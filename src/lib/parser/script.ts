@@ -2,7 +2,7 @@ import { dirname, relative, resolve } from "path";
 import type { KulalaError } from "./types/error";
 import type { KulalaScript } from "./types/script";
 
-const inlineScriptRegex = /[<>] {%/;
+const inlineScriptRegex = /[<>] \\{%/;
 export const preRequestScriptMarker = "< ";
 export const postRequestScriptMarker = "> ";
 

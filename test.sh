@@ -9,7 +9,7 @@ escaped_content=$(echo "$escaped_content" | sed -e ':a;N;$!ba;s/\n/\\n/g')
 # escape curlies
 escaped_content=$(echo "$escaped_content" | sed -e 's/{/\\\\{/g' -e 's/}/\\\\}/g')
 
-parse_json="{\"action\":\"parse\", \"content\": \"$escaped_content\"}"
+parse_json="{\"action\":\"parse\", \"filepath\": \"test/simple.http\", \"content\": \"$escaped_content\"}"
 
 if kulala_response=$(echo "$parse_json" | bun run src/index.ts); then
   echo "$kulala_response" | jq -r '.'
