@@ -67,8 +67,19 @@ export const getBody = async (
     postRequestScriptMarkerPos !== -1
       ? contents.slice(0, postRequestScriptMarkerPos).trim()
       : contents.trim();
+  try {
+    return {
+      type: "json",
+      content: JSON.parse(content.replace(/\\\{/g, "{").replace(/\\\}/g, "}")),
+    };
+  } catch (_) {
+    console.warn(
+      `Failed to parse body as JSON, treating as raw text. Error: ${_}`,
+    );
+  }
+
   return {
     type: "raw",
-    content: contents,
+    content: content,
   };
 };

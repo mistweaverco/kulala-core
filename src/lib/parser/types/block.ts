@@ -11,6 +11,10 @@ export type KulalaBlock = {
   operators: KulalaOperator[];
   request: KulalaRequest;
   scripts: KulalaScripts;
+  position: {
+    start: number;
+    end: number;
+  };
 };
 
 export type KulalaBlockLineNumber = number;

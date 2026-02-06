@@ -2,7 +2,8 @@ import { dirname, relative, resolve } from "path";
 import type { KulalaError } from "./types/error";
 import type { KulalaScript } from "./types/script";
 
-const inlineScriptRegex = /[<>] \\{%/;
+const inlineScriptRegexStart = /[<>] \\{%/;
+const inlineClosingTag = "%\\}";
 export const preRequestScriptMarker = "< ";
 export const postRequestScriptMarker = "> ";
 
@@ -27,8 +28,8 @@ export const getScript = async (
   //" lang=js/ts and trailing " %>"
   const removeLang = langTest ? ` lang=${langTest}` : "";
   const contents = blockLines.slice(lineIdx).join("\n");
-  const isInlineScript = inlineScriptRegex.test(line);
-  const closingTag = contents.indexOf("%}");
+  const isInlineScript = inlineScriptRegexStart.test(line);
+  const closingTag = contents.indexOf(inlineClosingTag);
   let content = "";
   if (isInlineScript) {
     content = contents

@@ -1,5 +1,15 @@
 import type { KulalaDocument, KulalaStdinParsed } from "../../types";
 
+export const writeRequestResponseToStderr = (res: unknown): void => {
+  Bun.stderr.write(JSON.stringify(res, null, 2));
+  process.exit(1);
+};
+
+export const writeRequestResponseToStdout = (res: unknown): void => {
+  Bun.stdout.write(JSON.stringify(res, null, 2));
+  process.exit(0);
+};
+
 export const writeToStderr = (doc: KulalaDocument): void => {
   const encoder = new TextEncoder();
   const data = encoder.encode(JSON.stringify(doc, null, 2) + "\n");

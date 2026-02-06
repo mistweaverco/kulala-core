@@ -1,4 +1,5 @@
 import type { KulalaDocument, KulalaParser } from "./types";
+import { KulalaRunner } from "./../runner";
 import {
   getAllContentsFromStdinAtOnce,
   writeToStderr,
@@ -6,27 +7,28 @@ import {
 } from "./lib/helpers";
 import { getDocument } from "./parser";
 const kulalaParser = {} as KulalaParser;
+const kulalaRunner = KulalaRunner();
 
 const stdIn = await getAllContentsFromStdinAtOnce();
 
 kulalaParser.parse = async (): Promise<void> => {
-  let document: KulalaDocument | null = null;
+  let doc: KulalaDocument | null = null;
   switch (stdIn.action) {
     case "parse":
-      document = await getDocument(stdIn.content, stdIn.filepath);
-      if (document.hasErrors) {
-        writeToStderr(document);
+      doc = await getDocument(stdIn.content, stdIn.filepath);
+      if (doc.hasErrors) {
+        writeToStderr(doc);
         break;
       }
-      writeToStdout(document);
+      writeToStdout(doc);
       break;
     case "run":
-      document = await getDocument(stdIn.content, stdIn.filepath);
-      if (document.hasErrors) {
-        writeToStderr(document);
+      doc = await getDocument(stdIn.content, stdIn.filepath);
+      if (doc.hasErrors) {
+        writeToStderr(doc);
         break;
       }
-      writeToStdout(document);
+      await kulalaRunner.run(doc, stdIn.cursorPosition);
       break;
     default:
       break;

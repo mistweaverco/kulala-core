@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+action=${1:-"run"}
+start_line_cursor=${2:-1}
+
 content=$(cat test/simple.http)
 
 # escape backslashes, double quotes, forward slashes, carriage returns, and tabs
@@ -9,13 +12,16 @@ escaped_content=$(echo "$escaped_content" | sed -e ':a;N;$!ba;s/\n/\\n/g')
 # escape curlies
 escaped_content=$(echo "$escaped_content" | sed -e 's/{/\\\\{/g' -e 's/}/\\\\}/g')
 
-parse_json="{\"action\":\"parse\", \"filepath\": \"test/simple.http\", \"content\": \"$escaped_content\"}"
+parse_json="{\"action\":\"$action\", \"filepath\": \"test/simple.http\", \"content\": \"$escaped_content\", \"cursorPosition\": {\"line\": $start_line_cursor, \"column\": 1}}"
 
 if kulala_response=$(echo "$parse_json" | bun run src/index.ts); then
-  echo "$kulala_response" | jq -r '.'
+  echo "Kulala response:"
+  echo "----------------"
+  echo "$kulala_response" | jq -r '.' || echo "$kulala_response"
 else
   echo "Error running Kulala:"
-  echo "$kulala_response"
+  echo "---------------------"
+  echo "$kulala_response" | jq -r '.'
   echo "Original JSON sent to Kulala:"
   echo "$parse_json"
 fi

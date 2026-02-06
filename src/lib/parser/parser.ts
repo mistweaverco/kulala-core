@@ -74,6 +74,7 @@ const isError = (obj: unknown): obj is KulalaError => {
 const getParsedBlock = async (
   rawBlock: string,
   idx: number,
+  position: { start: number; end: number },
   filepath?: string,
 ): Promise<KulalaBlock> => {
   let lineIdx = 0;
@@ -102,6 +103,7 @@ const getParsedBlock = async (
       preRequest: [],
       postRequest: [],
     },
+    position,
   };
   for (const line of lines) {
     lineType = getLineType(line, lineIdx, seenBlockTypes);
@@ -140,12 +142,13 @@ const getParsedBlock = async (
         result.operators.push(operator);
         break;
       case "body":
+        if (result.request.body) break;
         body = await getBody(lines, lineIdx);
         if (isError(body)) {
           result.errors.push(body);
           break;
         }
-        result.request.body = body;
+        result.request.body = body.content;
         break;
       case "preRequestScript":
       case "postRequestScript":
@@ -171,7 +174,10 @@ const getBlocks = async (
   const blocks: KulalaBlock[] = [];
   const rawBlocks = content.matchAll(blockRegex);
   for (const [idx, rawBlock] of Array.from(rawBlocks).entries()) {
-    blocks.push(await getParsedBlock(rawBlock[0], idx, filepath));
+    const start = content.substring(0, rawBlock.index).split("\n").length;
+    const end = start + rawBlock[0].split("\n").length - 1;
+    const position = { start, end };
+    blocks.push(await getParsedBlock(rawBlock[0], idx, position, filepath));
   }
   return blocks;
 };
