@@ -15,7 +15,7 @@ const setUserAgentHeaderIfNotPresent = (
       "User-Agent": [
         {
           name: "User-Agent",
-          value: "KulalaCore/1.0.0",
+          value: "KulalaCore/0.1.0",
         },
       ],
     };
