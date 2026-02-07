@@ -15,7 +15,7 @@ const setUserAgentHeaderIfNotPresent = (
       "User-Agent": [
         {
           name: "User-Agent",
-          value: "KulalaCore/0.1.0",
+          value: "kulala-core/0.1.0",
         },
       ],
     };
@@ -50,7 +50,7 @@ const doRequestFromBlock = async (
   const headers = {} as Record<string, string>;
   for (const [key, value] of Object.entries(block.request.headers)) {
     if (!headers[key]) {
-      headers[key] = value.map((h) => h.value).join(", ");
+      headers[key] = value.map((h) => h.value).join("; ");
     }
   }
 
