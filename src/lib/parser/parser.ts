@@ -175,7 +175,7 @@ const getBlocks = async (
   const rawBlocks = content.matchAll(blockRegex);
   for (const [idx, rawBlock] of Array.from(rawBlocks).entries()) {
     const start = content.substring(0, rawBlock.index).split("\n").length;
-    const end = start + rawBlock[0].split("\n").length - 1;
+    const end = start + rawBlock[0].split("\n").length - 2;
     const position = { start, end };
     blocks.push(await getParsedBlock(rawBlock[0], idx, position, filepath));
   }

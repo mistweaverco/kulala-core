@@ -1,3 +1,4 @@
+import got, { type Method } from "got";
 import { version } from "./../../../package.json";
 import type { KulalaDocument } from "../parser/types";
 import type { KulalaBlock } from "../parser/types/block";
@@ -29,6 +30,14 @@ type KulalaRequestSuccessResponse = {
   success: true;
   status: number;
   headers: Record<string, string>;
+  timings: {
+    namelookup: number;
+    connect: number;
+    appconnect: number;
+    pretransfer: number;
+    redirect: number;
+    starttransfer: number;
+  };
   body:
     | {
         type: "text";
@@ -45,6 +54,61 @@ type KulalaRequestErrorResponse = {
   error: string;
 };
 
+type RequestHeaderType = "json" | "form-data" | "form-urlencoded" | "invalid";
+
+const getRequestHeaderType = (headers: unknown): RequestHeaderType => {
+  if (typeof headers !== "object" || headers === null) {
+    return "invalid";
+  }
+  const contentTypeHeader = Object.entries(headers).find(
+    ([key]) => key.toLowerCase() === "content-type",
+  );
+  if (!contentTypeHeader) {
+    return "invalid";
+  }
+  const contentTypeValue = contentTypeHeader[1];
+  if (typeof contentTypeValue === "string") {
+    if (contentTypeValue.includes("application/json")) {
+      return "json";
+    }
+    if (contentTypeValue.includes("multipart/form-data")) {
+      return "form-data";
+    }
+    if (contentTypeValue.includes("application/x-www-form-urlencoded")) {
+      return "form-urlencoded";
+    }
+  }
+  return "invalid";
+};
+
+const getJSONRequestBody = (
+  body: unknown,
+): Record<string, unknown> | undefined => {
+  if (typeof body === "object" && body !== null) {
+    return body as Record<string, unknown>;
+  }
+  return undefined;
+};
+
+const getFormRequestBody = (
+  body: unknown,
+  formType: "form-data" | "form-urlencoded",
+): Record<string, unknown> | undefined => {
+  if (formType === "form-data") {
+    const formData: Record<string, string> = {};
+    const pairs = (body as string).split("&");
+    for (const pair of pairs) {
+      const [key, value] = pair.split("=");
+      formData[key] = value;
+    }
+    return formData;
+  }
+  if (formType === "form-urlencoded") {
+    return getJSONRequestBody(body);
+  }
+  return undefined;
+};
+
 const doRequestFromBlock = async (
   block: KulalaBlock,
 ): Promise<KulalaRequestSuccessResponse | KulalaRequestErrorResponse> => {
@@ -55,19 +119,30 @@ const doRequestFromBlock = async (
       headers[key] = value.map((h) => h.value).join("; ");
     }
   }
+  const requestHeaderType = getRequestHeaderType(headers);
+  const json =
+    requestHeaderType === "json"
+      ? getJSONRequestBody(block.request.body)
+      : undefined;
+  const form =
+    requestHeaderType === "form-urlencoded"
+      ? getFormRequestBody(block.request.body, "form-urlencoded")
+      : requestHeaderType === "form-data"
+        ? getFormRequestBody(block.request.body, "form-data")
+        : undefined;
 
   try {
-    const response = await fetch(block.request.url, {
-      method: block.request.method,
+    const response = await got(block.request.url, {
+      retry: {
+        limit: 0,
+      },
+      method: block.request.method as Method,
       headers,
-      body: block.request.body
-        ? typeof block.request.body === "object"
-          ? JSON.stringify(block.request.body)
-          : block.request.body
-        : undefined,
+      json,
+      form,
     });
-    const text = await response.text();
-    const contentType = response.headers.get("Content-Type") || "";
+    const text = response.body;
+    const contentType = response.headers["content-type"] || "";
     const isJson = contentType.includes("application/json");
     const body = isJson
       ? {
@@ -75,14 +150,23 @@ const doRequestFromBlock = async (
           content: JSON.parse(text || "") as Record<string, unknown>,
         }
       : { type: "text", content: text || "" };
-    const headersObj: Record<string, string> = {};
-    response.headers.forEach((value, key) => {
-      headersObj[key] = value;
-    });
+
+    const { phases } = response.timings;
 
     return {
-      status: response.status,
-      headers: headersObj,
+      status: response.statusCode,
+      headers: response.headers as Record<string, string>,
+      timings: {
+        namelookup: phases.dns,
+        connect: phases.tcp,
+        appconnect: phases.tls,
+        pretransfer: phases.request,
+        redirect:
+          phases.total && phases.firstByte
+            ? phases.total - phases.firstByte
+            : 0,
+        starttransfer: phases.firstByte,
+      },
       body,
     } as KulalaRequestSuccessResponse;
   } catch (error) {

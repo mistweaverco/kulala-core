@@ -1,6 +1,7 @@
 ### LOGIN_REQUEST
 
 POST https://httpbin.org/post HTTP/1.1
+Content-Type: application/json
 
 {
   "username": "user123",
