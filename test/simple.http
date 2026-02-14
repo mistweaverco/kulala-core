@@ -49,7 +49,10 @@ X-Custom-Header: Kulala-Named-Request
 ### NAMED_REQUEST_INSECURE
 
 < {%
-console.log('Reading token from TOKEN.txt');
+var fs = require('fs');
+if (!fs.existsSync('TOKEN.txt')) {
+  console.log('TOKEN.txt not found, using default token');
+}
 %}
 # @curl-insecure
 POST https://httpbin.org/post HTTP/1.1
@@ -57,7 +60,7 @@ Content-Type: application/json
 X-Custom-Header: Kulala-Insecure
 
 {
-  "token": ""
+  "token": "some-insecure-token"
 }
 
 > ./simple.js

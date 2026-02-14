@@ -37,7 +37,9 @@ export const getScript = async (
         line.indexOf(`{%${removeLang}`) + removeLang.length + 2,
         closingTag,
       )
-      .trim();
+      .trim()
+      .replaceAll("\\{", "{")
+      .replaceAll("\\}", "}");
   } else {
     if (!filepath) {
       return {

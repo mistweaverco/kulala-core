@@ -1,4 +1,4 @@
-import got, { type Method } from "got";
+import got, { type Method, type Response } from "got";
 import { version } from "./../../../package.json";
 import type { KulalaDocument } from "../parser/types";
 import type { KulalaBlock } from "../parser/types/block";
@@ -8,6 +8,7 @@ import {
   writeRequestResponseToStderr,
   writeRequestResponseToStdout,
 } from "../parser/lib/helpers";
+import { runScripts } from "./scripts";
 
 const setUserAgentHeaderIfNotPresent = (
   headers: KulalaRequest["headers"],
@@ -111,6 +112,7 @@ const getFormRequestBody = (
 
 const doRequestFromBlock = async (
   block: KulalaBlock,
+  filePath?: string,
 ): Promise<KulalaRequestSuccessResponse | KulalaRequestErrorResponse> => {
   block.request.headers = setUserAgentHeaderIfNotPresent(block.request.headers);
   const headers = {} as Record<string, string>;
@@ -131,8 +133,18 @@ const doRequestFromBlock = async (
         ? getFormRequestBody(block.request.body, "form-data")
         : undefined;
 
+  let response: Response | undefined = undefined;
+
+  await runScripts(
+    block.scripts.preRequest,
+    "preRequest",
+    block,
+    filePath,
+    response,
+  );
+
   try {
-    const response = await got(block.request.url, {
+    response = await got(block.request.url, {
       retry: {
         limit: 0,
       },
@@ -152,6 +164,14 @@ const doRequestFromBlock = async (
       : { type: "text", content: text || "" };
 
     const { phases } = response.timings;
+
+    await runScripts(
+      block.scripts.postRequest,
+      "postRequest",
+      block,
+      filePath,
+      response,
+    );
 
     return {
       status: response.statusCode,
@@ -220,7 +240,7 @@ const run = async (
   const results: (KulalaRequestSuccessResponse | KulalaRequestErrorResponse)[] =
     [];
   for (const block of blocks) {
-    results.push(await doRequestFromBlock(block));
+    results.push(await doRequestFromBlock(block, doc.filepath));
   }
   writeRequestResponseToStdout(results);
 };
