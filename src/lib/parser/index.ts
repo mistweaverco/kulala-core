@@ -28,7 +28,7 @@ kulalaParser.parse = async (): Promise<void> => {
         writeToStderr(doc);
         break;
       }
-      await kulalaRunner.run(doc, stdIn.cursorPosition);
+      await kulalaRunner.run(doc, stdIn.limit);
       break;
     default:
       break;

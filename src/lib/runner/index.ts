@@ -1,6 +1,7 @@
 import type { KulalaDocument } from "../parser/types";
 import type { KulalaBlock } from "../parser/types/block";
 import type { KulalaRequest } from "../parser/types/request";
+import type { KulalaStdinActionRunLimit } from "../parser/types/stdinparsed";
 import {
   writeRequestResponseToStderr,
   writeRequestResponseToStdout,
@@ -107,26 +108,33 @@ const findBlockAtCursor = (
 
 const run = async (
   doc: KulalaDocument,
-  cursorPosition?: { line: number; column: number },
+  limit?: KulalaStdinActionRunLimit[],
 ): Promise<void> => {
-  if (cursorPosition) {
-    const block = findBlockAtCursor(doc, cursorPosition);
-    if (!block) {
-      writeRequestResponseToStderr({
-        success: false,
-        error: "No block found at the cursor position.",
-      } as KulalaRequestErrorResponse);
-      return;
-    } else {
-      const res = await doRequestFromBlock(block);
-      writeRequestResponseToStdout(res);
-      return;
+  const blocks: KulalaBlock[] = [];
+  if (limit) {
+    for (const l of limit) {
+      if (l.filter === "cursorPosition") {
+        const block = findBlockAtCursor(doc, {
+          line: l.line,
+          column: l.column,
+        });
+        if (!block) {
+          writeRequestResponseToStderr({
+            success: false,
+            error: "No block found at the cursor position.",
+          } as KulalaRequestErrorResponse);
+          return;
+        } else {
+          blocks.push(block);
+        }
+      }
     }
+  } else {
+    blocks.push(...doc.blocks);
   }
   const results: (KulalaRequestSuccessResponse | KulalaRequestErrorResponse)[] =
     [];
-  for (const block of doc.blocks) {
-    console.log("Running block", block);
+  for (const block of blocks) {
     results.push(await doRequestFromBlock(block));
   }
   writeRequestResponseToStdout(results);
