@@ -1,3 +1,4 @@
+import { version } from "./../../../package.json";
 import type { KulalaDocument } from "../parser/types";
 import type { KulalaBlock } from "../parser/types/block";
 import type { KulalaRequest } from "../parser/types/request";
@@ -16,7 +17,7 @@ const setUserAgentHeaderIfNotPresent = (
       "User-Agent": [
         {
           name: "User-Agent",
-          value: "kulala-core/0.1.0",
+          value: "kulala-core/" + version,
         },
       ],
     };
