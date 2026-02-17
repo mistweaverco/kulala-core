@@ -9,6 +9,7 @@ import {
   writeRequestResponseToStderr,
   writeRequestResponseToStdout,
 } from "../parser/lib/helpers";
+import { incrementReplayCount } from "../persistence";
 import { runScripts } from "./scripts";
 
 const buildHeadersFromSection = (
@@ -279,6 +280,8 @@ const doRequestFromBlock = async (
       filePath,
       response,
     );
+
+    incrementReplayCount(filePath ?? "", block.name);
 
     return {
       status: response.statusCode,

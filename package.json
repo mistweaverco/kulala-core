@@ -6,7 +6,8 @@
   "private": true,
   "scripts": {
     "format": "prettier --write .",
-    "lint": "prettier --check . && eslint ."
+    "lint": "prettier --check . && eslint .",
+    "test": "bun test"
   },
   "devDependencies": {
     "@eslint/js": "9.36.0",
