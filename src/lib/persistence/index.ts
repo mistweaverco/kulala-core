@@ -6,15 +6,27 @@
  * - Variables: global, per-document, or per-request.
  *
  * Data directory:
- * - Linux: $XDG_DATA_HOME/kulala (~/.local/share/kulala)
- * - macOS: ~/Library/Application Support/kulala
- * - Windows: %APPDATA%/kulala
+ * - Linux: $XDG_DATA_HOME/kulala-core (~/.local/share/kulala-core)
+ * - macOS: ~/Library/Application Support/kulala-core
+ * - Windows: %APPDATA%/kulala-core
  *
- * Future: optional OS keychain lock/unlock for the DB (see issue #6).
+ * Optional OS keychain lock/unlock:
+ * - macOS: Keychain Access; Linux: Secret Service (secret-tool); Windows: Credential Manager (PowerShell P/Invoke).
+ * - unlockDb() / lockDb() encrypt the DB at rest when locked.
+ * - Fallback: if keychain is unavailable or you never call unlockDb(), getDb() uses a normal unencrypted SQLite file.
  */
 
 export { getDataDir, ensureDataDir } from "./data-dir";
-export { getDb, closeDb, getDbInMemory, setDbForTesting } from "./db";
+export {
+  getDb,
+  closeDb,
+  getDbInMemory,
+  setDbForTesting,
+  unlockDb,
+  lockDb,
+  isUnlockedWithKeychain,
+  isKeychainAvailable,
+} from "./db";
 export {
   saveDocument,
   loadDocument,

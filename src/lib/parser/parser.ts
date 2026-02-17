@@ -90,7 +90,6 @@ const getParsedBlock = async (
 ): Promise<KulalaBlock> => {
   let lineIdx = 0;
   let lineType: KulalaBlockLineType = { name: "name", lineNumber: lineIdx };
-  let request: KulalaRequest | KulalaError;
   let header: KulalaHeader | KulalaError;
   let operator: KulalaOperator | KulalaError;
   let script: KulalaScript | KulalaError;

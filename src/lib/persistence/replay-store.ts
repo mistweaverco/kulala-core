@@ -52,7 +52,9 @@ export function getReplayCount(
         last_run_at: string | null;
       },
       [string, string]
-    >("SELECT document_filepath, block_name, run_count, last_run_at FROM request_runs WHERE document_filepath = ? AND block_name = ?")
+    >(
+      "SELECT document_filepath, block_name, run_count, last_run_at FROM request_runs WHERE document_filepath = ? AND block_name = ?",
+    )
     .get(documentFilepath, blockName);
   if (!row) return null;
   return {
