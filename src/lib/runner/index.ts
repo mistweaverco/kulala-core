@@ -1,4 +1,5 @@
 import got, { type Method, type Response } from "got";
+import type { FormDataLike } from "form-data-encoder";
 import { version } from "./../../../package.json";
 import type { KulalaDocument } from "../parser/types";
 import type { KulalaBlock } from "../parser/types/block";
@@ -100,30 +101,90 @@ const getJSONRequestBody = (
   return undefined;
 };
 
+/** Parse "key=value&key2=value2" into an object (application/x-www-form-urlencoded). */
+const parseFormUrlEncoded = (body: string): Record<string, string> => {
+  const out: Record<string, string> = {};
+  for (const pair of body.split("&")) {
+    const eq = pair.indexOf("=");
+    if (eq === -1) {
+      out[decodeURIComponent(pair.trim())] = "";
+    } else {
+      out[decodeURIComponent(pair.slice(0, eq).trim())] = decodeURIComponent(
+        pair
+          .slice(eq + 1)
+          .trim()
+          .replace(/\+/g, " "),
+      );
+    }
+  }
+  return out;
+};
+
 const getFormRequestBody = (
   body: unknown,
   formType: "form-data" | "form-urlencoded",
 ): Record<string, unknown> | undefined => {
-  if (formType === "form-data") {
-    const formData: Record<string, string> = {};
-    const pairs = (body as string).split("&");
-    for (const pair of pairs) {
-      const [key, value] = pair.split("=");
-      formData[key] = value;
-    }
-    return formData;
-  }
   if (formType === "form-urlencoded") {
-    return getJSONRequestBody(body);
+    if (typeof body === "object" && body !== null) {
+      return body as Record<string, unknown>;
+    }
+    if (typeof body === "string") {
+      return parseFormUrlEncoded(body) as Record<string, unknown>;
+    }
+    return undefined;
+  }
+  if (formType === "form-data") {
+    if (typeof body === "object" && body !== null) {
+      return body as Record<string, unknown>;
+    }
+    if (typeof body === "string") {
+      return parseFormUrlEncoded(body) as Record<string, unknown>;
+    }
+    return undefined;
   }
   return undefined;
+};
+
+/** True if value looks like a file reference: { filePath: string, filename?: string }. */
+const isFileRef = (
+  value: unknown,
+): value is { filePath: string; filename?: string } =>
+  typeof value === "object" &&
+  value !== null &&
+  "filePath" in value &&
+  typeof (value as { filePath: unknown }).filePath === "string";
+
+/**
+ * Build FormData for multipart/form-data. Body entries can be strings or
+ * file refs { filePath, filename? }. Paths are resolved relative to baseDir.
+ */
+const buildMultipartBody = async (
+  body: Record<string, unknown>,
+  baseDir: string,
+): Promise<FormData> => {
+  const path = await import("path");
+  const form = new FormData();
+  for (const [key, value] of Object.entries(body)) {
+    if (isFileRef(value)) {
+      const resolvedPath = path.resolve(baseDir, value.filePath);
+      const file = Bun.file(resolvedPath);
+      form.append(
+        key,
+        file,
+        value.filename ?? value.filePath.split(/[/\\]/).pop(),
+      );
+    } else {
+      form.append(key, String(value ?? ""));
+    }
+  }
+  return form;
 };
 
 const doRequestFromBlock = async (
   block: KulalaBlock,
   filePath?: string,
 ): Promise<KulalaRequestSuccessResponse | KulalaRequestErrorResponse> => {
-  const headers = setUserAgentHeaderIfNotPresent(
+  let headers = setUserAgentHeaderIfNotPresent(
     buildHeadersFromSection(block.request.headerSection),
   );
   const requestHeaderType = getRequestHeaderType(headers);
@@ -134,9 +195,27 @@ const doRequestFromBlock = async (
   const form =
     requestHeaderType === "form-urlencoded"
       ? getFormRequestBody(block.request.body, "form-urlencoded")
-      : requestHeaderType === "form-data"
-        ? getFormRequestBody(block.request.body, "form-data")
-        : undefined;
+      : undefined;
+  const formDataBody =
+    requestHeaderType === "form-data"
+      ? getFormRequestBody(block.request.body, "form-data")
+      : undefined;
+
+  let multipartBody: FormData | undefined;
+  if (formDataBody && typeof formDataBody === "object") {
+    const baseDir = filePath
+      ? (await import("path")).dirname(filePath)
+      : process.cwd();
+    multipartBody = await buildMultipartBody(
+      formDataBody as Record<string, unknown>,
+      baseDir,
+    );
+    headers = Object.fromEntries(
+      Object.entries(headers).filter(
+        ([k]) => k.toLowerCase() !== "content-type",
+      ),
+    );
+  }
 
   let response: Response | undefined = undefined;
 
@@ -149,15 +228,30 @@ const doRequestFromBlock = async (
   );
 
   try {
-    response = await got(block.request.url, {
-      retry: {
-        limit: 0,
-      },
+    const baseOptions = {
+      retry: { limit: 0 },
       method: block.request.method as Method,
       headers,
-      json,
-      form,
-    });
+    };
+
+    if (multipartBody) {
+      response = await got(block.request.url, {
+        ...baseOptions,
+        body: multipartBody as unknown as FormDataLike,
+      });
+    } else if (json !== undefined) {
+      response = await got(block.request.url, {
+        ...baseOptions,
+        json,
+      });
+    } else if (form !== undefined) {
+      response = await got(block.request.url, {
+        ...baseOptions,
+        form: form as Record<string, string>,
+      });
+    } else {
+      response = await got(block.request.url, baseOptions);
+    }
     const rawBody = response.body;
     const contentType = response.headers["content-type"] || "";
     const isJson = contentType.includes("application/json");
