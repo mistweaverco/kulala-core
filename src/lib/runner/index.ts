@@ -10,18 +10,27 @@ import {
 } from "../parser/lib/helpers";
 import { runScripts } from "./scripts";
 
+const buildHeadersFromSection = (
+  headerSection: KulalaRequest["headerSection"],
+): Record<string, string> => {
+  const out: Record<string, string> = {};
+  for (const entry of headerSection) {
+    if (entry.type === "header") {
+      const v = entry.value ?? "";
+      if (!out[entry.name]) out[entry.name] = v;
+      else out[entry.name] = out[entry.name] + "; " + v;
+    }
+  }
+  return out;
+};
+
 const setUserAgentHeaderIfNotPresent = (
-  headers: KulalaRequest["headers"],
-): KulalaRequest["headers"] => {
+  headers: Record<string, string>,
+): Record<string, string> => {
   if (!headers["User-Agent"] && !headers["user-agent"]) {
     return {
       ...headers,
-      "User-Agent": [
-        {
-          name: "User-Agent",
-          value: "kulala-core/" + version,
-        },
-      ],
+      "User-Agent": "kulala-core/" + version,
     };
   }
   return headers;
@@ -114,13 +123,9 @@ const doRequestFromBlock = async (
   block: KulalaBlock,
   filePath?: string,
 ): Promise<KulalaRequestSuccessResponse | KulalaRequestErrorResponse> => {
-  block.request.headers = setUserAgentHeaderIfNotPresent(block.request.headers);
-  const headers = {} as Record<string, string>;
-  for (const [key, value] of Object.entries(block.request.headers)) {
-    if (!headers[key]) {
-      headers[key] = value.map((h) => h.value).join("; ");
-    }
-  }
+  const headers = setUserAgentHeaderIfNotPresent(
+    buildHeadersFromSection(block.request.headerSection),
+  );
   const requestHeaderType = getRequestHeaderType(headers);
   const json =
     requestHeaderType === "json"
@@ -153,15 +158,23 @@ const doRequestFromBlock = async (
       json,
       form,
     });
-    const text = response.body;
+    const rawBody = response.body;
     const contentType = response.headers["content-type"] || "";
     const isJson = contentType.includes("application/json");
     const body = isJson
       ? {
           type: "json",
-          content: JSON.parse(text || "") as Record<string, unknown>,
+          content: (typeof rawBody === "object" && rawBody !== null
+            ? rawBody
+            : JSON.parse(
+                typeof rawBody === "string" ? rawBody : String(rawBody ?? ""),
+              )) as Record<string, unknown>,
         }
-      : { type: "text", content: text || "" };
+      : {
+          type: "text",
+          content:
+            typeof rawBody === "string" ? rawBody : String(rawBody ?? ""),
+        };
 
     const { phases } = response.timings;
 

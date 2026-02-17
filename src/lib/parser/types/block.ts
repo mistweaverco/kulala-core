@@ -4,9 +4,14 @@ import type { KulalaComment } from "./comment";
 import type { KulalaScripts } from "./script";
 import type { KulalaError } from "./error.ts";
 
+// Preamble: everything before the request line (operators and comments in order).
+export type KulalaPreambleEntry = KulalaOperator | KulalaComment;
+
 export type KulalaBlock = {
   name: string;
   errors: KulalaError[];
+  // Ordered list of operators and comments before the request line.
+  preamble: KulalaPreambleEntry[];
   comments: KulalaComment[];
   operators: KulalaOperator[];
   request: KulalaRequest;
@@ -30,6 +35,7 @@ export type KulalaBlockLineTypeName =
   | "postRequestScript"
   | "preRequestScript"
   | "request"
+  | "requestContinuation"
   | "unknown";
 
 export type KulalaBlockLineType = {

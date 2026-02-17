@@ -37,8 +37,19 @@ const getLineType = (
   }
   if (line.startsWith("# @")) return { name: "operator", lineNumber: lineIdx };
   if (line.startsWith("#")) return { name: "comment", lineNumber: lineIdx };
-  if (line.match(/^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS|TRACE|CONNECT) /)) {
+  if (
+    line.match(
+      /^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS|TRACE|CONNECT|GRAPHQL) /,
+    )
+  ) {
     return { name: "request", lineNumber: lineIdx };
+  }
+  if (
+    seenBlockTypes.has("request") &&
+    !seenBlockTypes.has("body") &&
+    /^\s/.test(line)
+  ) {
+    return { name: "requestContinuation", lineNumber: lineIdx };
   }
   if (
     seenBlockTypes.has("request") &&
@@ -92,46 +103,64 @@ const getParsedBlock = async (
   const result: KulalaBlock = {
     name,
     errors: [],
+    preamble: [],
     comments: [],
+    operators: [],
     request: {
       method: "GET",
       url: "/",
-      headers: {},
+      headerSection: [],
     },
-    operators: [],
     scripts: {
       preRequest: [],
       postRequest: [],
     },
     position,
   };
-  for (const line of lines) {
+  while (lineIdx < lines.length) {
+    const line = lines[lineIdx];
     lineType = getLineType(line, lineIdx, seenBlockTypes);
     if (!seenBlockTypes.has(lineType.name)) {
       seenBlockTypes.add(lineType.name);
     }
     switch (lineType.name) {
-      case "headers":
+      case "headers": {
         header = getHeader(line, lineIdx);
         if (isError(header)) {
           result.errors.push(header);
           break;
         }
-        if (!result.request.headers[header.name]) {
-          result.request.headers[header.name] = [];
-        }
-        result.request.headers[header.name].push(header);
+        result.request.headerSection.push({
+          type: "header",
+          name: header.name,
+          value: header.value,
+        });
         break;
+      }
       case "comment":
-        result.comments.push(getComment(line, lineIdx));
+        if (!seenBlockTypes.has("request")) {
+          const comment = getComment(line, lineIdx);
+          result.preamble.push(comment);
+          result.comments.push(comment);
+        } else {
+          result.request.headerSection.push({
+            type: "comment",
+            comment: getComment(line, lineIdx),
+          });
+        }
         break;
-      case "request":
-        request = getRequest(line, lineIdx);
-        if (isError(request)) {
-          result.errors.push(request);
+      case "request": {
+        const [requestResult, consumed] = getRequest(lines, lineIdx);
+        if (isError(requestResult)) {
+          result.errors.push(requestResult);
+          lineIdx += 1;
           break;
         }
-        result.request = request;
+        result.request = requestResult;
+        lineIdx += consumed - 1;
+        break;
+      }
+      case "requestContinuation":
         break;
       case "operator":
         operator = getOperator(line, lineIdx);
@@ -139,6 +168,7 @@ const getParsedBlock = async (
           result.errors.push(operator);
           break;
         }
+        result.preamble.push(operator);
         result.operators.push(operator);
         break;
       case "body":

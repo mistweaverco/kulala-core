@@ -1,4 +1,4 @@
-import type { KulalaHeader } from "./header";
+import type { KulalaComment } from "./comment";
 
 export type KulalaHttpMethodAvailable =
   | "DELETE"
@@ -52,16 +52,17 @@ export type KulalaHttpURL = `${KulalaHttpScheme}://${string}` | `/${string}`;
 export type KulalaHttpRequestLineString =
   `${KulalaHttpMethodAvailable} ${KulalaHttpURL} ${KulalaHttpVersion}`;
 
-// We considered an array of objects,
-// where each object represents a single header (name-value pair),
-// a structure like Array<Record<string, string>>.
-// It looks like this would be the most flexible way to represent headers,
-// allowing for multiple headers with the same name and preserving order.
-// However, this approach is really slow when it comes to lookups,
-// as it requires iterating through the array to find a specific header.
-// Additionally, it doesn't leverage TypeScript's strengths in type safety and clarity,
-// making it less ideal for scenarios where headers need to be accessed frequently or validated.
-type KulalaRequestHeaders = Record<string, KulalaHeader[]>;
+// Request line can span multiple lines (e.g. URL with query params). Each part is either
+// a URL continuation line or a comment, so comments can be preserved in place.
+export type KulalaRequestLinePart =
+  | { type: "url"; line: string }
+  | { type: "comment"; comment: KulalaComment };
+
+// Header section is an ordered array so comments between headers are preserved.
+export type KulalaHeaderSectionEntry =
+  | { type: "header"; name: string; value?: string }
+  | { type: "comment"; comment: KulalaComment };
+
 type KulalaRequestBody = string | object;
 
 // Considering the HTTP methods, we can categorize them into two groups:
@@ -71,7 +72,11 @@ type KulalaRequestBody = string | object;
 
 export type KulalaRequest = {
   method: KulalaHttpMethod;
+  // Resolved URL used for execution (single line, no comments).
   url: KulalaHttpURL;
-  headers: KulalaRequestHeaders;
+  // Ordered list of headers and comments so comments are preserved in place.
+  headerSection: KulalaHeaderSectionEntry[];
+  // Optional: when request line spans multiple lines or has comments, for round-trip.
+  requestLineParts?: KulalaRequestLinePart[];
   body?: KulalaRequestBody;
 };

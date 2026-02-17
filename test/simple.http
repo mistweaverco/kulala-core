@@ -8,6 +8,34 @@ Content-Type: application/json
   "password": "pass123"
 }
 
+### REQUEST_WITH_QUERY_PARAMS_AND_HEADERS_AND_COMMENTS_AND_OPERATORS
+
+# @curl-insecure
+#@curl-connect-timeout 5
+# @curl-timeout 5
+
+POST https://httpbin.org/post
+  ?someKey=someValue1
+  # &someKey2=someValue2
+  &someKey3=someValue3
+  # &someKey4=someValue4
+  &someKey5=someValue5
+  # &someKey6=someValue6
+  &someKey7=someValue7
+  HTTP/1.1
+# X-My-Custom-Header1: MyValue1
+Content-Type: application/json
+X-My-Custom-Header2: MyValue2
+# X-My-Custom-Header4: MyValue4
+X-My-Custom-Header5: MyValue5
+# X-My-Custom-Header6: MyValue6
+X-My-Custom-Header7: MyValue7
+
+{
+  "username": "user123",
+  "password": "pass123"
+}
+
 ### COOKIE_REQUEST
 
 POST https://httpbin.org/post HTTP/1.1
