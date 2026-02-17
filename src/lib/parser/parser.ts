@@ -16,7 +16,6 @@ import { getBody } from "./body";
 import type { KulalaHeader } from "./types/header";
 import { getComment } from "./comment";
 import { getRequest } from "./request";
-import type { KulalaRequest } from "./types/request";
 import type { KulalaRequestBody } from "./types/body";
 const blockRegex = /###(.*?)\n([\s\S]+?)(?=###|$)/g;
 const nameRegex = /### (.+?)\n/;
