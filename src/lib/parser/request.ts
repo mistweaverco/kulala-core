@@ -104,7 +104,7 @@ export const getRequest = (
     if (!isRequestContinuationLine(line)) break;
     const trimmed = line.trim();
     consumed += 1;
-    if (trimmed.startsWith("#")) {
+    if (trimmed.startsWith("# ")) {
       requestLineParts.push({
         type: "comment",
         comment: getComment(line, startLineIdx + consumed - 1),
