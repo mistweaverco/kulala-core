@@ -28,6 +28,8 @@ export type KulalaStdinActionRun = {
   content: string;
   /* The path to the file where the contents come from, if any */
   filepath?: string;
+  /** Environment name for variable lookup (kuba, http-client.env.json). Defaults to "default". */
+  env?: string;
   limit?: KulalaStdinActionRunLimit[];
 };
 

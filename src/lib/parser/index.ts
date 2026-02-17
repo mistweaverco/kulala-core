@@ -22,14 +22,18 @@ kulalaParser.parse = async (): Promise<void> => {
       }
       writeToStdout(doc);
       break;
-    case "run":
+    case "run": {
       doc = await getDocument(stdIn.content, stdIn.filepath);
       if (doc.hasErrors) {
         writeToStderr(doc);
         break;
       }
-      await kulalaRunner.run(doc, stdIn.limit);
+      await kulalaRunner.run(doc, stdIn.limit, {
+        content: stdIn.content,
+        env: stdIn.env ?? "default",
+      });
       break;
+    }
     default:
       break;
   }

@@ -10,6 +10,12 @@ import {
   writeRequestResponseToStdout,
 } from "../parser/lib/helpers";
 import { incrementReplayCount } from "../persistence";
+import {
+  getStableDocumentId,
+  resolveVariables,
+  substituteInString,
+  substituteInObject,
+} from "../variables";
 import { runScripts } from "./scripts";
 
 const buildHeadersFromSection = (
@@ -184,22 +190,41 @@ const buildMultipartBody = async (
 const doRequestFromBlock = async (
   block: KulalaBlock,
   filePath?: string,
+  vars?: Record<string, string>,
+  stableDocIdForReplay?: string,
 ): Promise<KulalaRequestSuccessResponse | KulalaRequestErrorResponse> => {
+  const url = vars
+    ? substituteInString(block.request.url, vars)
+    : block.request.url;
+
   let headers = setUserAgentHeaderIfNotPresent(
     buildHeadersFromSection(block.request.headerSection),
   );
+  if (vars) {
+    const substitutedHeaders: Record<string, string> = {};
+    for (const [k, v] of Object.entries(headers)) {
+      substitutedHeaders[k] = substituteInString(v, vars);
+    }
+    headers = substitutedHeaders;
+  }
+
+  const body = vars
+    ? (substituteInObject(
+        block.request.body,
+        vars,
+      ) as typeof block.request.body)
+    : block.request.body;
+
   const requestHeaderType = getRequestHeaderType(headers);
   const json =
-    requestHeaderType === "json"
-      ? getJSONRequestBody(block.request.body)
-      : undefined;
+    requestHeaderType === "json" ? getJSONRequestBody(body) : undefined;
   const form =
     requestHeaderType === "form-urlencoded"
-      ? getFormRequestBody(block.request.body, "form-urlencoded")
+      ? getFormRequestBody(body, "form-urlencoded")
       : undefined;
   const formDataBody =
     requestHeaderType === "form-data"
-      ? getFormRequestBody(block.request.body, "form-data")
+      ? getFormRequestBody(body, "form-data")
       : undefined;
 
   let multipartBody: FormData | undefined;
@@ -236,22 +261,22 @@ const doRequestFromBlock = async (
     };
 
     if (multipartBody) {
-      response = await got(block.request.url, {
+      response = await got(url, {
         ...baseOptions,
         body: multipartBody as unknown as FormDataLike,
       });
     } else if (json !== undefined) {
-      response = await got(block.request.url, {
+      response = await got(url, {
         ...baseOptions,
         json,
       });
     } else if (form !== undefined) {
-      response = await got(block.request.url, {
+      response = await got(url, {
         ...baseOptions,
         form: form as Record<string, string>,
       });
     } else {
-      response = await got(block.request.url, baseOptions);
+      response = await got(url, baseOptions);
     }
     const rawBody = response.body;
     const contentType = response.headers["content-type"] || "";
@@ -281,7 +306,7 @@ const doRequestFromBlock = async (
       response,
     );
 
-    incrementReplayCount(filePath ?? "", block.name);
+    incrementReplayCount(stableDocIdForReplay ?? filePath ?? "", block.name);
 
     return {
       status: response.statusCode,
@@ -321,9 +346,17 @@ const findBlockAtCursor = (
   return null;
 };
 
+export type KulalaRunOptions = {
+  /** Raw document content (for stable ID when filepath is absent). */
+  content?: string;
+  /** Environment name for variable resolution (kuba, etc.). Defaults to "default". */
+  env?: string;
+};
+
 const run = async (
   doc: KulalaDocument,
   limit?: KulalaStdinActionRunLimit[],
+  options?: KulalaRunOptions,
 ): Promise<void> => {
   const blocks: KulalaBlock[] = [];
   if (limit) {
@@ -343,14 +376,27 @@ const run = async (
           blocks.push(block);
         }
       }
+      if (l.filter === "name") {
+        const block = doc.blocks.find((b) => b.name === l.name);
+        if (block) blocks.push(block);
+      }
     }
   } else {
     blocks.push(...doc.blocks);
   }
+
+  const env = options?.env ?? "default";
+  const stableDocId = getStableDocumentId(doc.filepath, options?.content);
+  const path = await import("path");
+  const startDir = doc.filepath ? path.dirname(doc.filepath) : process.cwd();
+
   const results: (KulalaRequestSuccessResponse | KulalaRequestErrorResponse)[] =
     [];
   for (const block of blocks) {
-    results.push(await doRequestFromBlock(block, doc.filepath));
+    const vars = await resolveVariables(env, stableDocId, block.name, startDir);
+    results.push(
+      await doRequestFromBlock(block, doc.filepath, vars, stableDocId),
+    );
   }
   writeRequestResponseToStdout(results);
 };
