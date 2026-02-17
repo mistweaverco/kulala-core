@@ -1,5 +1,5 @@
 {
-  "action":"run",
+  "action": "run",
   "filepath": "test/simple.http",
   "content": "FILE_CONTENT_OF_HTTP_FILE_HERE",
   "limit": [
