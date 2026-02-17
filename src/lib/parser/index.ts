@@ -2,6 +2,7 @@ import type { KulalaDocument, KulalaParser } from "./types";
 import { KulalaRunner } from "./../runner";
 import {
   getAllContentsFromStdinAtOnce,
+  writeErrorToStderr,
   writeToStderr,
   writeToStdout,
 } from "./lib/helpers";
@@ -40,3 +41,4 @@ kulalaParser.parse = async (): Promise<void> => {
 };
 
 export { kulalaParser as KulalaParser };
+export { writeErrorToStderr };

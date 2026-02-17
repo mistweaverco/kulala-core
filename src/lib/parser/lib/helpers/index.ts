@@ -5,6 +5,11 @@ export const writeRequestResponseToStderr = (res: unknown): void => {
   process.exit(1);
 };
 
+/** Write a kulala-core error message to stderr (same shape as runner errors, does not exit). */
+export const writeErrorToStderr = (error: string): void => {
+  Bun.stderr.write(JSON.stringify({ success: false, error }, null, 2) + "\n");
+};
+
 export const writeRequestResponseToStdout = (res: unknown): void => {
   Bun.stdout.write(JSON.stringify(res, null, 2));
   process.exit(0);

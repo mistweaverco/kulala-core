@@ -5,7 +5,9 @@ Content-Type: application/json
 
 {
   "username": "user123",
-  "password": "pass123"
+  "password": "pass123",
+  "kuba_env_test": "{{ SOME_HARD_CODED_ENV }}",
+  "OS_USER": "{{ $env.USER }}"
 }
 
 ### REQUEST_WITH_QUERY_PARAMS_AND_HEADERS_AND_COMMENTS_AND_OPERATORS

@@ -16,6 +16,10 @@ import {
   substituteInString,
   substituteInObject,
 } from "../variables";
+import {
+  resolveRequestVariable,
+  type PreviousResponse,
+} from "../variables/request-vars";
 import { runScripts } from "./scripts";
 
 const buildHeadersFromSection = (
@@ -187,33 +191,39 @@ const buildMultipartBody = async (
   return form;
 };
 
+type VariableResolver = (name: string) => string | undefined;
+
 const doRequestFromBlock = async (
   block: KulalaBlock,
   filePath?: string,
   vars?: Record<string, string>,
   stableDocIdForReplay?: string,
+  resolver?: VariableResolver,
 ): Promise<KulalaRequestSuccessResponse | KulalaRequestErrorResponse> => {
-  const url = vars
-    ? substituteInString(block.request.url, vars)
-    : block.request.url;
+  const url =
+    vars !== undefined
+      ? substituteInString(block.request.url, vars, resolver)
+      : block.request.url;
 
   let headers = setUserAgentHeaderIfNotPresent(
     buildHeadersFromSection(block.request.headerSection),
   );
-  if (vars) {
+  if (vars !== undefined) {
     const substitutedHeaders: Record<string, string> = {};
     for (const [k, v] of Object.entries(headers)) {
-      substitutedHeaders[k] = substituteInString(v, vars);
+      substitutedHeaders[k] = substituteInString(v, vars, resolver);
     }
     headers = substitutedHeaders;
   }
 
-  const body = vars
-    ? (substituteInObject(
-        block.request.body,
-        vars,
-      ) as typeof block.request.body)
-    : block.request.body;
+  const body =
+    vars !== undefined
+      ? (substituteInObject(
+          block.request.body,
+          vars,
+          resolver,
+        ) as typeof block.request.body)
+      : block.request.body;
 
   const requestHeaderType = getRequestHeaderType(headers);
   const json =
@@ -392,11 +402,25 @@ const run = async (
 
   const results: (KulalaRequestSuccessResponse | KulalaRequestErrorResponse)[] =
     [];
+  const previousResults = new Map<string, PreviousResponse>();
   for (const block of blocks) {
     const vars = await resolveVariables(env, stableDocId, block.name, startDir);
-    results.push(
-      await doRequestFromBlock(block, doc.filepath, vars, stableDocId),
+    const resolver = (key: string) =>
+      resolveRequestVariable(key, previousResults);
+    const result = await doRequestFromBlock(
+      block,
+      doc.filepath,
+      vars,
+      stableDocId,
+      resolver,
     );
+    results.push(result);
+    if (result.success) {
+      previousResults.set(block.name, {
+        body: result.body,
+        headers: result.headers,
+      });
+    }
   }
   writeRequestResponseToStdout(results);
 };

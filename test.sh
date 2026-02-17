@@ -12,7 +12,7 @@ escaped_content=$(echo "$escaped_content" | sed -e ':a;N;$!ba;s/\n/\\n/g')
 # escape curlies
 escaped_content=$(echo "$escaped_content" | sed -e 's/{/\\\\{/g' -e 's/}/\\\\}/g')
 
-parse_json="{\"action\":\"$action\", \"filepath\": \"test/simple.http\", \"content\": \"$escaped_content\", \"limit\": [{\"filter\": \"cursorPosition\", \"line\": $start_line_cursor, \"column\": 1},{\"filter\": \"cursorPosition\", \"line\": 11, \"column\": 1}]}"
+parse_json="{\"action\":\"$action\", \"filepath\": \"test/simple.http\", \"content\": \"$escaped_content\", \"limit\": [{\"filter\": \"cursorPosition\", \"line\": $start_line_cursor, \"column\": 1}]}"
 
 
 echo ".http file content:"

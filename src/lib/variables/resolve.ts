@@ -1,6 +1,7 @@
-import { dirname } from "path";
 import { getVariables } from "../persistence";
+import { loadEnvVars } from "./env-files";
 import { findKubaYamlDir, getKubaEnv } from "./kuba";
+import { getMagicVariables } from "./magic";
 
 /**
  * Coerce a variable value to string for substitution.
@@ -14,9 +15,11 @@ function toString(v: unknown): string {
 }
 
 /**
- * Resolve all variables for a request: kuba (if kuba.yaml found), then persistence
- * (global -> document -> request). Later sources override earlier.
- * Returns a flat Record<string, string> for substitution.
+ * Resolve all variables for a request.
+ * Order (later overrides earlier): kuba → system/env files (http-client.env.json, .env) →
+ * persistence (global → document → request) → magic variables ($uuid, $timestamp, etc.).
+ * See https://neovim.getkulala.net/docs/usage/magic-variables and
+ * https://neovim.getkulala.net/docs/usage/dotenv-and-http-client.env.json-support
  */
 export async function resolveVariables(
   env: string,
@@ -28,12 +31,17 @@ export async function resolveVariables(
 
   const kubaDir = findKubaYamlDir(startDir);
   if (kubaDir !== null) {
-    const kubaVars = getKubaEnv(env, kubaDir);
+    const kubaVars = await getKubaEnv(env, kubaDir);
     if (kubaVars) {
       for (const [k, v] of Object.entries(kubaVars)) {
         out[k] = v;
       }
     }
+  }
+
+  const envVars = loadEnvVars(env, startDir);
+  for (const [k, v] of Object.entries(envVars)) {
+    out[k] = v;
   }
 
   const globalVars = getVariables("global");
@@ -52,6 +60,11 @@ export async function resolveVariables(
   });
   for (const [k, v] of Object.entries(requestVars)) {
     out[k] = toString(v);
+  }
+
+  const magic = getMagicVariables();
+  for (const [k, v] of Object.entries(magic)) {
+    out[k] = v;
   }
 
   return out;

@@ -1,6 +1,7 @@
-import { spawnSync } from "child_process";
 import { existsSync } from "fs";
-import { join, dirname } from "path";
+import { dirname, join } from "path";
+import { writeErrorToStderr } from "../parser/lib/helpers";
+import { flattenToDotPaths } from "./flatten-json";
 
 const KUBA_YAML = "kuba.yaml";
 
@@ -21,56 +22,52 @@ export function findKubaYamlDir(startDir: string): string | null {
 }
 
 /**
- * Check if `kuba` is available in PATH.
+ * Check if `kuba` is available in PATH
  */
 export function isKubaInPath(): boolean {
-  const which = typeof Bun !== "undefined" ? Bun.which?.("kuba") : null;
-  if (which) return true;
-  const result = spawnSync("which", ["kuba"], { encoding: "utf8" });
-  return result.status === 0;
+  return Bun.which("kuba") != null;
 }
 
 /**
- * Run `kuba show --contain --env <env> --output json` in dir and return parsed env vars.
+ * Run `kuba show --env <env> --output json` in dir and return parsed env vars.
  * Returns null if kuba.yaml not in dir, kuba not in PATH, or command fails.
  * If kuba.yaml exists but kuba is not in PATH, writes a message to stderr.
  */
-export function getKubaEnv(
+export async function getKubaEnv(
   env: string,
   dir: string,
-): Record<string, string> | null {
+): Promise<Record<string, string> | null> {
   if (!existsSync(join(dir, KUBA_YAML))) {
     return null;
   }
   if (!isKubaInPath()) {
-    Bun.stderr.write(
-      new TextEncoder().encode(
-        "kulala-core: kuba.yaml found but 'kuba' is not in PATH. Install kuba or add it to PATH.\n",
-      ),
+    writeErrorToStderr(
+      "kuba.yaml found but 'kuba' is not in PATH. Install kuba or add it to PATH.",
     );
     return null;
   }
-  const result = spawnSync(
-    "kuba",
-    ["show", "--contain", "--env", env, "--output", "json"],
-    { encoding: "utf8", cwd: dir, stdio: ["pipe", "pipe", "pipe"] },
-  );
-  if (result.status !== 0 || result.stdout == null) {
+  const proc = Bun.spawn(["kuba", "show", "--env", env, "--output", "json"], {
+    cwd: dir,
+    stdout: "pipe",
+    stderr: "pipe",
+    stdin: "ignore",
+  });
+  const exitCode = await proc.exited;
+  if (exitCode !== 0) {
     return null;
   }
   try {
-    const data = JSON.parse(result.stdout.trim()) as unknown;
+    const raw = await new Response(proc.stdout).text();
+    const data = JSON.parse(raw.trim()) as unknown;
     if (typeof data !== "object" || data === null) return null;
+    // Support both flat { VAR: "value" } and env-nested { "default": { VAR: "value" } }
+    const source =
+      typeof (data as Record<string, unknown>)[env] === "object" &&
+      (data as Record<string, unknown>)[env] !== null
+        ? ((data as Record<string, unknown>)[env] as Record<string, unknown>)
+        : (data as Record<string, unknown>);
     const out: Record<string, string> = {};
-    for (const [k, v] of Object.entries(data)) {
-      if (
-        typeof v === "string" ||
-        typeof v === "number" ||
-        typeof v === "boolean"
-      ) {
-        out[k] = String(v);
-      }
-    }
+    flattenToDotPaths(source, "", out);
     return out;
   } catch {
     return null;

@@ -68,9 +68,14 @@ export const getBody = async (
       ? contents.slice(0, postRequestScriptMarkerPos).trim()
       : contents.trim();
   try {
+    // Allow trailing commas (strip comma before } or ])
+    const jsonStr = content
+      .replace(/\\\{/g, "{")
+      .replace(/\\\}/g, "}")
+      .replace(/,(\s*[}\]])/g, "$1");
     return {
       type: "json",
-      content: JSON.parse(content.replace(/\\\{/g, "{").replace(/\\\}/g, "}")),
+      content: JSON.parse(jsonStr),
     };
   } catch (_) {
     console.warn(

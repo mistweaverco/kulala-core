@@ -1,12 +1,24 @@
 /**
  * Variable resolution and substitution for HTTP requests.
  * - Stable document ID (filepath or content hash) so variables don't leak between documents.
- * - Kuba: traverse up for kuba.yaml, run `kuba show --contain --env <env> --output json`.
+ * - Kuba: traverse up for kuba.yaml, run `kuba show --env <env> --output json`.
+ * - Env files: system env, http-client.env.json, http-client.private.env.json, .env (by env name).
  * - Persistence: global, document-scoped, and request-scoped variables from SQLite.
- * - Substitution: {{variableName}} in URL, headers, and body.
+ * - System env as {{$env.VAR}}: JetBrains-style (https://www.jetbrains.com/help/idea/http-client-variables.html).
+ * - Dynamic variables: $uuid, $random.uuid, $timestamp, $isoTimestamp, $date, $randomInt (0..1000).
+ * - Request variables: {{REQUEST_NAME.response.body.$.path}}, {{REQUEST_NAME.response.headers.Name}}.
+ * - JSONPath-style in env/kuba: nested JSON flattened to dotted paths (client.host.url, client.['host.url']).
+ * - Substitution: {{variableName}} or compound paths; optional spaces {{ var }} in URL, headers, body.
  */
 
 export { getStableDocumentId } from "./stable-id";
 export { findKubaYamlDir, getKubaEnv, isKubaInPath } from "./kuba";
+export { loadEnvVars } from "./env-files";
+export { getMagicVariables } from "./magic";
 export { resolveVariables } from "./resolve";
 export { substituteInString, substituteInObject } from "./substitute";
+export {
+  resolveRequestVariable,
+  isRequestVariableKey,
+  type PreviousResponse,
+} from "./request-vars";
