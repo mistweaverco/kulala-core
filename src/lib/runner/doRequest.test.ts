@@ -34,7 +34,7 @@ function makeBlock(overrides: Partial<KulalaBlock> = {}): KulalaBlock {
 beforeAll(() => {
   server = Bun.serve({
     port: 0,
-    fetch(req) {
+    async fetch(req) {
       const u = new URL(req.url);
       const path = u.pathname;
       const method = req.method;
@@ -48,6 +48,57 @@ beforeAll(() => {
         return Response.json({ received: true });
       }
       if (path === "/graphql" && method === "POST") {
+        const raw = await req.text();
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(raw);
+        } catch {
+          return new Response(
+            JSON.stringify({ errors: [{ message: "Body is not valid JSON" }] }),
+            { status: 400, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        if (typeof parsed !== "object" || parsed === null) {
+          return new Response(
+            JSON.stringify({ errors: [{ message: "Body must be an object" }] }),
+            { status: 400, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        const obj = parsed as Record<string, unknown>;
+        if ("data" in obj && Object.keys(obj).length === 1) {
+          return new Response(
+            JSON.stringify({
+              errors: [
+                {
+                  message:
+                    "Body must be { query, variables }, not wrapped in data",
+                },
+              ],
+            }),
+            { status: 400, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        if (typeof obj.query !== "string") {
+          return new Response(
+            JSON.stringify({
+              errors: [{ message: "Body must have query as a string" }],
+            }),
+            { status: 400, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        if (obj.query.includes("\\\\") || obj.query.includes("\\{")) {
+          return new Response(
+            JSON.stringify({
+              errors: [
+                {
+                  message:
+                    "Query must not be double-escaped (no backslash-brace)",
+                },
+              ],
+            }),
+            { status: 400, headers: { "Content-Type": "application/json" } },
+          );
+        }
         return Response.json({ data: {} });
       }
       if (path === "/text" && method === "GET") {

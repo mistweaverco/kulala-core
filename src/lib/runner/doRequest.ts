@@ -93,7 +93,7 @@ export async function doRequestFromBlock(
     ? { ...headers, "Content-Type": "application/json" }
     : headers;
 
-  let response: RunnerResponseLike | undefined = undefined;
+  const response: RunnerResponseLike | undefined = undefined;
 
   await runScripts(
     block.scripts.preRequest,
@@ -117,7 +117,14 @@ export async function doRequestFromBlock(
         body: multipartBody as unknown as FormDataLike,
       });
     } else if (graphqlBody !== undefined) {
-      res = await got(url, { ...baseOptions, json: graphqlBody });
+      // Send plain { query, variables } per GraphQL over HTTP; never wrap or pre-stringify.
+      const payload: { query: string; variables?: Record<string, unknown> } = {
+        query: typeof graphqlBody.query === "string" ? graphqlBody.query : "",
+        ...(graphqlBody.variables != null
+          ? { variables: graphqlBody.variables }
+          : {}),
+      };
+      res = await got(url, { ...baseOptions, json: payload });
     } else if (json !== undefined) {
       res = await got(url, { ...baseOptions, json });
     } else if (form !== undefined) {

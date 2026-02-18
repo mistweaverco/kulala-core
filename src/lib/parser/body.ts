@@ -77,7 +77,8 @@ export const getBody = async (
       .split(/\n\s*\n/)
       .map((p) => p.trim())
       .filter(Boolean);
-    const query = parts[0] ?? "";
+    // Note: stdin JSON encoding may escape braces as \{ and \}. Undo that for GraphQL queries.
+    const query = (parts[0] ?? "").replace(/\\\{/g, "{").replace(/\\\}/g, "}");
     let variables: Record<string, unknown> | undefined = undefined;
 
     // If there's a second part, try to parse it as JSON for variables
@@ -95,7 +96,7 @@ export const getBody = async (
         ) {
           variables = parsed as Record<string, unknown>;
         }
-      } catch (_) {
+      } catch {
         // If variables JSON parsing fails, ignore variables
       }
     }
@@ -120,9 +121,9 @@ export const getBody = async (
       type: "json",
       content: JSON.parse(jsonStr),
     };
-  } catch (_) {
+  } catch (error) {
     console.warn(
-      `Failed to parse body as JSON, treating as raw text. Error: ${_}`,
+      `Failed to parse body as JSON, treating as raw text. Error: ${error}`,
     );
   }
 

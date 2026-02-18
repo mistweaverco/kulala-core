@@ -52,6 +52,7 @@ const getLineType = (
   }
   if (
     seenBlockTypes.has("request") &&
+    !seenBlockTypes.has("afterHeaders") &&
     !seenBlockTypes.has("body") &&
     line.includes(": ")
   ) {

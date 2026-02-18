@@ -142,6 +142,29 @@ test("getBody: GraphQL with variables containing variable placeholders", async (
   // Note: Variable substitution happens later in the runner via substituteInObject
 });
 
+test("getBody: GraphQL unescapes \\{ and \\} in query", async () => {
+  const lines = [
+    "GRAPHQL https://api.example.com/graphql HTTP/1.1",
+    "",
+    "query Person($id: ID) \\{",
+    "  person(personID: $id) \\{",
+    "    name",
+    "  \\}",
+    "\\}",
+    "",
+    '{ "id": 1 }',
+  ];
+  const result = await getBody(lines, 2, "GRAPHQL");
+  expect(result).toEqual({
+    type: "graphql",
+    content: {
+      query:
+        "query Person($id: ID) {\n  person(personID: $id) {\n    name\n  }\n}",
+      variables: { id: 1 },
+    },
+  });
+});
+
 test("getBody: GraphQL with multi-line indented variables JSON", async () => {
   const lines = [
     "GRAPHQL https://api.example.com/graphql HTTP/1.1",
