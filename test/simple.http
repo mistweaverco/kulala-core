@@ -99,3 +99,18 @@ X-Custom-Header: Kulala-Insecure
   var fs = require('fs');
   fs.writeFileSync('TOKEN.txt', response.body.json.token);
 %}
+
+### GQL_WITH_VARIABLES
+
+GRAPHQL https://swapi-graphql.netlify.app/.netlify/functions/index HTTP/1.1
+Accept: application/json
+
+query Person($id: ID) {
+  person(personID: $id) {
+    name
+  }
+}
+
+{
+  "id": 1
+}

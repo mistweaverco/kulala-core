@@ -1,6 +1,6 @@
 import path from "path";
 import type { KulalaBlock } from "./../parser/types/block";
-import { type Response } from "got";
+import type { RunnerResponseLike } from "./types";
 import {
   type KulalaScript,
   type KulalaScriptType,
@@ -56,7 +56,7 @@ export const runScripts = async (
   type: KulalaScriptType,
   block: KulalaBlock,
   filePath?: string,
-  response?: Response,
+  response?: RunnerResponseLike,
 ): Promise<void> => {
   for (const script of scripts) {
     try {
