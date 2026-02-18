@@ -61,8 +61,11 @@ beforeAll(() => {
         });
       }
 
-      // Protected API endpoint
-      if (path === "/api/protected" && req.method === "GET") {
+      // Protected API endpoint (supports both GET and POST)
+      if (
+        path === "/api/protected" &&
+        (req.method === "GET" || req.method === "POST")
+      ) {
         const authHeader = req.headers.get("authorization");
         if (authHeader === "Bearer test-access-token-123") {
           return Response.json({
@@ -176,5 +179,96 @@ test("doRequestFromBlock: uses OAuth2 token from $auth.token()", async () => {
     if (result.body.type === "json") {
       expect(result.body.content.message).toBe("Success");
     }
+  }
+});
+
+test("doRequestFromBlock: handles escaped braces in $auth.token() from JSON payload", async () => {
+  // Create OAuth2 config
+  const envFile = join(testDir, "http-client.env.json");
+  writeFileSync(
+    envFile,
+    JSON.stringify(
+      {
+        default: {
+          Security: {
+            Auth: {
+              "playground-oauth2": {
+                Type: "OAuth2",
+                "Grant Type": "Client Credentials",
+                "Token URL": tokenUrl,
+                "Client ID": "test-client-id",
+                "Client Secret": "test-client-secret",
+                "Client Credentials": "basic",
+              },
+            },
+          },
+        },
+      },
+      null,
+      2,
+    ),
+  );
+
+  // Simulate the scenario where braces are escaped in JSON: \\{\\{$auth.token(...)\\}\\}
+  const block: KulalaBlock = {
+    name: "GET_DATA_WITH_SCOPES",
+    errors: [],
+    preamble: [],
+    comments: [],
+    operators: [],
+    request: {
+      method: "POST",
+      url: apiUrl,
+      headerSection: [
+        {
+          type: "header",
+          name: "Authorization",
+          // This simulates what happens when JSON escapes braces: \\{\\{$auth.token("playground-oauth2")\\}\\}
+          // After JSON parsing, this becomes: \{\{$auth.token("playground-oauth2")\}\}
+          value: 'Bearer \\{\\{$auth.token("playground-oauth2")\\}\\}',
+        },
+        {
+          type: "header",
+          name: "Accept",
+          value: "application/json",
+        },
+      ],
+    },
+    scripts: { preRequest: [], postRequest: [] },
+    position: { start: 1, end: 10 },
+  };
+
+  const result = await doRequestFromBlock(
+    block,
+    join(testDir, "oauth2.http"),
+    undefined,
+    undefined,
+    undefined,
+    "default",
+  );
+
+  if (!result.success) {
+    if ("prompt" in result && result.prompt) {
+      console.log("Got prompt response:", JSON.stringify(result, null, 2));
+      throw new Error(
+        `Unexpected prompt response: ${result.message}. This test should use Client Credentials which doesn't require prompts.`,
+      );
+    } else if ("error" in result) {
+      console.log("Request failed with error:", result.error);
+      console.log("Full result:", JSON.stringify(result, null, 2));
+      console.log("Block URL:", block.request.url);
+      console.log(
+        "Block headers:",
+        JSON.stringify(block.request.headerSection, null, 2),
+      );
+    } else {
+      console.log("Unknown error format:", JSON.stringify(result, null, 2));
+    }
+  }
+  expect(result).toHaveProperty("success", true);
+  if (result.success) {
+    expect(result.status).toBe(200);
+    // The Authorization header should have the actual token, not the placeholder
+    expect(result.body.type).toBe("json");
   }
 });

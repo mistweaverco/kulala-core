@@ -10,7 +10,7 @@ import { saveOAuth2AuthData } from "./config";
  */
 export async function continueOAuth2Flow(
   promptId: string,
-  inputs: Record<string, string>,
+  inputs: Array<{ id: string; value: string }>,
 ): Promise<OAuth2TokenData> {
   const prompt = getPrompt(promptId);
   if (!prompt) {
@@ -33,9 +33,14 @@ export async function continueOAuth2Flow(
   const startDir = context.startDir as string;
   const grantType = config["Grant Type"];
 
+  // Convert array of inputs to a map for easier lookup
+  const inputsMap = new Map(inputs.map((input) => [input.id, input.value]));
+
   // Get the user input (redirect URL or code)
   const redirectInput =
-    inputs.redirect_url || inputs.code || inputs.access_token;
+    inputsMap.get("redirect_url") ||
+    inputsMap.get("code") ||
+    inputsMap.get("access_token");
   if (!redirectInput) {
     throw new Error(
       "Missing required input: redirect_url, code, or access_token",

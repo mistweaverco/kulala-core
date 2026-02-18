@@ -5,9 +5,7 @@ import { existsSync, readFileSync } from "fs";
  * Get input payload from multiple sources (in order of preference):
  * 1. File path passed as CLI argument (--input-file or -i)
  * 2. Environment variable KULALA_CORE_INPUT_FILE
- * 3. Stdin (fallback for backward compatibility)
- *
- * This allows stdin to be free for interactive input (e.g., OAuth2 manual code entry).
+ * 3. Stdin
  */
 async function getInputPayload(): Promise<string> {
   const args = process.argv.slice(2);
@@ -21,12 +19,10 @@ async function getInputPayload(): Promise<string> {
     inputFile = args[inputFileIndex + 1];
   }
 
-  // Check environment variable
   if (!inputFile && process.env.KULALA_CORE_INPUT_FILE) {
     inputFile = process.env.KULALA_CORE_INPUT_FILE;
   }
 
-  // If file path provided, read from file
   if (inputFile) {
     if (!existsSync(inputFile)) {
       throw new Error(`Input file not found: ${inputFile}`);
@@ -34,7 +30,6 @@ async function getInputPayload(): Promise<string> {
     return readFileSync(inputFile, "utf8");
   }
 
-  // Fallback to stdin (backward compatibility)
   const reader = Bun.stdin.stream().getReader();
   const decoder = new TextDecoder();
   let content = "";

@@ -7,7 +7,14 @@ export function buildHeadersFromSection(
   const out: Record<string, string> = {};
   for (const entry of headerSection) {
     if (entry.type === "header") {
-      const v = entry.value ?? "";
+      // Unescape braces if content came from JSON stdin (similar to header parser)
+      // When content is JSON-encoded, braces may be escaped as \{ and \} or \\{ and \\}
+      // We need to unescape them to get the actual {{variable}} syntax
+      let v = entry.value ?? "";
+      if (v) {
+        // Handle both \{ and \\{ patterns (unescape multiple times to handle double-escaping)
+        v = v.replace(/\\+{/g, "{").replace(/\\+}/g, "}");
+      }
       if (!out[entry.name]) out[entry.name] = v;
       else out[entry.name] = out[entry.name] + "; " + v;
     }

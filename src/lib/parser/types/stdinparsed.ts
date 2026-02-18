@@ -36,7 +36,10 @@ export type KulalaStdinActionRun = {
 export type KulalaStdinActionContinue = {
   action: "continue";
   promptId: string;
-  inputs: Record<string, string>;
+  inputs: Array<{
+    id: string;
+    value: string;
+  }>;
 };
 
 export type KulalaStdinParsed =

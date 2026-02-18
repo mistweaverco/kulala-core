@@ -34,6 +34,20 @@ export type KulalaPromptResponse = {
   }>;
 };
 
+export type KulalaResponseWrapper =
+  | {
+      type: "responses";
+      data: Array<
+        | KulalaRequestSuccessResponse
+        | KulalaRequestErrorResponse
+        | KulalaPromptResponse
+      >;
+    }
+  | {
+      type: "error";
+      data: Array<KulalaRequestErrorResponse>;
+    };
+
 export type RequestHeaderType =
   | "json"
   | "form-data"

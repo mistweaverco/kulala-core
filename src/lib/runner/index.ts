@@ -17,12 +17,14 @@ import type {
   KulalaRequestSuccessResponse,
   KulalaPromptResponse,
   KulalaRunOptions,
+  KulalaResponseWrapper,
 } from "./types";
 
 export type { KulalaRunOptions } from "./types";
 export type {
   KulalaRequestErrorResponse,
   KulalaRequestSuccessResponse,
+  KulalaResponseWrapper,
 } from "./types";
 
 const run = async (
@@ -39,10 +41,16 @@ const run = async (
           column: l.column,
         });
         if (!block) {
-          writeRequestResponseToStderr({
-            success: false,
-            error: "No block found at the cursor position.",
-          } as KulalaRequestErrorResponse);
+          const errorResponse: KulalaResponseWrapper = {
+            type: "error",
+            data: [
+              {
+                success: false,
+                error: "No block found at the cursor position.",
+              } as KulalaRequestErrorResponse,
+            ],
+          };
+          writeRequestResponseToStderr(errorResponse);
           return;
         }
         // Avoid adding duplicate blocks
@@ -99,7 +107,11 @@ const run = async (
 
     // If we got a prompt response, stop processing and return it
     if (!result.success && "prompt" in result && result.prompt) {
-      writeRequestResponseToStdout([result]);
+      const responseWrapper: KulalaResponseWrapper = {
+        type: "responses",
+        data: [result],
+      };
+      writeRequestResponseToStdout(responseWrapper);
       return;
     }
 
@@ -110,7 +122,11 @@ const run = async (
       });
     }
   }
-  writeRequestResponseToStdout(results);
+  const responseWrapper: KulalaResponseWrapper = {
+    type: "responses",
+    data: results,
+  };
+  writeRequestResponseToStdout(responseWrapper);
 };
 
 export const KulalaRunner = () => {

@@ -8,6 +8,7 @@ import {
   substituteInStringAsync,
 } from "../variables";
 import { OAuth2Manager } from "../auth/oauth2/manager";
+import { OAuth2PromptError } from "../auth/oauth2/prompt-error";
 import { incrementReplayCount } from "../persistence";
 import { runScripts } from "./scripts";
 import {
@@ -61,8 +62,19 @@ export async function doRequestFromBlock(
   };
 
   // Check if we need async substitution (for $auth.token() calls)
+  // Unescape braces in header values before checking (similar to header parser)
+  const unescapeBraces = (str: string): string => {
+    return str.replace(/\\+{/g, "{").replace(/\\+}/g, "}");
+  };
   const urlStr = typeof block.request.url === "string" ? block.request.url : "";
-  const headerStr = JSON.stringify(block.request.headerSection);
+  // Unescape braces in header values before stringifying to detect $auth. correctly
+  const headerSectionWithUnescapedBraces = block.request.headerSection.map(
+    (entry) =>
+      entry.type === "header" && entry.value
+        ? { ...entry, value: unescapeBraces(entry.value) }
+        : entry,
+  );
+  const headerStr = JSON.stringify(headerSectionWithUnescapedBraces);
   const bodyStr = JSON.stringify(block.request.body ?? {});
   const needsAsyncSubstitution =
     urlStr.includes("$auth.") ||
