@@ -74,10 +74,13 @@ export const getBody = async (
   // until the end or up to the postRequestScriptMarker
   const contents = blockLines.slice(lineIdx).join("\n");
   const postRequestScriptMarkerPos = contents.indexOf(postRequestScriptMarker);
-  const content =
+  let content =
     postRequestScriptMarkerPos !== -1
       ? contents.slice(0, postRequestScriptMarkerPos).trim()
       : contents.trim();
+  // Strip trailing response-redirect (>> / >>!) and post-request script (> path) lines so they are not parsed as body.
+  // Use \s* at end so we match when content has trailing newline; match any line starting with > or >> so we never leave a stray ">".
+  content = content.replace(/\n\s*>{1,2}!?[^\n]*\s*$/, "").trim();
 
   // Body from file: first line is "< path" (JetBrains HTTP syntax)
   const firstLine = blockLines[lineIdx]?.trim() ?? "";

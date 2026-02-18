@@ -145,6 +145,44 @@ test("getBody: body from file with quoted path", async () => {
   });
 });
 
+test("getBody: JSON body with trailing >> redirect line is stripped (no stray > in payload)", async () => {
+  const lines = [
+    "POST https://httpbin.org/post HTTP/1.1",
+    "Content-Type: application/json",
+    "",
+    "{",
+    '  "name": "Kulala-Core"',
+    "}",
+    "",
+    ">> ./redirect-response-to-file.tmp.json",
+  ];
+  const result = await getBody(lines, 3, "POST");
+  expect(result.type).toBe("json");
+  if (result.type === "json") {
+    const content = result.content as Record<string, unknown>;
+    expect(content.name).toBe("Kulala-Core");
+    const str = JSON.stringify(content);
+    expect(str.endsWith(">")).toBe(false);
+  }
+});
+
+test("getBody: JSON body with trailing >> redirect and trailing newline is stripped", async () => {
+  const lines = [
+    "POST https://example.com/post HTTP/1.1",
+    "Content-Type: application/json",
+    "",
+    '{ "x": 1 }',
+    "",
+    ">> ./out.json",
+    "",
+  ];
+  const result = await getBody(lines, 3, "POST");
+  expect(result.type).toBe("json");
+  if (result.type === "json") {
+    expect(result.content).toEqual({ x: 1 });
+  }
+});
+
 test("getBody: non-GraphQL method parses as JSON", async () => {
   const lines = [
     "POST https://api.example.com/api HTTP/1.1",

@@ -36,6 +36,7 @@ export type KulalaBlockLineTypeName =
   | "preRequestScript"
   | "request"
   | "requestContinuation"
+  | "responseRedirect"
   | "unknown";
 
 export type KulalaBlockLineType = {

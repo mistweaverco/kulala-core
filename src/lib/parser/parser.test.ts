@@ -152,3 +152,35 @@ Content-Type: application/json
   expect(block.request.method).toBe("POST");
   expect(block.request.body).toEqual({ __bodyFromFile: "./input.json" });
 });
+
+test("parser: redirect response to file (>> and >>!) JetBrains syntax", async () => {
+  const contentWithAppend = `### SAVE_RESPONSE
+
+GET https://httpbin.org/get HTTP/1.1
+
+>> myFolder/myFile.json`;
+
+  const docAppend = await getDocument(contentWithAppend);
+  const blockAppend = docAppend.blocks[0];
+  expect(blockAppend.errors).toEqual([]);
+  expect(blockAppend.request.responseRedirect).toEqual({
+    filePath: "myFolder/myFile.json",
+    overwrite: false,
+  });
+
+  const contentWithOverwrite = `### OVERWRITE_RESPONSE
+
+POST https://httpbin.org/post HTTP/1.1
+Content-Type: application/json
+
+{}
+>>! output/result.json`;
+
+  const docOverwrite = await getDocument(contentWithOverwrite);
+  const blockOverwrite = docOverwrite.blocks[0];
+  expect(blockOverwrite.errors).toEqual([]);
+  expect(blockOverwrite.request.responseRedirect).toEqual({
+    filePath: "output/result.json",
+    overwrite: true,
+  });
+});

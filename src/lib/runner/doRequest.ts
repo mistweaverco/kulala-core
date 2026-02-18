@@ -267,6 +267,43 @@ export async function doRequestFromBlock(
             typeof rawBody === "string" ? rawBody : String(rawBody ?? ""),
         };
 
+    // Redirect response to file (>> path or >>! path)
+    const redirect = block.request.responseRedirect;
+    if (redirect?.filePath) {
+      const pathMod = await import("path");
+      const fs = await import("fs/promises");
+      const resolved = pathMod.resolve(startDir, redirect.filePath);
+      await fs.mkdir(pathMod.dirname(resolved), { recursive: true });
+      const isBuffer = Buffer.isBuffer(rawBody);
+      const bodyToWrite: string | Buffer =
+        typeof rawBody === "string"
+          ? rawBody
+          : isBuffer
+            ? rawBody
+            : String(rawBody ?? "");
+      const writeOpts: { encoding?: BufferEncoding } = isBuffer
+        ? {}
+        : { encoding: "utf-8" };
+      if (redirect.overwrite) {
+        await fs.writeFile(resolved, bodyToWrite, writeOpts);
+      } else {
+        let target = resolved;
+        let n = 0;
+        const ext = pathMod.extname(resolved);
+        const base = resolved.slice(0, -ext.length || undefined);
+        while (true) {
+          try {
+            await fs.access(target);
+            n += 1;
+            target = n === 1 ? `${base}-1${ext}` : `${base}-${n}${ext}`;
+          } catch {
+            await fs.writeFile(target, bodyToWrite, writeOpts);
+            break;
+          }
+        }
+      }
+    }
+
     const responseLike: RunnerResponseLike = {
       body: rawBody,
       statusCode: res.statusCode,

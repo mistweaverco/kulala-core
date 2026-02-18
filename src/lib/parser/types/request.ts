@@ -65,6 +65,12 @@ export type KulalaHeaderSectionEntry =
 
 type KulalaRequestBody = string | object;
 
+/** Redirect response body to a file (JetBrains >> / >>! syntax). */
+export type KulalaResponseRedirect = {
+  filePath: string;
+  overwrite: boolean;
+};
+
 // Considering the HTTP methods, we can categorize them into two groups:
 // Methods that typically do not have a body (e.g., GET, HEAD, OPTIONS).
 // Methods that usually include a body (e.g., POST, PUT, DELETE, PATCH, GRAPHQL).
@@ -79,4 +85,6 @@ export type KulalaRequest = {
   // Optional: when request line spans multiple lines or has comments, for round-trip.
   requestLineParts?: KulalaRequestLinePart[];
   body?: KulalaRequestBody;
+  /** When set, save response body to this file (>> = create/suffix, >>! = overwrite). */
+  responseRedirect?: KulalaResponseRedirect;
 };

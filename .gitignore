@@ -38,3 +38,6 @@ http-client.private.env.json
 
 # Dotenv environment variable files
 .env*
+
+# Test redirects
+http-example-files/*.tmp*

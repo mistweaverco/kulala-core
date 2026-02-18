@@ -38,6 +38,13 @@ const getLineType = (
 ): KulalaBlockLineType => {
   if (lineIdx === 0) return { name: "name", lineNumber: lineIdx };
   if (line.startsWith("###")) return { name: "name", lineNumber: lineIdx };
+  // Redirect response (>> path / >>! path) must be checked before generic body
+  if (
+    seenBlockTypes.has("afterHeaders") &&
+    (line.startsWith(">>!") || line.startsWith(">>"))
+  ) {
+    return { name: "responseRedirect", lineNumber: lineIdx };
+  }
   // Body line (including JetBrains "< path" body-from-file) must be checked before "< " → preRequestScript
   if (
     seenBlockTypes.has("request") &&
@@ -204,6 +211,16 @@ const getParsedBlock = async (
         }
         result.request.body = body.content;
         break;
+      case "responseRedirect": {
+        const overwrite = line.startsWith(">>!");
+        const path = (
+          line.startsWith(">>!") ? line.slice(3) : line.slice(2)
+        ).trim();
+        if (path) {
+          result.request.responseRedirect = { filePath: path, overwrite };
+        }
+        break;
+      }
       case "preRequestScript":
       case "postRequestScript":
         script = await getScript(line, lines, lineIdx, filepath);

@@ -426,3 +426,69 @@ test("doRequestFromBlock: reads request body from file (JetBrains < path syntax)
     expect(content.echoed).toBe(JSON.stringify({ from: "file", n: 42 }));
   }
 });
+
+test("doRequestFromBlock: redirects response to file (>>! overwrite)", async () => {
+  const { mkdtempSync } = await import("fs");
+  const { join } = await import("path");
+  const { tmpdir } = await import("os");
+  const fs = await import("fs/promises");
+  const dir = mkdtempSync(join(tmpdir(), "kulala-redirect-"));
+  const httpFilePath = join(dir, "request.http");
+  const outFile = join(dir, "response.json");
+
+  const block = makeBlock({
+    request: {
+      method: "GET",
+      url: `${baseUrl}/get`,
+      headerSection: [],
+      responseRedirect: { filePath: "response.json", overwrite: true },
+    },
+  });
+
+  const result = await doRequestFromBlock(
+    block,
+    httpFilePath,
+    undefined,
+    undefined,
+    undefined,
+  );
+
+  expect(result).toHaveProperty("success", true);
+  const content = await fs.readFile(outFile, "utf-8");
+  const parsed = JSON.parse(content) as Record<string, unknown>;
+  expect(parsed.json).toBeDefined();
+  expect((parsed.json as Record<string, unknown>)?.success).toBe(true);
+});
+
+test("doRequestFromBlock: redirects response to file (>> create with suffix if exists)", async () => {
+  const { mkdtempSync } = await import("fs");
+  const { join } = await import("path");
+  const { tmpdir } = await import("os");
+  const fs = await import("fs/promises");
+  const dir = mkdtempSync(join(tmpdir(), "kulala-redirect2-"));
+  const httpFilePath = join(dir, "request.http");
+  const existingFile = join(dir, "out.json");
+  await fs.writeFile(existingFile, "existing", "utf-8");
+
+  const block = makeBlock({
+    request: {
+      method: "GET",
+      url: `${baseUrl}/text`,
+      headerSection: [],
+      responseRedirect: { filePath: "out.json", overwrite: false },
+    },
+  });
+
+  const result = await doRequestFromBlock(
+    block,
+    httpFilePath,
+    undefined,
+    undefined,
+    undefined,
+  );
+
+  expect(result).toHaveProperty("success", true);
+  expect(await fs.readFile(existingFile, "utf-8")).toBe("existing");
+  const newFile = join(dir, "out-1.json");
+  expect(await fs.readFile(newFile, "utf-8")).toBe("plain text response");
+});
