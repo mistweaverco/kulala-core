@@ -2,10 +2,10 @@ import type { KulalaError } from "./types/error";
 import { postRequestScriptMarker } from "./script";
 import type {
   KulalaRequestBody,
+  KulalaRequestBodyFromFileContent,
   KulalaRequestBodyType,
   KulalaRequestFileBody,
   KulalaRequestGraphQLBody,
-  KulalaRequestBodyFromFileContent,
 } from "./types/body";
 
 export const isBody = (obj: unknown): obj is KulalaRequestBody => {
@@ -140,21 +140,21 @@ export const getBody = async (
     };
   }
 
-  // Regular JSON body
-  try {
-    // Allow trailing commas (strip comma before } or ])
-    const jsonStr = content
-      .replace(/\\\{/g, "{")
-      .replace(/\\\}/g, "}")
-      .replace(/,(\s*[}\]])/g, "$1");
-    return {
-      type: "json",
-      content: JSON.parse(jsonStr),
-    };
-  } catch (error) {
-    console.warn(
-      `Failed to parse body as JSON, treating as raw text. Error: ${error}`,
-    );
+  if (content !== "") {
+    // Regular JSON body
+    try {
+      // Allow trailing commas (strip comma before } or ])
+      const jsonStr = content
+        .replace(/\\\{/g, "{")
+        .replace(/\\\}/g, "}")
+        .replace(/,(\s*[}\]])/g, "$1");
+      return {
+        type: "json",
+        content: JSON.parse(jsonStr),
+      };
+    } catch (e /* eslint-disable-line @typescript-eslint/no-unused-vars */) {
+      // do nothing, we'll treat it as raw text body below
+    }
   }
 
   return {
