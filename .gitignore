@@ -32,3 +32,9 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # Finder (MacOS) folder config
 .DS_Store
+
+# Sensitive client configuration
+http-client.private.env.json
+
+# Dotenv environment variable files
+.env*

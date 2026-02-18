@@ -9,7 +9,7 @@ const DOTENV = ".env";
 /**
  * Collect directory paths from startDir upward to root.
  */
-function dirsUpward(startDir: string): string[] {
+export function dirsUpward(startDir: string): string[] {
   const dirs: string[] = [];
   let dir = startDir;
   for (;;) {
@@ -22,6 +22,26 @@ function dirsUpward(startDir: string): string[] {
 }
 
 /**
+ * Load raw JSON section from http-client.env.json or http-client.private.env.json.
+ * Returns the raw object (not flattened) for the given env key.
+ */
+export function loadHttpClientEnvJsonRaw(
+  filePath: string,
+  env: string,
+): Record<string, unknown> | null {
+  try {
+    const raw = readFileSync(filePath, "utf8");
+    const data = JSON.parse(raw) as unknown;
+    if (typeof data !== "object" || data === null) return null;
+    const section = (data as Record<string, unknown>)[env];
+    if (typeof section !== "object" || section === null) return null;
+    return section as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Load and merge env section from one http-client.env.json or http-client.private.env.json.
  * Supports nested objects: values flattened to dotted paths (e.g. client.host.url, client.['host.url']).
  * Returns Record<string, string> for the given env key (e.g. "default", "dev").
@@ -30,18 +50,11 @@ function loadHttpClientEnvJson(
   filePath: string,
   env: string,
 ): Record<string, string> {
-  try {
-    const raw = readFileSync(filePath, "utf8");
-    const data = JSON.parse(raw) as unknown;
-    if (typeof data !== "object" || data === null) return {};
-    const section = (data as Record<string, unknown>)[env];
-    if (typeof section !== "object" || section === null) return {};
-    const out: Record<string, string> = {};
-    flattenToDotPaths(section, "", out);
-    return out;
-  } catch {
-    return {};
-  }
+  const section = loadHttpClientEnvJsonRaw(filePath, env);
+  if (!section) return {};
+  const out: Record<string, string> = {};
+  flattenToDotPaths(section, "", out);
+  return out;
 }
 
 /**

@@ -1,7 +1,13 @@
 import got, { type Method, type Response } from "got";
 import type { FormDataLike } from "form-data-encoder";
 import type { KulalaBlock } from "../parser/types/block";
-import { substituteInString, substituteInObject } from "../variables";
+import {
+  substituteInString,
+  substituteInStringAsync,
+  substituteInObject,
+  substituteInObjectAsync,
+} from "../variables";
+import { OAuth2Manager } from "../auth/oauth2/manager";
 import { incrementReplayCount } from "../persistence";
 import { runScripts } from "./scripts";
 import {
@@ -31,26 +37,66 @@ export async function doRequestFromBlock(
   vars: Record<string, string> | undefined,
   stableDocIdForReplay: string | undefined,
   resolver: VariableResolver | undefined,
+  env: string = "default",
 ): Promise<KulalaRequestSuccessResponse | KulalaRequestErrorResponse> {
-  const url =
-    vars !== undefined
+  // Initialize OAuth2 manager if needed
+  const startDir = filePath
+    ? (await import("path")).dirname(filePath)
+    : process.cwd();
+  const oauth2Manager = new OAuth2Manager(env, startDir);
+  const authResolver = async (
+    func: "token" | "idToken",
+    authId: string,
+  ): Promise<string | undefined> => {
+    if (func === "token") {
+      return await oauth2Manager.getAccessToken(authId);
+    } else {
+      return await oauth2Manager.getIdToken(authId);
+    }
+  };
+
+  // Check if we need async substitution (for $auth.token() calls)
+  const urlStr = typeof block.request.url === "string" ? block.request.url : "";
+  const headerStr = JSON.stringify(block.request.headerSection);
+  const bodyStr = JSON.stringify(block.request.body ?? {});
+  const needsAsyncSubstitution =
+    urlStr.includes("$auth.") ||
+    headerStr.includes("$auth.") ||
+    bodyStr.includes("$auth.");
+
+  const url = needsAsyncSubstitution
+    ? await substituteInStringAsync(
+        block.request.url,
+        vars ?? {},
+        resolver,
+        authResolver,
+      )
+    : vars !== undefined
       ? substituteInString(block.request.url, vars, resolver)
       : block.request.url;
 
   let headers = setUserAgentHeaderIfNotPresent(
     buildHeadersFromSection(block.request.headerSection),
   );
-  if (vars !== undefined) {
+  if (vars !== undefined || needsAsyncSubstitution) {
     const substitutedHeaders: Record<string, string> = {};
     for (const [k, v] of Object.entries(headers)) {
-      substitutedHeaders[k] = substituteInString(v, vars, resolver);
+      substitutedHeaders[k] = needsAsyncSubstitution
+        ? await substituteInStringAsync(v, vars ?? {}, resolver, authResolver)
+        : substituteInString(v, vars ?? {}, resolver);
     }
     headers = substitutedHeaders;
   }
   headers = normalizeAuthorizationHeader(headers);
 
-  const body =
-    vars !== undefined
+  const body = needsAsyncSubstitution
+    ? await substituteInObjectAsync(
+        block.request.body,
+        vars ?? {},
+        resolver,
+        authResolver,
+      )
+    : vars !== undefined
       ? (substituteInObject(
           block.request.body,
           vars,

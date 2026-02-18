@@ -89,6 +89,7 @@ const run = async (
       vars,
       stableDocId,
       resolver,
+      env,
     );
     results.push(result);
     if (result.success) {

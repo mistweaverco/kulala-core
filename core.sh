@@ -15,6 +15,9 @@ escaped_content=$(echo "$escaped_content" | sed -e 's/{/\\\\{/g' -e 's/}/\\\\}/g
 
 parse_json="{\"action\":\"$action\", \"filepath\": \"$http_file\", \"content\": \"$escaped_content\", \"limit\": [{\"filter\": \"cursorPosition\", \"line\": $start_line_cursor, \"column\": 1}]}"
 
+# Use temporary file for input (frees stdin for interactive input like OAuth2)
+payload_file=$(mktemp)
+echo "$parse_json" > "$payload_file"
 
 echo ".http file content:"
 echo "----------------------"
@@ -27,7 +30,7 @@ echo
 
 echo "Actual invocation of Kulala with the following JSON payload:"
 echo "----------------------"
-echo "\"$parse_json\" | bun run src/index.ts"
+echo "bun run src/index.ts --input-file $payload_file"
 echo
 
 echo "Payload sent to Kulala:"
@@ -35,7 +38,7 @@ echo "----------------------"
 echo "$parse_json" | jq -r '.'
 echo
 
-if kulala_response=$(echo "$parse_json" | bun run src/index.ts); then
+if kulala_response=$(bun run src/index.ts --input-file "$payload_file"); then
   echo "Kulala response:"
   echo "----------------"
   echo "$kulala_response" | jq -r '.' || echo "$kulala_response"
@@ -46,3 +49,6 @@ else
   echo "Original JSON sent to Kulala:"
   echo "$parse_json"
 fi
+
+# Cleanup
+rm -f "$payload_file"

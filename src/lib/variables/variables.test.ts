@@ -4,7 +4,9 @@ import {
   getStableDocumentId,
   resolveVariables,
   substituteInString,
+  substituteInStringAsync,
   substituteInObject,
+  substituteInObjectAsync,
 } from "./index";
 import { loadEnvVars } from "./env-files";
 import { flattenToDotPaths } from "./flatten-json";
@@ -245,5 +247,226 @@ test("substituteInObject: GraphQL without variables section", () => {
   const result = substituteInObject(graphqlBody, vars);
   expect(result).toEqual({
     query: "query Query { allFilms { films { title } } }",
+  });
+});
+
+test("substituteInString: $auth.token() calls are preserved in sync version", () => {
+  const result = substituteInString('Bearer {{$auth.token("my-auth")}}', {});
+  // Should keep the placeholder since it requires async resolution
+  expect(result).toBe('Bearer {{$auth.token("my-auth")}}');
+});
+
+test("substituteInStringAsync: resolves $auth.token() calls", async () => {
+  const authResolver = async (
+    func: "token" | "idToken",
+    authId: string,
+  ): Promise<string | undefined> => {
+    if (func === "token" && authId === "my-auth") {
+      return "access-token-123";
+    }
+    return undefined;
+  };
+
+  const result = await substituteInStringAsync(
+    'Bearer {{$auth.token("my-auth")}}',
+    {},
+    undefined,
+    authResolver,
+  );
+  expect(result).toBe("Bearer access-token-123");
+});
+
+test("substituteInStringAsync: resolves $auth.idToken() calls", async () => {
+  const authResolver = async (
+    func: "token" | "idToken",
+    authId: string,
+  ): Promise<string | undefined> => {
+    if (func === "idToken" && authId === "my-auth") {
+      return "id-token-456";
+    }
+    return undefined;
+  };
+
+  const result = await substituteInStringAsync(
+    'ID: {{$auth.idToken("my-auth")}}',
+    {},
+    undefined,
+    authResolver,
+  );
+  expect(result).toBe("ID: id-token-456");
+});
+
+test("substituteInStringAsync: handles multiple occurrences of same variable", async () => {
+  const result = await substituteInStringAsync("{{name}} and {{name}} again", {
+    name: "test",
+  });
+  expect(result).toBe("test and test again");
+});
+
+test("substituteInStringAsync: handles multiple $auth.token() calls", async () => {
+  const authResolver = async (
+    func: "token" | "idToken",
+    authId: string,
+  ): Promise<string | undefined> => {
+    if (func === "token" && authId === "auth1") {
+      return "token1";
+    }
+    if (func === "token" && authId === "auth2") {
+      return "token2";
+    }
+    return undefined;
+  };
+
+  const result = await substituteInStringAsync(
+    '{{$auth.token("auth1")}} and {{$auth.token("auth2")}}',
+    {},
+    undefined,
+    authResolver,
+  );
+  expect(result).toBe("token1 and token2");
+});
+
+test("substituteInStringAsync: handles same $auth.token() call multiple times", async () => {
+  const authResolver = async (
+    func: "token" | "idToken",
+    authId: string,
+  ): Promise<string | undefined> => {
+    if (func === "token" && authId === "my-auth") {
+      return "same-token";
+    }
+    return undefined;
+  };
+
+  const result = await substituteInStringAsync(
+    '{{$auth.token("my-auth")}} and {{$auth.token("my-auth")}}',
+    {},
+    undefined,
+    authResolver,
+  );
+  expect(result).toBe("same-token and same-token");
+});
+
+test("substituteInStringAsync: mixes regular vars and $auth.token() calls", async () => {
+  const authResolver = async (
+    func: "token" | "idToken",
+    authId: string,
+  ): Promise<string | undefined> => {
+    if (func === "token" && authId === "my-auth") {
+      return "token-123";
+    }
+    return undefined;
+  };
+
+  const result = await substituteInStringAsync(
+    '{{base}}/api with {{$auth.token("my-auth")}}',
+    { base: "https://example.com" },
+    undefined,
+    authResolver,
+  );
+  expect(result).toBe("https://example.com/api with token-123");
+});
+
+test("substituteInStringAsync: handles $auth.token() with single quotes", async () => {
+  const authResolver = async (
+    func: "token" | "idToken",
+    authId: string,
+  ): Promise<string | undefined> => {
+    if (func === "token" && authId === "my-auth") {
+      return "token-123";
+    }
+    return undefined;
+  };
+
+  const result = await substituteInStringAsync(
+    "Bearer {{$auth.token('my-auth')}}",
+    {},
+    undefined,
+    authResolver,
+  );
+  expect(result).toBe("Bearer token-123");
+});
+
+test("substituteInStringAsync: returns empty string when authResolver returns undefined", async () => {
+  const authResolver = async (): Promise<string | undefined> => {
+    return undefined;
+  };
+
+  const result = await substituteInStringAsync(
+    'Bearer {{$auth.token("missing")}}',
+    {},
+    undefined,
+    authResolver,
+  );
+  expect(result).toBe("Bearer ");
+});
+
+test("substituteInStringAsync: handles $auth.token() without authResolver", async () => {
+  const result = await substituteInStringAsync(
+    'Bearer {{$auth.token("my-auth")}}',
+    {},
+  );
+  // Should keep placeholder when no authResolver provided
+  expect(result).toBe('Bearer {{$auth.token("my-auth")}}');
+});
+
+test("substituteInObjectAsync: resolves $auth.token() in nested objects", async () => {
+  const authResolver = async (
+    func: "token" | "idToken",
+    authId: string,
+  ): Promise<string | undefined> => {
+    if (func === "token" && authId === "my-auth") {
+      return "token-123";
+    }
+    return undefined;
+  };
+
+  const body = {
+    header: {
+      Authorization: 'Bearer {{$auth.token("my-auth")}}',
+    },
+    data: "test",
+  };
+
+  const result = await substituteInObjectAsync(
+    body,
+    {},
+    undefined,
+    authResolver,
+  );
+  expect(result).toEqual({
+    header: {
+      Authorization: "Bearer token-123",
+    },
+    data: "test",
+  });
+});
+
+test("substituteInObjectAsync: resolves $auth.token() in arrays", async () => {
+  const authResolver = async (
+    func: "token" | "idToken",
+    authId: string,
+  ): Promise<string | undefined> => {
+    if (func === "token" && authId === "my-auth") {
+      return "token-123";
+    }
+    return undefined;
+  };
+
+  const body = {
+    items: [
+      'Bearer {{$auth.token("my-auth")}}',
+      "other",
+      'Bearer {{$auth.token("my-auth")}}',
+    ],
+  };
+
+  const result = await substituteInObjectAsync(
+    body,
+    {},
+    undefined,
+    authResolver,
+  );
+  expect(result).toEqual({
+    items: ["Bearer token-123", "other", "Bearer token-123"],
   });
 });

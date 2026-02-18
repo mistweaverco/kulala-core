@@ -16,9 +16,15 @@ export { findKubaYamlDir, getKubaEnv, isKubaInPath } from "./kuba";
 export { loadEnvVars } from "./env-files";
 export { getMagicVariables } from "./magic";
 export { resolveVariables } from "./resolve";
-export { substituteInString, substituteInObject } from "./substitute";
+export {
+  substituteInString,
+  substituteInStringAsync,
+  substituteInObject,
+  substituteInObjectAsync,
+} from "./substitute";
 export {
   resolveRequestVariable,
   isRequestVariableKey,
   type PreviousResponse,
 } from "./request-vars";
+export { OAuth2Manager } from "../auth/oauth2/manager";
