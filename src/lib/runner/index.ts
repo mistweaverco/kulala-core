@@ -112,6 +112,27 @@ const getJSONRequestBody = (
   return undefined;
 };
 
+const getGraphQLRequestBody = (
+  body: unknown,
+): { query: string; variables?: Record<string, unknown> } | undefined => {
+  if (
+    typeof body === "object" &&
+    body !== null &&
+    "query" in body &&
+    typeof (body as { query: unknown }).query === "string"
+  ) {
+    const graphqlBody = body as {
+      query: string;
+      variables?: Record<string, unknown>;
+    };
+    return {
+      query: graphqlBody.query,
+      variables: graphqlBody.variables,
+    };
+  }
+  return undefined;
+};
+
 /** Parse "key=value&key2=value2" into an object (application/x-www-form-urlencoded). */
 const parseFormUrlEncoded = (body: string): Record<string, string> => {
   const out: Record<string, string> = {};
@@ -226,8 +247,12 @@ const doRequestFromBlock = async (
       : block.request.body;
 
   const requestHeaderType = getRequestHeaderType(headers);
+  const isGraphQL = block.request.method === "GRAPHQL";
+  const graphqlBody = isGraphQL ? getGraphQLRequestBody(body) : undefined;
   const json =
-    requestHeaderType === "json" ? getJSONRequestBody(body) : undefined;
+    !isGraphQL && requestHeaderType === "json"
+      ? getJSONRequestBody(body)
+      : undefined;
   const form =
     requestHeaderType === "form-urlencoded"
       ? getFormRequestBody(body, "form-urlencoded")
@@ -266,14 +291,24 @@ const doRequestFromBlock = async (
   try {
     const baseOptions = {
       retry: { limit: 0 },
-      method: block.request.method as Method,
-      headers,
+      method: (isGraphQL ? "POST" : block.request.method) as Method,
+      headers: isGraphQL
+        ? {
+            ...headers,
+            "Content-Type": "application/json",
+          }
+        : headers,
     };
 
     if (multipartBody) {
       response = await got(url, {
         ...baseOptions,
         body: multipartBody as unknown as FormDataLike,
+      });
+    } else if (graphqlBody !== undefined) {
+      response = await got(url, {
+        ...baseOptions,
+        json: graphqlBody,
       });
     } else if (json !== undefined) {
       response = await got(url, {

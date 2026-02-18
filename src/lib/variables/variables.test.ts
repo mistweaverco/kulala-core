@@ -187,3 +187,63 @@ test("flattenToDotPaths: keys containing dots use bracket notation", () => {
     "GET example.org",
   );
 });
+
+test("substituteInObject: GraphQL query string substitution", () => {
+  const graphqlBody = {
+    query: "query { user(id: {{userId}}) { name } }",
+    variables: {},
+  };
+  const vars = { userId: "123" };
+  const result = substituteInObject(graphqlBody, vars);
+  expect(result).toEqual({
+    query: "query { user(id: 123) { name } }",
+    variables: {},
+  });
+});
+
+test("substituteInObject: GraphQL variables object substitution", () => {
+  const graphqlBody = {
+    query: "query Person($id: ID) { person(personID: $id) { name } }",
+    variables: {
+      id: "{{userId}}",
+      name: "{{userName}}",
+    },
+  };
+  const vars = { userId: "123", userName: "John" };
+  const result = substituteInObject(graphqlBody, vars);
+  expect(result).toEqual({
+    query: "query Person($id: ID) { person(personID: $id) { name } }",
+    variables: {
+      id: "123",
+      name: "John",
+    },
+  });
+});
+
+test("substituteInObject: GraphQL query and variables both substituted", () => {
+  const graphqlBody = {
+    query: "query { user(id: {{userId}}) { name email } }",
+    variables: {
+      filter: "{{filterValue}}",
+    },
+  };
+  const vars = { userId: "456", filterValue: "active" };
+  const result = substituteInObject(graphqlBody, vars);
+  expect(result).toEqual({
+    query: "query { user(id: 456) { name email } }",
+    variables: {
+      filter: "active",
+    },
+  });
+});
+
+test("substituteInObject: GraphQL without variables section", () => {
+  const graphqlBody = {
+    query: "query Query { allFilms { films { title } } }",
+  };
+  const vars = { someVar: "value" };
+  const result = substituteInObject(graphqlBody, vars);
+  expect(result).toEqual({
+    query: "query Query { allFilms { films { title } } }",
+  });
+});

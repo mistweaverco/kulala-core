@@ -171,7 +171,7 @@ const getParsedBlock = async (
         break;
       case "body":
         if (result.request.body) break;
-        body = await getBody(lines, lineIdx);
+        body = await getBody(lines, lineIdx, result.request.method);
         if (isError(body)) {
           result.errors.push(body);
           break;
