@@ -151,9 +151,12 @@ test("doRequestFromBlock: GET request returns success response (real got)", asyn
         json: { success: true, url: baseUrl },
       });
     }
-    expect(result.timings).toHaveProperty("namelookup");
-    expect(result.timings).toHaveProperty("connect");
-    expect(result.timings).toHaveProperty("starttransfer");
+    expect(result.timings).toHaveProperty("dns");
+    expect(result.timings).toHaveProperty("tcp");
+    expect(result.timings).toHaveProperty("firstByte");
+    expect(result.timings).toHaveProperty("request");
+    expect(result.timings).toHaveProperty("tls");
+    expect(result.timings).toHaveProperty("redirect");
   }
 });
 

@@ -3,12 +3,12 @@ export type KulalaRequestSuccessResponse = {
   status: number;
   headers: Record<string, string>;
   timings: {
-    namelookup: number;
-    connect: number;
-    appconnect: number;
-    pretransfer: number;
+    dns: number;
+    tcp: number;
+    tls: number;
+    request: number;
     redirect: number;
-    starttransfer: number;
+    firstByte: number;
   };
   body:
     | { type: "text"; content: string }

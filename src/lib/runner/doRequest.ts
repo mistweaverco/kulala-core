@@ -2,10 +2,10 @@ import got, { type Method, type Response } from "got";
 import type { FormDataLike } from "form-data-encoder";
 import type { KulalaBlock } from "../parser/types/block";
 import {
-  substituteInString,
-  substituteInStringAsync,
   substituteInObject,
   substituteInObjectAsync,
+  substituteInString,
+  substituteInStringAsync,
 } from "../variables";
 import { OAuth2Manager } from "../auth/oauth2/manager";
 import { incrementReplayCount } from "../persistence";
@@ -16,18 +16,18 @@ import {
   setUserAgentHeaderIfNotPresent,
 } from "./headers";
 import {
-  getRequestHeaderType,
-  getJSONRequestBody,
-  getGraphQLRequestBody,
-  getFormRequestBody,
   buildMultipartBody,
+  getFormRequestBody,
+  getGraphQLRequestBody,
+  getJSONRequestBody,
+  getRequestHeaderType,
 } from "./body";
 import type {
-  KulalaRequestSuccessResponse,
-  KulalaRequestErrorResponse,
   KulalaPromptResponse,
-  VariableResolver,
+  KulalaRequestErrorResponse,
+  KulalaRequestSuccessResponse,
   RunnerResponseLike,
+  VariableResolver,
 } from "./types";
 
 export type { RunnerResponseLike } from "./types";
@@ -255,12 +255,12 @@ export async function doRequestFromBlock(
       status: res.statusCode,
       headers: res.headers as Record<string, string>,
       timings: {
-        namelookup: phases.dns ?? 0,
-        connect: phases.tcp ?? 0,
-        appconnect: phases.tls ?? 0,
-        pretransfer: phases.request ?? 0,
+        dns: phases.dns ?? 0,
+        tcp: phases.tcp ?? 0,
+        tls: phases.tls ?? 0,
+        request: phases.request ?? 0,
         redirect: total && firstByte ? total - firstByte : 0,
-        starttransfer: firstByte,
+        firstByte,
       },
       body: responseBody,
     } as KulalaRequestSuccessResponse;
