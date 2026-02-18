@@ -38,6 +38,15 @@ const getLineType = (
 ): KulalaBlockLineType => {
   if (lineIdx === 0) return { name: "name", lineNumber: lineIdx };
   if (line.startsWith("###")) return { name: "name", lineNumber: lineIdx };
+  // Body line (including JetBrains "< path" body-from-file) must be checked before "< " → preRequestScript
+  if (
+    seenBlockTypes.has("request") &&
+    seenBlockTypes.has("afterHeaders") &&
+    !seenBlockTypes.has("afterBody") &&
+    !seenBlockTypes.has("postRequestScript")
+  ) {
+    return { name: "body", lineNumber: lineIdx };
+  }
   if (line.startsWith("< ")) {
     return { name: "preRequestScript", lineNumber: lineIdx };
   }
@@ -70,14 +79,6 @@ const getLineType = (
   }
   if (seenBlockTypes.has("afterHeaders") && line.startsWith("> ")) {
     return { name: "postRequestScript", lineNumber: lineIdx };
-  }
-  if (
-    seenBlockTypes.has("request") &&
-    seenBlockTypes.has("afterHeaders") &&
-    !seenBlockTypes.has("afterBody") &&
-    !seenBlockTypes.has("postRequestScript")
-  ) {
-    return { name: "body", lineNumber: lineIdx };
   }
   if (line.trim() === "" && seenBlockTypes.has("body")) {
     return { name: "afterBody", lineNumber: lineIdx };

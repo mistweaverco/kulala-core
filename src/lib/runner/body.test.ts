@@ -6,6 +6,8 @@ import {
   parseFormUrlEncoded,
   getFormRequestBody,
   isFileRef,
+  isBodyFromFileRef,
+  resolveBodyFromFile,
 } from "./body";
 
 test("getRequestHeaderType returns json for application/json", () => {
@@ -90,4 +92,44 @@ test("isFileRef returns false for plain values", () => {
   expect(isFileRef("string")).toBe(false);
   expect(isFileRef({ path: "/tmp" })).toBe(false);
   expect(isFileRef(null)).toBe(false);
+});
+
+test("isBodyFromFileRef returns true for body-from-file shape", () => {
+  expect(isBodyFromFileRef({ __bodyFromFile: "./input.json" })).toBe(true);
+  expect(isBodyFromFileRef({ __bodyFromFile: "path/to/body.json" })).toBe(true);
+});
+
+test("isBodyFromFileRef returns false for other values", () => {
+  expect(isBodyFromFileRef("string")).toBe(false);
+  expect(isBodyFromFileRef({ filePath: "/tmp" })).toBe(false);
+  expect(isBodyFromFileRef({ __bodyFromFile: 123 })).toBe(false);
+  expect(isBodyFromFileRef(null)).toBe(false);
+});
+
+test("resolveBodyFromFile reads file relative to baseDir", async () => {
+  const { mkdtempSync } = await import("fs");
+  const { join } = await import("path");
+  const { tmpdir } = await import("os");
+  const dir = mkdtempSync(join(tmpdir(), "kulala-resolve-body-"));
+  const filePath = join(dir, "payload.txt");
+  await Bun.write(filePath, "hello from file");
+
+  const content = await resolveBodyFromFile("payload.txt", dir);
+  expect(content).toBe("hello from file");
+});
+
+test("resolveBodyFromFile resolves relative path with subdir", async () => {
+  const { mkdtempSync } = await import("fs");
+  const { join } = await import("path");
+  const { tmpdir } = await import("os");
+  const dir = mkdtempSync(join(tmpdir(), "kulala-resolve-body-"));
+  const subdir = join(dir, "fixtures");
+  await import("fs").then((fs) =>
+    fs.promises.mkdir(subdir, { recursive: true }),
+  );
+  const filePath = join(subdir, "data.json");
+  await Bun.write(filePath, '{"x":1}');
+
+  const content = await resolveBodyFromFile("fixtures/data.json", dir);
+  expect(content).toBe('{"x":1}');
 });

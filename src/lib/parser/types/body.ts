@@ -3,7 +3,8 @@ export type KulalaRequestBodyType =
   | "form"
   | "file"
   | "raw"
-  | "graphql";
+  | "graphql"
+  | "bodyFromFile";
 
 export type KulalaRequestGraphQLBody = {
   query: string;
@@ -21,6 +22,11 @@ export type KulalaRequestFileBody = {
   filename?: string;
 };
 
+/** Body read from a file (JetBrains-style `< path` syntax). Stored under __bodyFromFile to avoid conflicting with JSON payloads. */
+export type KulalaRequestBodyFromFileContent = {
+  __bodyFromFile: string;
+};
+
 export type KulalaRequestRawBody = {
   contentType?: string;
 };
@@ -30,4 +36,5 @@ export type KulalaRequestBody =
   | { type: "form"; content: KulalaRequestFormBody }
   | { type: "file"; content: KulalaRequestFileBody }
   | { type: "raw"; content: string }
-  | { type: "graphql"; content: KulalaRequestGraphQLBody };
+  | { type: "graphql"; content: KulalaRequestGraphQLBody }
+  | { type: "bodyFromFile"; content: KulalaRequestBodyFromFileContent };

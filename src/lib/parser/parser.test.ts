@@ -136,3 +136,19 @@ Content-Type: application/json
   }
   expect(block.request.body).toBeDefined();
 });
+
+test("parser: POST with body from file (< path) JetBrains syntax", async () => {
+  const content = `### POST_BODY_FROM_FILE
+
+POST https://example.com:8080/api/html/post HTTP/1.1
+Content-Type: application/json
+
+< ./input.json`;
+
+  const doc = await getDocument(content);
+  const block = doc.blocks[0];
+
+  expect(block.errors).toEqual([]);
+  expect(block.request.method).toBe("POST");
+  expect(block.request.body).toEqual({ __bodyFromFile: "./input.json" });
+});

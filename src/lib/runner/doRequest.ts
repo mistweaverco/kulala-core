@@ -22,6 +22,8 @@ import {
   getGraphQLRequestBody,
   getJSONRequestBody,
   getRequestHeaderType,
+  isBodyFromFileRef,
+  resolveBodyFromFile,
 } from "./body";
 import type {
   KulalaPromptResponse,
@@ -61,6 +63,15 @@ export async function doRequestFromBlock(
     }
   };
 
+  // Resolve body-from-file (JetBrains-style "< path") so we have effective body for substitution and send
+  let effectiveBody: typeof block.request.body = block.request.body;
+  if (isBodyFromFileRef(effectiveBody)) {
+    effectiveBody = await resolveBodyFromFile(
+      effectiveBody.__bodyFromFile,
+      startDir,
+    );
+  }
+
   // Check if we need async substitution (for $auth.token() calls)
   // Unescape braces in header values before checking (similar to header parser)
   const unescapeBraces = (str: string): string => {
@@ -75,7 +86,7 @@ export async function doRequestFromBlock(
         : entry,
   );
   const headerStr = JSON.stringify(headerSectionWithUnescapedBraces);
-  const bodyStr = JSON.stringify(block.request.body ?? {});
+  const bodyStr = JSON.stringify(effectiveBody ?? {});
   const needsAsyncSubstitution =
     urlStr.includes("$auth.") ||
     headerStr.includes("$auth.") ||
@@ -125,18 +136,18 @@ export async function doRequestFromBlock(
   try {
     body = needsAsyncSubstitution
       ? await substituteInObjectAsync(
-          block.request.body,
+          effectiveBody,
           vars ?? {},
           resolver,
           authResolver,
         )
       : vars !== undefined
         ? (substituteInObject(
-            block.request.body,
+            effectiveBody,
             vars,
             resolver,
           ) as typeof block.request.body)
-        : block.request.body;
+        : effectiveBody;
   } catch (error) {
     if (error instanceof OAuth2PromptError) {
       return error.promptResponse;
@@ -147,10 +158,22 @@ export async function doRequestFromBlock(
   const requestHeaderType = getRequestHeaderType(headers);
   const isGraphQL = block.request.method === "GRAPHQL";
   const graphqlBody = isGraphQL ? getGraphQLRequestBody(body) : undefined;
-  const json =
+  let json =
     !isGraphQL && requestHeaderType === "json"
       ? getJSONRequestBody(body)
       : undefined;
+  // Body-from-file yields a string; parse as JSON when Content-Type is json
+  if (
+    json === undefined &&
+    requestHeaderType === "json" &&
+    typeof body === "string"
+  ) {
+    try {
+      json = JSON.parse(body) as Record<string, unknown>;
+    } catch {
+      // leave json undefined, may fall through to raw body
+    }
+  }
   const form =
     requestHeaderType === "form-urlencoded"
       ? getFormRequestBody(body, "form-urlencoded")
@@ -220,6 +243,8 @@ export async function doRequestFromBlock(
         ...baseOptions,
         form: form as Record<string, string>,
       });
+    } else if (typeof body === "string" && body.length > 0) {
+      res = await got(url, { ...baseOptions, body });
     } else {
       res = await got(url, baseOptions);
     }

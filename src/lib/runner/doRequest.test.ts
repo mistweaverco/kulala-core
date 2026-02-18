@@ -55,6 +55,10 @@ beforeAll(() => {
       if (path === "/post" && method === "POST") {
         return Response.json({ received: true });
       }
+      if (path === "/echo-body" && method === "POST") {
+        const raw = await req.text();
+        return Response.json({ echoed: raw });
+      }
       if (path === "/graphql" && method === "POST") {
         const raw = await req.text();
         let parsed: unknown;
@@ -381,5 +385,44 @@ test("doRequestFromBlock: maps text response body when Content-Type is not json"
     if (result.body.type === "text") {
       expect(result.body.content).toBe("plain text response");
     }
+  }
+});
+
+test("doRequestFromBlock: reads request body from file (JetBrains < path syntax)", async () => {
+  const { mkdtempSync } = await import("fs");
+  const { join } = await import("path");
+  const { tmpdir } = await import("os");
+  const dir = mkdtempSync(join(tmpdir(), "kulala-body-"));
+  const bodyFile = join(dir, "input.json");
+  await Bun.write(bodyFile, JSON.stringify({ from: "file", n: 42 }));
+  const httpFilePath = join(dir, "request.http");
+
+  const block = makeBlock({
+    request: {
+      method: "POST",
+      url: `${baseUrl}/echo-body`,
+      headerSection: [
+        { type: "header", name: "Content-Type", value: "application/json" },
+      ],
+      body: { __bodyFromFile: "input.json" },
+    },
+  });
+
+  const result = await doRequestFromBlock(
+    block,
+    httpFilePath,
+    undefined,
+    undefined,
+    undefined,
+  );
+
+  expect(result).toHaveProperty("success", true);
+  if (
+    result.success &&
+    result.body.type === "json" &&
+    "content" in result.body
+  ) {
+    const content = result.body.content as { echoed?: string };
+    expect(content.echoed).toBe(JSON.stringify({ from: "file", n: 42 }));
   }
 });

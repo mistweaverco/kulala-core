@@ -99,6 +99,33 @@ export function getFormRequestBody(
   return undefined;
 }
 
+/** True if body is a "read body from file" reference: { __bodyFromFile: string }. */
+export function isBodyFromFileRef(
+  body: unknown,
+): body is { __bodyFromFile: string } {
+  return (
+    typeof body === "object" &&
+    body !== null &&
+    "__bodyFromFile" in body &&
+    typeof (body as { __bodyFromFile: unknown }).__bodyFromFile === "string"
+  );
+}
+
+/**
+ * Resolve body-from-file: read file at path (relative to baseDir) and return its contents as string.
+ * @throws if file cannot be read
+ */
+export async function resolveBodyFromFile(
+  filePath: string,
+  baseDir: string,
+): Promise<string> {
+  const path = await import("path");
+  const fs = await import("fs/promises");
+  const resolved = path.resolve(baseDir, filePath);
+  const content = await fs.readFile(resolved, "utf-8");
+  return content;
+}
+
 /** True if value looks like a file reference: { filePath: string, filename?: string }. */
 export function isFileRef(
   value: unknown,

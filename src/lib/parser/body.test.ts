@@ -105,6 +105,46 @@ test("getBody: GraphQL query only (no variables)", async () => {
   });
 });
 
+test("getBody: body from file (< path) JetBrains syntax", async () => {
+  const lines = [
+    "POST https://example.com:8080/api/html/post HTTP/1.1",
+    "Content-Type: application/json",
+    "",
+    "< ./input.json",
+  ];
+  const result = await getBody(lines, 3, "POST");
+  expect(result).toEqual({
+    type: "bodyFromFile",
+    content: { __bodyFromFile: "./input.json" },
+  });
+});
+
+test("getBody: body from file with path without leading ./", async () => {
+  const lines = [
+    "POST https://example.com/api HTTP/1.1",
+    "",
+    "< path/to/file.json",
+  ];
+  const result = await getBody(lines, 2, "POST");
+  expect(result).toEqual({
+    type: "bodyFromFile",
+    content: { __bodyFromFile: "path/to/file.json" },
+  });
+});
+
+test("getBody: body from file with quoted path", async () => {
+  const lines = [
+    "POST https://example.com/api HTTP/1.1",
+    "",
+    '< "fixtures/input.json"',
+  ];
+  const result = await getBody(lines, 2, "POST");
+  expect(result).toEqual({
+    type: "bodyFromFile",
+    content: { __bodyFromFile: "fixtures/input.json" },
+  });
+});
+
 test("getBody: non-GraphQL method parses as JSON", async () => {
   const lines = [
     "POST https://api.example.com/api HTTP/1.1",

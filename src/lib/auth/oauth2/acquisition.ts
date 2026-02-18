@@ -1,4 +1,5 @@
 import got from "got";
+import { setUserAgentHeaderIfNotPresent } from "./../../runner/headers";
 import type { OAuth2Config, OAuth2TokenData } from "./types";
 import {
   buildAuthorizationUrl,
@@ -36,10 +37,10 @@ export async function acquireClientCredentialsToken(
   }
 
   const clientCredentialsLocation = config["Client Credentials"] ?? "basic";
-  const headers: Record<string, string> = {
+  const headers: Record<string, string> = setUserAgentHeaderIfNotPresent({
     "Content-Type": "application/x-www-form-urlencoded",
     ...(config["Custom Headers"] ?? {}),
-  };
+  });
 
   const bodyParams: Record<string, string> = {
     grant_type: "client_credentials",
@@ -71,7 +72,9 @@ export async function acquireClientCredentialsToken(
   // Handle client credentials location
   if (clientCredentialsLocation === "basic") {
     // Basic auth header
-    const credentials = `${config["Client ID"]}:${config["Client Secret"] ?? ""}`;
+    const credentials = `${config["Client ID"]}:${
+      config["Client Secret"] ?? ""
+    }`;
     const encoded = Buffer.from(credentials, "utf8").toString("base64");
     headers.Authorization = `Basic ${encoded}`;
   } else if (clientCredentialsLocation === "in body") {

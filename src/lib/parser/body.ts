@@ -5,6 +5,7 @@ import type {
   KulalaRequestBodyType,
   KulalaRequestFileBody,
   KulalaRequestGraphQLBody,
+  KulalaRequestBodyFromFileContent,
 } from "./types/body";
 
 export const isBody = (obj: unknown): obj is KulalaRequestBody => {
@@ -21,6 +22,7 @@ export const isBody = (obj: unknown): obj is KulalaRequestBody => {
     "file",
     "raw",
     "graphql",
+    "bodyFromFile",
   ];
   if (!validTypes.includes(body.type)) {
     return false;
@@ -50,6 +52,14 @@ export const isBody = (obj: unknown): obj is KulalaRequestBody => {
         "query" in body.content &&
         typeof (body.content as KulalaRequestGraphQLBody).query === "string"
       );
+    case "bodyFromFile":
+      return (
+        typeof body.content === "object" &&
+        body.content !== null &&
+        "__bodyFromFile" in body.content &&
+        typeof (body.content as KulalaRequestBodyFromFileContent)
+          .__bodyFromFile === "string"
+      );
     default:
       return false;
   }
@@ -68,6 +78,23 @@ export const getBody = async (
     postRequestScriptMarkerPos !== -1
       ? contents.slice(0, postRequestScriptMarkerPos).trim()
       : contents.trim();
+
+  // Body from file: first line is "< path" (JetBrains HTTP syntax)
+  const firstLine = blockLines[lineIdx]?.trim() ?? "";
+  const fileRefMatch = firstLine.match(/^<\s+(.+)$/);
+  if (fileRefMatch) {
+    let path = fileRefMatch[1]!.trim();
+    if (
+      (path.startsWith('"') && path.endsWith('"')) ||
+      (path.startsWith("'") && path.endsWith("'"))
+    ) {
+      path = path.slice(1, -1);
+    }
+    return {
+      type: "bodyFromFile",
+      content: { __bodyFromFile: path },
+    };
+  }
 
   // GraphQL requests: query as plain text, optional variables JSON after blank line
   // Format per https://neovim.getkulala.net/docs/usage/graphql
