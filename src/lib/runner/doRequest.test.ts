@@ -41,6 +41,11 @@ beforeAll(() => {
       if (path === "/get" && method === "GET") {
         return Response.json({ json: { success: true, url: baseUrl } });
       }
+      if (path === "/auth" && method === "GET") {
+        return Response.json({
+          authorization: req.headers.get("authorization"),
+        });
+      }
       if (path === "/path" && method === "GET") {
         return Response.json({});
       }
@@ -168,6 +173,97 @@ test("doRequestFromBlock: substitutes URL and headers when vars provided", async
   );
 
   expect(result).toHaveProperty("success", true);
+});
+
+test("doRequestFromBlock: encodes Authorization Basic username:password", async () => {
+  const block = makeBlock({
+    request: {
+      method: "GET",
+      url: `${baseUrl}/auth`,
+      headerSection: [
+        { type: "header", name: "Authorization", value: "Basic myUser:secret" },
+      ],
+    },
+  });
+
+  const result = await doRequestFromBlock(
+    block,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+  );
+
+  expect(result).toHaveProperty("success", true);
+  if (result.success) {
+    expect(result.body.type).toBe("json");
+    if (result.body.type === "json") {
+      expect(result.body.content.authorization).toBe(
+        `Basic ${Buffer.from("myUser:secret", "utf8").toString("base64")}`,
+      );
+    }
+  }
+});
+
+test("doRequestFromBlock: keeps Authorization Basic base64 as-is", async () => {
+  const already = Buffer.from("myUser:secret", "utf8").toString("base64");
+  const block = makeBlock({
+    request: {
+      method: "GET",
+      url: `${baseUrl}/auth`,
+      headerSection: [
+        { type: "header", name: "Authorization", value: `Basic ${already}` },
+      ],
+    },
+  });
+
+  const result = await doRequestFromBlock(
+    block,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+  );
+
+  expect(result).toHaveProperty("success", true);
+  if (result.success) {
+    expect(result.body.type).toBe("json");
+    if (result.body.type === "json") {
+      expect(result.body.content.authorization).toBe(`Basic ${already}`);
+    }
+  }
+});
+
+test("doRequestFromBlock: keeps Authorization Bearer as-is", async () => {
+  const block = makeBlock({
+    request: {
+      method: "GET",
+      url: `${baseUrl}/auth`,
+      headerSection: [
+        {
+          type: "header",
+          name: "Authorization",
+          value: "Bearer token123",
+        },
+      ],
+    },
+  });
+
+  const result = await doRequestFromBlock(
+    block,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+  );
+
+  expect(result).toHaveProperty("success", true);
+  if (result.success) {
+    expect(result.body.type).toBe("json");
+    if (result.body.type === "json") {
+      expect(result.body.content.authorization).toBe("Bearer token123");
+    }
+  }
 });
 
 test("doRequestFromBlock: sends JSON body for POST with Content-Type application/json", async () => {

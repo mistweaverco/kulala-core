@@ -6,6 +6,7 @@ import { incrementReplayCount } from "../persistence";
 import { runScripts } from "./scripts";
 import {
   buildHeadersFromSection,
+  normalizeAuthorizationHeader,
   setUserAgentHeaderIfNotPresent,
 } from "./headers";
 import {
@@ -46,6 +47,7 @@ export async function doRequestFromBlock(
     }
     headers = substitutedHeaders;
   }
+  headers = normalizeAuthorizationHeader(headers);
 
   const body =
     vars !== undefined

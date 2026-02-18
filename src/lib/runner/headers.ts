@@ -26,3 +26,47 @@ export function setUserAgentHeaderIfNotPresent(
   }
   return headers;
 }
+
+/**
+ * Kulala-compatible Authorization header helpers.
+ *
+ * Currently supported:
+ * - Basic: if value is "Basic username:password" (or "Basic username password"),
+ *   encode credentials as base64 and replace value with "Basic <base64>".
+ *
+ * If the value is already base64 (no ":" and not two tokens), it's left unchanged.
+ */
+export function normalizeAuthorizationHeader(
+  headers: Record<string, string>,
+): Record<string, string> {
+  const authKey = Object.keys(headers).find(
+    (k) => k.toLowerCase() === "authorization",
+  );
+  if (!authKey) return headers;
+  const raw = headers[authKey];
+  if (typeof raw !== "string") return headers;
+
+  const trimmed = raw.trim();
+  const match = trimmed.match(/^(\S+)\s+(.+)$/);
+  if (!match) return headers;
+
+  const scheme = match[1] ?? "";
+  const rest = (match[2] ?? "").trim();
+
+  if (scheme.toLowerCase() !== "basic") return headers;
+
+  let credentials: string | undefined;
+  if (rest.includes(":")) {
+    credentials = rest;
+  } else {
+    const parts = rest.split(/\s+/).filter(Boolean);
+    if (parts.length === 2) {
+      credentials = `${parts[0]}:${parts[1]}`;
+    }
+  }
+
+  if (!credentials) return headers;
+
+  const encoded = Buffer.from(credentials, "utf8").toString("base64");
+  return { ...headers, [authKey]: `Basic ${encoded}` };
+}
