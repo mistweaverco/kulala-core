@@ -17,6 +17,13 @@ import type { KulalaHeader } from "./types/header";
 import { getComment } from "./comment";
 import { getRequest } from "./request";
 import type { KulalaRequestBody } from "./types/body";
+import {
+  parseImportDirective,
+  parseRunDirective,
+  isDirective,
+} from "./directive";
+import type { KulalaDirective } from "./types/directive";
+import { resolve, dirname } from "path";
 const blockRegex = /###(.*?)\n([\s\S]+?)(?=###|$)/g;
 const nameRegex = /### (.+?)\n/;
 
@@ -196,6 +203,61 @@ const getParsedBlock = async (
   return result as KulalaBlock;
 };
 
+/**
+ * Extract directives (import/run) from the top of the file, before blocks.
+ */
+function extractDirectives(content: string): {
+  directives: KulalaDirective[];
+  contentWithoutDirectives: string;
+  errors: KulalaError[];
+} {
+  const lines = content.split("\n");
+  const directives: KulalaDirective[] = [];
+  const errors: KulalaError[] = [];
+  let directiveEndIdx = 0;
+
+  // Find directives at the top (before first block)
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!;
+    const trimmed = line.trim();
+
+    // Stop at first block marker
+    if (trimmed.startsWith("###")) {
+      break;
+    }
+
+    // Skip empty lines and comments
+    if (!trimmed || trimmed.startsWith("#")) {
+      continue;
+    }
+
+    if (isDirective(line)) {
+      directiveEndIdx = i + 1;
+      if (trimmed.startsWith("import ")) {
+        const result = parseImportDirective(line, i);
+        if ("errorMessage" in result) {
+          errors.push(result);
+        } else {
+          directives.push(result);
+        }
+      } else if (trimmed.startsWith("run ")) {
+        const result = parseRunDirective(line, i);
+        if ("errorMessage" in result) {
+          errors.push(result);
+        } else {
+          directives.push(result);
+        }
+      }
+    }
+  }
+
+  // Remove directive lines from content
+  const contentWithoutDirectives =
+    directiveEndIdx > 0 ? lines.slice(directiveEndIdx).join("\n") : content;
+
+  return { directives, contentWithoutDirectives, errors };
+}
+
 const getBlocks = async (
   content: string,
   filepath?: string,
@@ -211,13 +273,171 @@ const getBlocks = async (
   return blocks;
 };
 
+/**
+ * Resolve a file path relative to the current file.
+ */
+async function resolveImportPath(
+  importPath: string,
+  currentFilepath?: string,
+): Promise<string> {
+  if (currentFilepath) {
+    const baseDir = dirname(currentFilepath);
+    return resolve(baseDir, importPath);
+  }
+  return resolve(process.cwd(), importPath);
+}
+
+/**
+ * Load and parse an imported file.
+ */
+async function loadImportedFile(
+  importPath: string,
+  currentFilepath?: string,
+  visitedFiles: Set<string> = new Set(),
+): Promise<KulalaDocument | KulalaError> {
+  const resolvedPath = await resolveImportPath(importPath, currentFilepath);
+  const normalizedPath = resolve(resolvedPath);
+
+  // Prevent circular imports
+  if (visitedFiles.has(normalizedPath)) {
+    return {
+      errorMessage: `Circular import detected: ${normalizedPath}`,
+      lineNumber: 0,
+    };
+  }
+
+  visitedFiles.add(normalizedPath);
+
+  try {
+    const file = Bun.file(resolvedPath);
+    if (!(await file.exists())) {
+      return {
+        errorMessage: `Imported file not found: ${resolvedPath}`,
+        lineNumber: 0,
+      };
+    }
+    const content = await file.text();
+    return await getDocument(content, resolvedPath, visitedFiles);
+  } catch (error) {
+    return {
+      errorMessage: `Failed to load imported file ${resolvedPath}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      lineNumber: 0,
+    };
+  }
+}
+
 export const getDocument = async (
   content: string,
   filepath?: string,
+  visitedFiles: Set<string> = new Set(),
 ): Promise<KulalaDocument> => {
-  const blocks = await getBlocks(content, filepath);
+  const {
+    directives,
+    contentWithoutDirectives,
+    errors: directiveErrors,
+  } = extractDirectives(content);
+
+  const blocks = await getBlocks(contentWithoutDirectives, filepath);
+  const allErrors = [...directiveErrors];
+
+  // Process imports: load files and merge their blocks
+  const importedBlocks: KulalaBlock[] = [];
+  const importedDocuments: Map<string, KulalaDocument> = new Map();
+
+  for (const directive of directives) {
+    if (directive.type === "import") {
+      const result = await loadImportedFile(
+        directive.filepath,
+        filepath,
+        visitedFiles,
+      );
+      if ("errorMessage" in result) {
+        allErrors.push(result);
+      } else {
+        importedDocuments.set(directive.filepath, result);
+        // Add blocks from imported file
+        importedBlocks.push(...result.blocks);
+      }
+    }
+  }
+
+  // Process run directives: find blocks by name from imported files
+  const runBlocks: KulalaBlock[] = [];
+  for (const directive of directives) {
+    if (directive.type === "run") {
+      const target = directive.target.trim();
+      if (target.startsWith("#")) {
+        // Run specific block by name: run #BLOCK_NAME
+        const blockName = target.slice(1);
+        let found = false;
+
+        // Search in imported documents first
+        for (const [importPath, doc] of importedDocuments.entries()) {
+          const block = doc.blocks.find((b) => b.name === blockName);
+          if (block) {
+            found = true;
+            // Clone block and apply variable overrides if any
+            const runBlock: KulalaBlock = {
+              ...block,
+              name: `${block.name}_from_${importPath.split("/").pop()}`,
+            };
+            // Store variable overrides in a custom property (we'll handle this in runner)
+            (runBlock as any).__runDirective = directive;
+            runBlocks.push(runBlock);
+            break;
+          }
+        }
+
+        // Also search in current document blocks
+        if (!found) {
+          const block = blocks.find((b) => b.name === blockName);
+          if (block) {
+            found = true;
+            const runBlock: KulalaBlock = {
+              ...block,
+            };
+            (runBlock as any).__runDirective = directive;
+            runBlocks.push(runBlock);
+          }
+        }
+
+        if (!found) {
+          allErrors.push({
+            errorMessage: `Block not found: ${blockName}`,
+            lineNumber: directive.lineNumber,
+          });
+        }
+      } else {
+        // Run all blocks from a file: run ./file.http
+        const result = await loadImportedFile(target, filepath, visitedFiles);
+        if ("errorMessage" in result) {
+          allErrors.push({
+            errorMessage: result.errorMessage,
+            lineNumber: directive.lineNumber,
+          });
+        } else {
+          // Add all blocks from the file
+          for (const block of result.blocks) {
+            const runBlock: KulalaBlock = {
+              ...block,
+            };
+            (runBlock as any).__runDirective = directive;
+            runBlocks.push(runBlock);
+          }
+        }
+      }
+    }
+  }
+
+  // Combine: current blocks + imported blocks + run blocks
+  const allBlocks = [...blocks, ...importedBlocks, ...runBlocks];
+
   return {
     filepath,
-    blocks,
+    directives,
+    blocks: allBlocks,
+    hasErrors: allErrors.length > 0,
   };
 };

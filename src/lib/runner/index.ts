@@ -65,6 +65,17 @@ const run = async (
   const previousResults = new Map<string, PreviousResponse>();
   for (const block of blocks) {
     const vars = await resolveVariables(env, stableDocId, block.name, startDir);
+
+    // Apply variable overrides from run directive if present
+    const runDirective = (block as any).__runDirective;
+    if (runDirective?.variableOverrides) {
+      for (const [key, value] of Object.entries(
+        runDirective.variableOverrides,
+      )) {
+        vars[key] = value;
+      }
+    }
+
     const resolver = (key: string) =>
       resolveRequestVariable(key, previousResults);
     const result = await doRequestFromBlock(
