@@ -1,0 +1,29 @@
+### GQL_STARWARS_QUERY_PERSON
+
+GRAPHQL https://swapi-graphql.netlify.app/.netlify/functions/index HTTP/1.1
+Accept: application/json
+
+query Person($id: ID) {
+  person(personID: $id) {
+    name
+  }
+}
+
+{
+  "id": 1
+}
+
+### GQL_STARWARS_QUERY_PLANET
+
+GRAPHQL https://swapi-graphql.netlify.app/.netlify/functions/index HTTP/1.1
+Accept: application/json
+
+query Planet($id: ID) {
+  planet(planetID: $id) {
+    name
+  }
+}
+
+{
+  "id": 1
+}

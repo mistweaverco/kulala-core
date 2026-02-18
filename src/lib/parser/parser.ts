@@ -129,6 +129,23 @@ const getParsedBlock = async (
     if (!seenBlockTypes.has(lineType.name)) {
       seenBlockTypes.add(lineType.name);
     }
+
+    // Check for run directive inside block (before request is parsed)
+    if (!seenBlockTypes.has("request") && isDirective(line)) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith("run ")) {
+        const runDirective = parseRunDirective(line, lineIdx);
+        if (!isError(runDirective)) {
+          // Store run directive on block for later processing
+          (result as any).__blockRunDirective = runDirective;
+        } else {
+          result.errors.push(runDirective);
+        }
+        lineIdx++;
+        continue;
+      }
+    }
+
     switch (lineType.name) {
       case "headers": {
         header = getHeader(line, lineIdx);
@@ -210,6 +227,7 @@ function extractDirectives(content: string): {
   directives: KulalaDirective[];
   contentWithoutDirectives: string;
   errors: KulalaError[];
+  directiveLinesRemoved: number;
 } {
   const lines = content.split("\n");
   const directives: KulalaDirective[] = [];
@@ -255,7 +273,12 @@ function extractDirectives(content: string): {
   const contentWithoutDirectives =
     directiveEndIdx > 0 ? lines.slice(directiveEndIdx).join("\n") : content;
 
-  return { directives, contentWithoutDirectives, errors };
+  return {
+    directives,
+    contentWithoutDirectives,
+    errors,
+    directiveLinesRemoved: directiveEndIdx,
+  };
 }
 
 const getBlocks = async (
@@ -337,9 +360,11 @@ export const getDocument = async (
     directives,
     contentWithoutDirectives,
     errors: directiveErrors,
+    directiveLinesRemoved,
   } = extractDirectives(content);
 
   const blocks = await getBlocks(contentWithoutDirectives, filepath);
+  const nativeBlockCount = blocks.length;
   const allErrors = [...directiveErrors];
 
   // Process imports: load files and merge their blocks
@@ -431,6 +456,55 @@ export const getDocument = async (
     }
   }
 
+  // Process run directives inside blocks (blocks that contain "run #BLOCK_NAME")
+  for (const block of blocks) {
+    const blockRunDirective = (block as any).__blockRunDirective;
+    if (blockRunDirective) {
+      const target = blockRunDirective.target.trim();
+      if (target.startsWith("#")) {
+        // Run specific block by name: run #BLOCK_NAME
+        const blockName = target.slice(1);
+        let found = false;
+
+        // Search in imported documents first
+        for (const [importPath, doc] of importedDocuments.entries()) {
+          const referencedBlock = doc.blocks.find((b) => b.name === blockName);
+          if (referencedBlock) {
+            found = true;
+            // Replace block's request with referenced block's request
+            block.request = referencedBlock.request;
+            block.scripts = referencedBlock.scripts;
+            // Store run directive for variable overrides
+            (block as any).__runDirective = blockRunDirective;
+            delete (block as any).__blockRunDirective;
+            break;
+          }
+        }
+
+        // Also search in current document blocks
+        if (!found) {
+          const referencedBlock = blocks.find((b) => b.name === blockName);
+          if (referencedBlock) {
+            found = true;
+            // Replace block's request with referenced block's request
+            block.request = referencedBlock.request;
+            block.scripts = referencedBlock.scripts;
+            // Store run directive for variable overrides
+            (block as any).__runDirective = blockRunDirective;
+            delete (block as any).__blockRunDirective;
+          }
+        }
+
+        if (!found) {
+          allErrors.push({
+            errorMessage: `Block not found: ${blockName}`,
+            lineNumber: blockRunDirective.lineNumber,
+          });
+        }
+      }
+    }
+  }
+
   // Combine: current blocks + imported blocks + run blocks
   const allBlocks = [...blocks, ...importedBlocks, ...runBlocks];
 
@@ -439,5 +513,7 @@ export const getDocument = async (
     directives,
     blocks: allBlocks,
     hasErrors: allErrors.length > 0,
+    directiveLinesRemoved,
+    nativeBlockCount,
   };
 };

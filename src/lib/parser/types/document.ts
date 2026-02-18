@@ -7,4 +7,8 @@ export type KulalaDocument = {
   directives: KulalaDirective[];
   blocks: KulalaBlock[];
   hasErrors?: boolean;
+  /** Number of directive lines removed from the top of the file. Used to adjust cursor positions. */
+  directiveLinesRemoved?: number;
+  /** Number of native blocks (blocks from the current file, excluding imported/run blocks). */
+  nativeBlockCount?: number;
 };

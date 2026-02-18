@@ -201,3 +201,52 @@ POST /main HTTP/1.1
   expect(doc.directives.length).toBe(2);
   expect(doc.blocks.some((b) => b.name === "MAIN_BLOCK")).toBe(true);
 });
+
+test("parser: run directive inside block replaces block request", async () => {
+  const importedContent = `### IMPORTED_BLOCK
+GET https://example.com/api HTTP/1.1
+Accept: application/json`;
+  writeFileSync(importedFile, importedContent);
+
+  const mainContent = `import ${importedFile}
+
+### WRAPPER_BLOCK
+
+run #IMPORTED_BLOCK
+`;
+  const doc = await getDocument(mainContent, join(testDir, "main.http"));
+
+  const wrapperBlock = doc.blocks.find((b) => b.name === "WRAPPER_BLOCK");
+  expect(wrapperBlock).toBeDefined();
+  expect(wrapperBlock?.request.method).toBe("GET");
+  expect(wrapperBlock?.request.url).toBe("https://example.com/api");
+  expect(
+    wrapperBlock?.request.headerSection.some(
+      (h) => h.type === "header" && (h as any).name === "Accept",
+    ),
+  ).toBe(true);
+  expect((wrapperBlock as any).__runDirective).toBeDefined();
+});
+
+test("parser: run directive inside block with variable overrides", async () => {
+  const importedContent = `### IMPORTED_BLOCK
+GET {{baseUrl}}/api HTTP/1.1
+Accept: application/json`;
+  writeFileSync(importedFile, importedContent);
+
+  const mainContent = `import ${importedFile}
+
+### WRAPPER_BLOCK
+
+run #IMPORTED_BLOCK (@baseUrl=https://example.com)
+`;
+  const doc = await getDocument(mainContent, join(testDir, "main.http"));
+
+  const wrapperBlock = doc.blocks.find((b) => b.name === "WRAPPER_BLOCK");
+  expect(wrapperBlock).toBeDefined();
+  expect(wrapperBlock?.request.method).toBe("GET");
+  expect((wrapperBlock as any).__runDirective).toBeDefined();
+  expect((wrapperBlock as any).__runDirective.variableOverrides).toEqual({
+    baseUrl: "https://example.com",
+  });
+});

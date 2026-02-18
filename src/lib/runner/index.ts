@@ -44,11 +44,16 @@ const run = async (
           } as KulalaRequestErrorResponse);
           return;
         }
-        blocks.push(block);
+        // Avoid adding duplicate blocks
+        if (!blocks.find((b) => b.name === block.name)) {
+          blocks.push(block);
+        }
       }
       if (l.filter === "name") {
         const block = doc.blocks.find((b) => b.name === l.name);
-        if (block) blocks.push(block);
+        if (block && !blocks.find((b) => b.name === block.name)) {
+          blocks.push(block);
+        }
       }
     }
   } else {
