@@ -92,71 +92,18 @@ export function isLocalhostRedirect(redirectUrl: string): boolean {
 }
 
 /**
- * Prompt user to manually enter authorization code from redirect URL.
- * Returns a promise that resolves when user provides the code.
+ * Parse redirect input (URL, query string, or raw code/token) into OAuth2 result.
+ * Used for prompt continuation.
  */
-export async function promptForManualCode(
-  redirectUrl: string,
+export function parseRedirectInput(
+  input: string,
   grantType: "Authorization Code" | "Implicit",
-): Promise<{
+): {
   code?: string;
   access_token?: string;
   id_token?: string;
   error?: string;
-}> {
-  // Check if stdin is interactive (TTY)
-  // If not, we can't prompt for manual input
-  const isTTY = process.stdin.isTTY;
-
-  if (!isTTY) {
-    throw new Error(
-      `Cannot prompt for manual authorization code in non-interactive context.\n` +
-        `Redirect URL is not localhost: ${redirectUrl}\n` +
-        `Please either:\n` +
-        `1. Use a localhost redirect URL (e.g., http://localhost:8080/callback) - recommended, or\n` +
-        `2. Set the "Browser CMD" option in your OAuth2 config to intercept non-localhost redirects, or\n` +
-        `3. Use file-based input (--input-file or -i) instead of stdin to free stdin for interactive input, or\n` +
-        `4. Run Kulala in an interactive terminal where manual input is possible.`,
-    );
-  }
-
-  // For Authorization Code, we need the 'code' parameter
-  // For Implicit, we need 'access_token' and optionally 'id_token'
-
-  console.error(
-    `\nPlease complete the authorization in your browser.\n` +
-      `After authorization, you will be redirected to: ${redirectUrl}\n` +
-      `Please copy the full redirect URL from your browser and paste it below, then press Enter:\n`,
-  );
-
-  // Read a single line from stdin (stops at newline, not EOF)
-  // This allows the user to paste and press Enter
-  const reader = Bun.stdin.stream().getReader();
-  const decoder = new TextDecoder();
-  let input = "";
-  let foundNewline = false;
-
-  try {
-    while (!foundNewline) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      const chunk = decoder.decode(value, { stream: true });
-      const newlineIndex = chunk.indexOf("\n");
-
-      if (newlineIndex !== -1) {
-        // Found newline - take everything up to it
-        input += chunk.slice(0, newlineIndex);
-        foundNewline = true;
-      } else {
-        // No newline yet - accumulate the chunk
-        input += chunk;
-      }
-    }
-  } finally {
-    reader.releaseLock();
-  }
-
+} {
   const trimmed = input.trim();
   if (!trimmed) {
     throw new Error("No redirect URL or authorization code provided");

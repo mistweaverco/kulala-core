@@ -12,6 +12,7 @@ import {
   refreshOAuth2Token,
 } from "./acquisition";
 import type { OAuth2Config, OAuth2TokenData } from "./types";
+import { OAuth2PromptError } from "./prompt-error";
 
 /**
  * OAuth2 token manager. Handles token acquisition, refresh, and storage.
@@ -62,29 +63,47 @@ export class OAuth2Manager {
 
     // Check if token is expired or missing
     if (!tokenData || isTokenExpired(tokenData)) {
-      // Acquire new token based on grant type
-      switch (config["Grant Type"]) {
-        case "Client Credentials":
-          tokenData = await acquireClientCredentialsToken(config);
-          break;
-        case "Authorization Code":
-          tokenData = await acquireAuthorizationCodeToken(config);
-          break;
-        case "Implicit":
-          tokenData = await acquireImplicitToken(config);
-          break;
-        case "Password":
-          tokenData = await acquirePasswordToken(config);
-          break;
-        case "Device Authorization":
-          throw new Error(
-            'Grant type "Device Authorization" not yet implemented',
-          );
-        default:
-          throw new Error(`Unsupported grant type: ${config["Grant Type"]}`);
+      try {
+        // Acquire new token based on grant type
+        switch (config["Grant Type"]) {
+          case "Client Credentials":
+            tokenData = await acquireClientCredentialsToken(config);
+            break;
+          case "Authorization Code":
+            tokenData = await acquireAuthorizationCodeToken(
+              config,
+              authId,
+              this.env,
+              this.startDir,
+            );
+            break;
+          case "Implicit":
+            tokenData = await acquireImplicitToken(
+              config,
+              authId,
+              this.env,
+              this.startDir,
+            );
+            break;
+          case "Password":
+            tokenData = await acquirePasswordToken(config);
+            break;
+          case "Device Authorization":
+            throw new Error(
+              'Grant type "Device Authorization" not yet implemented',
+            );
+          default:
+            throw new Error(`Unsupported grant type: ${config["Grant Type"]}`);
+        }
+        this.tokens.set(authId, tokenData);
+        saveOAuth2AuthData(this.env, this.startDir, authId, tokenData);
+      } catch (error) {
+        // Re-throw OAuth2PromptError so it can be handled upstream
+        if (error instanceof OAuth2PromptError) {
+          throw error;
+        }
+        throw error;
       }
-      this.tokens.set(authId, tokenData);
-      saveOAuth2AuthData(this.env, this.startDir, authId, tokenData);
     }
 
     return tokenData.access_token;

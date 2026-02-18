@@ -1,4 +1,4 @@
-import { expect, test, beforeAll, afterAll } from "bun:test";
+import { expect, test, beforeAll, afterAll, beforeEach } from "bun:test";
 import { writeFileSync, unlinkSync, mkdirSync, existsSync } from "fs";
 import { join } from "path";
 import {
@@ -12,8 +12,10 @@ import {
   generatePKCEPlain,
   isLocalhostRedirect,
   startRedirectServer,
+  openBrowser,
 } from "./browser-flow";
 import type { OAuth2Config } from "./types";
+import { setDbForTesting, getDbInMemory, closeDb } from "../../persistence";
 
 let testDir: string;
 let authServer: { stop: () => void; port: number };
@@ -23,10 +25,17 @@ let tokenUrl: string;
 let redirectUrl: string;
 
 beforeAll(() => {
+  // Set test environment to prevent browser opening
+  process.env.NODE_ENV = "test";
+
   testDir = join(process.cwd(), ".test-oauth2-browser");
   if (!existsSync(testDir)) {
     mkdirSync(testDir, { recursive: true });
   }
+
+  // Set up in-memory database for tests
+  const db = getDbInMemory();
+  setDbForTesting(db);
 
   // Start mock authorization server (simulates OAuth provider)
   authServer = Bun.serve({
@@ -103,6 +112,7 @@ beforeAll(() => {
 afterAll(() => {
   authServer.stop();
   tokenServer.stop();
+  closeDb();
   // Clean up test files
   try {
     const envFile = join(testDir, "http-client.env.json");
@@ -178,18 +188,28 @@ test("OAuth2: Authorization Code grant validates required fields", async () => {
   };
 
   await expect(
-    acquireAuthorizationCodeToken({
-      ...config,
-      "Auth URL": undefined,
-    } as OAuth2Config),
+    acquireAuthorizationCodeToken(
+      {
+        ...config,
+        "Auth URL": undefined,
+      } as OAuth2Config,
+      "test-auth",
+      "default",
+      testDir,
+    ),
   ).rejects.toThrow("Auth URL is required");
 
   await expect(
-    acquireAuthorizationCodeToken({
-      ...config,
-      "Auth URL": authUrl,
-      "Redirect URL": undefined,
-    } as OAuth2Config),
+    acquireAuthorizationCodeToken(
+      {
+        ...config,
+        "Auth URL": authUrl,
+        "Redirect URL": undefined,
+      } as OAuth2Config,
+      "test-auth",
+      "default",
+      testDir,
+    ),
   ).rejects.toThrow("Redirect URL is required");
 });
 
@@ -242,18 +262,28 @@ test("OAuth2: Implicit grant validates required fields", async () => {
   };
 
   await expect(
-    acquireImplicitToken({
-      ...config,
-      "Auth URL": undefined,
-    } as OAuth2Config),
+    acquireImplicitToken(
+      {
+        ...config,
+        "Auth URL": undefined,
+      } as OAuth2Config,
+      "test-auth",
+      "default",
+      testDir,
+    ),
   ).rejects.toThrow("Auth URL is required");
 
   await expect(
-    acquireImplicitToken({
-      ...config,
-      "Auth URL": authUrl,
-      "Redirect URL": undefined,
-    } as OAuth2Config),
+    acquireImplicitToken(
+      {
+        ...config,
+        "Auth URL": authUrl,
+        "Redirect URL": undefined,
+      } as OAuth2Config,
+      "test-auth",
+      "default",
+      testDir,
+    ),
   ).rejects.toThrow("Redirect URL is required");
 });
 

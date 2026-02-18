@@ -45,3 +45,12 @@ export {
   deleteVariable,
   type VariableScope,
 } from "./variable-store";
+export {
+  createPrompt,
+  getPrompt,
+  deletePrompt,
+  cleanupExpiredPrompts,
+  type PromptType,
+  type PromptContext,
+  type PendingPrompt,
+} from "./prompt-store";

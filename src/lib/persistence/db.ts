@@ -58,8 +58,20 @@ CREATE TABLE IF NOT EXISTS variables (
   UNIQUE(scope, name, scope_document, scope_block_name)
 );
 
+-- Pending prompts for user input (OAuth2, etc.)
+CREATE TABLE IF NOT EXISTS pending_prompts (
+  id TEXT PRIMARY KEY,
+  prompt_type TEXT NOT NULL,
+  context_json TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  expires_at TEXT,
+  UNIQUE(id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_request_runs_doc ON request_runs(document_filepath);
 CREATE INDEX IF NOT EXISTS idx_variables_scope ON variables(scope, scope_document, scope_block_name);
+CREATE INDEX IF NOT EXISTS idx_pending_prompts_type ON pending_prompts(prompt_type);
+CREATE INDEX IF NOT EXISTS idx_pending_prompts_expires ON pending_prompts(expires_at);
 `;
 
 /**

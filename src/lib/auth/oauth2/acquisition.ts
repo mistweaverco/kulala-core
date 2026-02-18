@@ -6,9 +6,14 @@ import {
   generatePKCEPlain,
   isLocalhostRedirect,
   openBrowser,
-  promptForManualCode,
   startRedirectServer,
 } from "./browser-flow";
+import {
+  createOAuth2AuthorizationCodePrompt,
+  createOAuth2ImplicitPrompt,
+} from "./prompt-helper";
+import { OAuth2PromptError } from "./prompt-error";
+import type { KulalaPromptResponse } from "../../runner/types";
 
 /**
  * Acquire OAuth2 access token using Client Credentials grant.
@@ -168,107 +173,19 @@ export function isTokenExpired(tokenData: OAuth2TokenData): boolean {
 }
 
 /**
- * Acquire OAuth2 access token using Authorization Code grant.
+ * Exchange authorization code for access token.
+ * This is the second step of the Authorization Code flow.
  */
-export async function acquireAuthorizationCodeToken(
+export async function exchangeAuthorizationCode(
   config: OAuth2Config,
+  code: string,
+  pkce?: { verifier: string; challenge: string; method: "S256" | "Plain" },
 ): Promise<OAuth2TokenData> {
-  if (config["Grant Type"] !== "Authorization Code") {
-    throw new Error(
-      `Invalid grant type for Authorization Code: ${config["Grant Type"]}`,
-    );
-  }
-
-  if (!config["Auth URL"]) {
-    throw new Error("Auth URL is required for Authorization Code grant");
-  }
-
   if (!config["Token URL"]) {
     throw new Error("Token URL is required for Authorization Code grant");
   }
 
-  if (!config["Redirect URL"]) {
-    throw new Error("Redirect URL is required for Authorization Code grant");
-  }
-
-  // Generate PKCE if enabled
-  let pkce:
-    | { verifier: string; challenge: string; method: "S256" | "Plain" }
-    | undefined;
-  if (config.PKCE) {
-    if (typeof config.PKCE === "boolean" && config.PKCE) {
-      // Default PKCE with S256
-      pkce = await generatePKCE();
-    } else if (typeof config.PKCE === "object") {
-      if (config.PKCE["Code Verifier"]) {
-        // Use provided verifier
-        const verifier = config.PKCE["Code Verifier"];
-        const method = config.PKCE["Code Challenge Method"] ?? "S256";
-        if (method === "Plain") {
-          pkce = { verifier, challenge: verifier, method: "Plain" };
-        } else {
-          // S256: hash the verifier
-          const cryptoModule = await import("crypto");
-          const hash = cryptoModule.createHash("sha256");
-          hash.update(verifier, "utf8");
-          const challenge = hash.digest("base64url");
-          pkce = { verifier, challenge, method: "S256" };
-        }
-      } else {
-        // Generate new PKCE
-        const method = config.PKCE["Code Challenge Method"] ?? "S256";
-        pkce = method === "Plain" ? generatePKCEPlain() : await generatePKCE();
-      }
-    }
-  }
-
-  // Build authorization URL
-  const redirectUrl = config["Redirect URL"];
-  const authUrl = buildAuthorizationUrl(config, redirectUrl, pkce);
-
-  // Check if we should use local server or manual entry
-  const useLocalServer =
-    isLocalhostRedirect(redirectUrl) || !!config["Browser CMD"];
-
-  let result: {
-    code?: string;
-    access_token?: string;
-    id_token?: string;
-    error?: string;
-  };
-  let server: { stop: () => void; port: number } | undefined;
-
-  if (useLocalServer) {
-    // Start redirect server for localhost redirects or when Browser CMD is specified
-    const serverResult = startRedirectServer(redirectUrl);
-    server = serverResult.server;
-
-    try {
-      // Open browser
-      await openBrowser(authUrl, config["Browser CMD"]);
-
-      // Wait for redirect (with timeout)
-      const timeout = new Promise<never>(
-        (_, reject) =>
-          setTimeout(() => reject(new Error("Authorization timeout")), 300000), // 5 minutes
-      );
-      result = await Promise.race([serverResult.promise, timeout]);
-    } finally {
-      server.stop();
-    }
-  } else {
-    // Manual entry required for non-localhost redirects
-    await openBrowser(authUrl, config["Browser CMD"]);
-    result = await promptForManualCode(redirectUrl, "Authorization Code");
-  }
-
-  if (result.error) {
-    throw new Error(`OAuth2 authorization error: ${result.error}`);
-  }
-
-  if (!result.code) {
-    throw new Error("No authorization code received");
-  }
+  const redirectUrl = config["Redirect URL"]!;
 
   // Exchange code for token
   const headers: Record<string, string> = {
@@ -278,7 +195,7 @@ export async function acquireAuthorizationCodeToken(
 
   const bodyParams: Record<string, string> = {
     grant_type: "authorization_code",
-    code: result.code,
+    code,
     redirect_uri: redirectUrl,
     client_id: config["Client ID"],
     ...(pkce ? { code_verifier: pkce.verifier } : {}),
@@ -302,7 +219,7 @@ export async function acquireAuthorizationCodeToken(
       config["Custom Request Parameters"],
     )) {
       let shouldInclude = false;
-      let paramValue: string | string[];
+      let paramValue: string | string[] | undefined;
 
       if (typeof value === "string") {
         shouldInclude = true;
@@ -317,7 +234,7 @@ export async function acquireAuthorizationCodeToken(
         paramValue = param.Value;
       }
 
-      if (shouldInclude) {
+      if (shouldInclude && paramValue !== undefined) {
         if (typeof paramValue === "string") {
           bodyParams[key] = paramValue;
         } else if (Array.isArray(paramValue)) {
@@ -349,28 +266,71 @@ export async function acquireAuthorizationCodeToken(
 }
 
 /**
- * Acquire OAuth2 access token using Implicit grant (browser-based).
+ * Acquire OAuth2 access token using Authorization Code grant.
  */
-export async function acquireImplicitToken(
+export async function acquireAuthorizationCodeToken(
   config: OAuth2Config,
+  authId: string,
+  env: string,
+  startDir: string,
+  code?: string,
+  pkce?: { verifier: string; challenge: string; method: "S256" | "Plain" },
 ): Promise<OAuth2TokenData> {
-  if (config["Grant Type"] !== "Implicit") {
-    throw new Error(`Invalid grant type for Implicit: ${config["Grant Type"]}`);
+  if (config["Grant Type"] !== "Authorization Code") {
+    throw new Error(
+      `Invalid grant type for Authorization Code: ${config["Grant Type"]}`,
+    );
   }
 
   if (!config["Auth URL"]) {
-    throw new Error("Auth URL is required for Implicit grant");
+    throw new Error("Auth URL is required for Authorization Code grant");
+  }
+
+  if (!config["Token URL"]) {
+    throw new Error("Token URL is required for Authorization Code grant");
   }
 
   if (!config["Redirect URL"]) {
-    throw new Error("Redirect URL is required for Implicit grant");
+    throw new Error("Redirect URL is required for Authorization Code grant");
+  }
+
+  // Generate PKCE if enabled (use provided pkce parameter if available, otherwise generate)
+  let pkceValue:
+    | { verifier: string; challenge: string; method: "S256" | "Plain" }
+    | undefined = pkce;
+  if (!pkceValue && config.PKCE) {
+    if (typeof config.PKCE === "boolean" && config.PKCE) {
+      // Default PKCE with S256
+      pkceValue = await generatePKCE();
+    } else if (typeof config.PKCE === "object") {
+      if (config.PKCE["Code Verifier"]) {
+        // Use provided verifier
+        const verifier = config.PKCE["Code Verifier"];
+        const method = config.PKCE["Code Challenge Method"] ?? "S256";
+        if (method === "Plain") {
+          pkceValue = { verifier, challenge: verifier, method: "Plain" };
+        } else {
+          // S256: hash the verifier
+          const cryptoModule = await import("crypto");
+          const hash = cryptoModule.createHash("sha256");
+          hash.update(verifier, "utf8");
+          const challenge = hash.digest("base64url");
+          pkceValue = { verifier, challenge, method: "S256" };
+        }
+      } else {
+        // Generate new PKCE
+        const method = config.PKCE["Code Challenge Method"] ?? "S256";
+        pkceValue =
+          method === "Plain" ? generatePKCEPlain() : await generatePKCE();
+      }
+    }
   }
 
   // Build authorization URL
   const redirectUrl = config["Redirect URL"];
-  const authUrl = buildAuthorizationUrl(config, redirectUrl);
+  const authUrl = buildAuthorizationUrl(config, redirectUrl, pkceValue);
 
-  // Check if we should use local server or manual entry
+  // Check if we should use local server or prompt system
   const useLocalServer =
     isLocalhostRedirect(redirectUrl) || !!config["Browser CMD"];
 
@@ -388,8 +348,10 @@ export async function acquireImplicitToken(
     server = serverResult.server;
 
     try {
-      // Open browser
-      await openBrowser(authUrl, config["Browser CMD"]);
+      // Open browser (no-op in test environment)
+      if (process.env.NODE_ENV !== "test") {
+        await openBrowser(authUrl, config["Browser CMD"]);
+      }
 
       // Wait for redirect (with timeout)
       const timeout = new Promise<never>(
@@ -401,9 +363,130 @@ export async function acquireImplicitToken(
       server.stop();
     }
   } else {
-    // Manual entry required for non-localhost redirects
-    await openBrowser(authUrl, config["Browser CMD"]);
-    result = await promptForManualCode(redirectUrl, "Implicit");
+    // Use prompt system for non-localhost redirects
+    const promptId = await createOAuth2AuthorizationCodePrompt(
+      config,
+      authId,
+      env,
+      startDir,
+      pkceValue,
+    );
+    const promptResponse: KulalaPromptResponse = {
+      success: false,
+      prompt: true,
+      promptId,
+      promptType: "oauth2_authorization_code",
+      message: `Please complete the authorization in your browser.\nAfter authorization, you will be redirected to: ${redirectUrl}\nPlease copy the full redirect URL or authorization code and use it to continue the request.`,
+      inputs: [
+        {
+          id: "redirect_url",
+          label: "Redirect URL or Authorization Code",
+          type: "url",
+          required: true,
+        },
+      ],
+    };
+    throw new OAuth2PromptError(promptResponse);
+  }
+
+  if (result.error) {
+    throw new Error(`OAuth2 authorization error: ${result.error}`);
+  }
+
+  // If code is provided (from continuation), skip authorization and go straight to exchange
+  if (code) {
+    return await exchangeAuthorizationCode(config, code, pkceValue);
+  }
+
+  if (!result.code) {
+    throw new Error("No authorization code received");
+  }
+
+  // Exchange code for token
+  return await exchangeAuthorizationCode(config, result.code, pkceValue);
+}
+
+/**
+ * Acquire OAuth2 access token using Implicit grant (browser-based).
+ */
+export async function acquireImplicitToken(
+  config: OAuth2Config,
+  authId: string,
+  env: string,
+  startDir: string,
+): Promise<OAuth2TokenData> {
+  if (config["Grant Type"] !== "Implicit") {
+    throw new Error(`Invalid grant type for Implicit: ${config["Grant Type"]}`);
+  }
+
+  if (!config["Auth URL"]) {
+    throw new Error("Auth URL is required for Implicit grant");
+  }
+
+  if (!config["Redirect URL"]) {
+    throw new Error("Redirect URL is required for Implicit grant");
+  }
+
+  // Build authorization URL
+  const redirectUrl = config["Redirect URL"];
+  const authUrl = buildAuthorizationUrl(config, redirectUrl);
+
+  // Check if we should use local server or prompt system
+  const useLocalServer =
+    isLocalhostRedirect(redirectUrl) || !!config["Browser CMD"];
+
+  let result: {
+    code?: string;
+    access_token?: string;
+    id_token?: string;
+    error?: string;
+  };
+  let server: { stop: () => void; port: number } | undefined;
+
+  if (useLocalServer) {
+    // Start redirect server for localhost redirects or when Browser CMD is specified
+    const serverResult = startRedirectServer(redirectUrl);
+    server = serverResult.server;
+
+    try {
+      // Open browser (no-op in test environment)
+      if (process.env.NODE_ENV !== "test") {
+        await openBrowser(authUrl, config["Browser CMD"]);
+      }
+
+      // Wait for redirect (with timeout)
+      const timeout = new Promise<never>(
+        (_, reject) =>
+          setTimeout(() => reject(new Error("Authorization timeout")), 300000), // 5 minutes
+      );
+      result = await Promise.race([serverResult.promise, timeout]);
+    } finally {
+      server.stop();
+    }
+  } else {
+    // Use prompt system for non-localhost redirects
+    const promptId = await createOAuth2ImplicitPrompt(
+      config,
+      authId,
+      env,
+      startDir,
+    );
+    const promptResponse: KulalaPromptResponse = {
+      success: false,
+      prompt: true,
+      promptId,
+      promptType: "oauth2_implicit_token",
+      message: `Please complete the authorization in your browser.\nAfter authorization, you will be redirected to: ${redirectUrl}\nPlease copy the full redirect URL or access token and use it to continue the request.`,
+      inputs: [
+        {
+          id: "redirect_url",
+          label: "Redirect URL or Access Token",
+          type: "url",
+          required: true,
+        },
+      ],
+    };
+    throw new OAuth2PromptError(promptResponse);
   }
 
   if (result.error) {
@@ -477,7 +560,7 @@ export async function acquirePasswordToken(
       config["Custom Request Parameters"],
     )) {
       let shouldInclude = false;
-      let paramValue: string | string[];
+      let paramValue: string | string[] | undefined;
 
       if (typeof value === "string") {
         shouldInclude = true;
@@ -492,7 +575,7 @@ export async function acquirePasswordToken(
         paramValue = param.Value;
       }
 
-      if (shouldInclude) {
+      if (shouldInclude && paramValue !== undefined) {
         if (typeof paramValue === "string") {
           bodyParams[key] = paramValue;
         } else if (Array.isArray(paramValue)) {

@@ -33,4 +33,13 @@ export type KulalaStdinActionRun = {
   limit?: KulalaStdinActionRunLimit[];
 };
 
-export type KulalaStdinParsed = KulalaStdinActionParse | KulalaStdinActionRun;
+export type KulalaStdinActionContinue = {
+  action: "continue";
+  promptId: string;
+  inputs: Record<string, string>;
+};
+
+export type KulalaStdinParsed =
+  | KulalaStdinActionParse
+  | KulalaStdinActionRun
+  | KulalaStdinActionContinue;

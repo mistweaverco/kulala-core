@@ -15,6 +15,7 @@ import { doRequestFromBlock } from "./doRequest";
 import type {
   KulalaRequestErrorResponse,
   KulalaRequestSuccessResponse,
+  KulalaPromptResponse,
   KulalaRunOptions,
 } from "./types";
 
@@ -65,8 +66,11 @@ const run = async (
   const path = await import("path");
   const startDir = doc.filepath ? path.dirname(doc.filepath) : process.cwd();
 
-  const results: (KulalaRequestSuccessResponse | KulalaRequestErrorResponse)[] =
-    [];
+  const results: (
+    | KulalaRequestSuccessResponse
+    | KulalaRequestErrorResponse
+    | KulalaPromptResponse
+  )[] = [];
   const previousResults = new Map<string, PreviousResponse>();
   for (const block of blocks) {
     const vars = await resolveVariables(env, stableDocId, block.name, startDir);
@@ -92,6 +96,13 @@ const run = async (
       env,
     );
     results.push(result);
+
+    // If we got a prompt response, stop processing and return it
+    if (!result.success && "prompt" in result && result.prompt) {
+      writeRequestResponseToStdout([result]);
+      return;
+    }
+
     if (result.success) {
       previousResults.set(block.name, {
         body: result.body,

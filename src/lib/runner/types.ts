@@ -20,6 +20,20 @@ export type KulalaRequestErrorResponse = {
   error: string;
 };
 
+export type KulalaPromptResponse = {
+  success: false;
+  prompt: true;
+  promptId: string;
+  promptType: string;
+  message: string;
+  inputs: Array<{
+    id: string;
+    label: string;
+    type: "text" | "password" | "url";
+    required?: boolean;
+  }>;
+};
+
 export type RequestHeaderType =
   | "json"
   | "form-data"

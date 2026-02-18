@@ -25,6 +25,7 @@ import {
 import type {
   KulalaRequestSuccessResponse,
   KulalaRequestErrorResponse,
+  KulalaPromptResponse,
   VariableResolver,
   RunnerResponseLike,
 } from "./types";
@@ -38,7 +39,11 @@ export async function doRequestFromBlock(
   stableDocIdForReplay: string | undefined,
   resolver: VariableResolver | undefined,
   env: string = "default",
-): Promise<KulalaRequestSuccessResponse | KulalaRequestErrorResponse> {
+): Promise<
+  | KulalaRequestSuccessResponse
+  | KulalaRequestErrorResponse
+  | KulalaPromptResponse
+> {
   // Initialize OAuth2 manager if needed
   const startDir = filePath
     ? (await import("path")).dirname(filePath)
@@ -64,45 +69,68 @@ export async function doRequestFromBlock(
     headerStr.includes("$auth.") ||
     bodyStr.includes("$auth.");
 
-  const url = needsAsyncSubstitution
-    ? await substituteInStringAsync(
-        block.request.url,
-        vars ?? {},
-        resolver,
-        authResolver,
-      )
-    : vars !== undefined
-      ? substituteInString(block.request.url, vars, resolver)
-      : block.request.url;
+  let url: string;
+  try {
+    url = needsAsyncSubstitution
+      ? await substituteInStringAsync(
+          block.request.url,
+          vars ?? {},
+          resolver,
+          authResolver,
+        )
+      : vars !== undefined
+        ? substituteInString(block.request.url, vars, resolver)
+        : block.request.url;
+  } catch (error) {
+    if (error instanceof OAuth2PromptError) {
+      return error.promptResponse;
+    }
+    throw error;
+  }
 
   let headers = setUserAgentHeaderIfNotPresent(
     buildHeadersFromSection(block.request.headerSection),
   );
   if (vars !== undefined || needsAsyncSubstitution) {
-    const substitutedHeaders: Record<string, string> = {};
-    for (const [k, v] of Object.entries(headers)) {
-      substitutedHeaders[k] = needsAsyncSubstitution
-        ? await substituteInStringAsync(v, vars ?? {}, resolver, authResolver)
-        : substituteInString(v, vars ?? {}, resolver);
+    try {
+      const substitutedHeaders: Record<string, string> = {};
+      for (const [k, v] of Object.entries(headers)) {
+        substitutedHeaders[k] = needsAsyncSubstitution
+          ? await substituteInStringAsync(v, vars ?? {}, resolver, authResolver)
+          : substituteInString(v, vars ?? {}, resolver);
+      }
+      headers = substitutedHeaders;
+    } catch (error) {
+      if (error instanceof OAuth2PromptError) {
+        return error.promptResponse;
+      }
+      throw error;
     }
-    headers = substitutedHeaders;
   }
   headers = normalizeAuthorizationHeader(headers);
 
-  const body = needsAsyncSubstitution
-    ? await substituteInObjectAsync(
-        block.request.body,
-        vars ?? {},
-        resolver,
-        authResolver,
-      )
-    : vars !== undefined
-      ? (substituteInObject(
+  let body: typeof block.request.body;
+  try {
+    body = needsAsyncSubstitution
+      ? await substituteInObjectAsync(
           block.request.body,
-          vars,
+          vars ?? {},
           resolver,
-        ) as typeof block.request.body)
-      : block.request.body;
+          authResolver,
+        )
+      : vars !== undefined
+        ? (substituteInObject(
+            block.request.body,
+            vars,
+            resolver,
+          ) as typeof block.request.body)
+        : block.request.body;
+  } catch (error) {
+    if (error instanceof OAuth2PromptError) {
+      return error.promptResponse;
+    }
+    throw error;
+  }
 
   const requestHeaderType = getRequestHeaderType(headers);
   const isGraphQL = block.request.method === "GRAPHQL";

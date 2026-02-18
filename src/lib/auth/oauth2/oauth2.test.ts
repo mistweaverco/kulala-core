@@ -16,6 +16,9 @@ let server: { stop: () => void; port: number };
 let tokenUrl: string;
 
 beforeAll(() => {
+  // Set test environment to prevent browser opening
+  process.env.NODE_ENV = "test";
+
   testDir = join(process.cwd(), ".test-oauth2");
   if (!existsSync(testDir)) {
     mkdirSync(testDir, { recursive: true });

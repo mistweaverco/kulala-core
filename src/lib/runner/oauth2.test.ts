@@ -18,6 +18,9 @@ let tokenUrl: string;
 let apiUrl: string;
 
 beforeAll(() => {
+  // Set test environment to prevent browser opening
+  process.env.NODE_ENV = "test";
+
   testDir = join(process.cwd(), ".test-oauth2-integration");
   if (!existsSync(testDir)) {
     mkdirSync(testDir, { recursive: true });

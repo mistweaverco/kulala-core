@@ -32,6 +32,9 @@ function makeBlock(overrides: Partial<KulalaBlock> = {}): KulalaBlock {
 }
 
 beforeAll(() => {
+  // Set test environment to prevent browser opening
+  process.env.NODE_ENV = "test";
+
   server = Bun.serve({
     port: 0,
     async fetch(req) {
