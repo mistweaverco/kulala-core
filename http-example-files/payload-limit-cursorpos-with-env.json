@@ -1,0 +1,13 @@
+{
+  "action": "run",
+  "env": "staging",
+  "filepath": "test/simple.http",
+  "content": "FILE_CONTENT_OF_HTTP_FILE_HERE",
+  "limit": [
+    {
+      "filter": "cursorPosition",
+      "line": 1,
+      "column": 1
+    }
+  ]
+}
