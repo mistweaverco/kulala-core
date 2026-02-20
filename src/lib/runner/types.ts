@@ -2,13 +2,19 @@ export type KulalaRequestSuccessResponse = {
   success: true;
   status: number;
   headers: Record<string, string>;
+  /** Final resolved URL (after redirects). */
+  url: string;
   timings: {
     dns: number;
     tcp: number;
     tls: number;
     request: number;
     redirect: number;
+    /** Time from request sent to first byte (server TTFB). */
     firstByte: number;
+    /** Time from start to first byte; matches curl time_starttransfer. */
+    startTransfer: number;
+    total: number;
   };
   body:
     | { type: "text"; content: string }

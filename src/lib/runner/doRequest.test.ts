@@ -158,9 +158,14 @@ test("doRequestFromBlock: GET request returns success response (real got)", asyn
     expect(result.timings).toHaveProperty("dns");
     expect(result.timings).toHaveProperty("tcp");
     expect(result.timings).toHaveProperty("firstByte");
+    expect(result.timings).toHaveProperty("startTransfer");
     expect(result.timings).toHaveProperty("request");
     expect(result.timings).toHaveProperty("tls");
     expect(result.timings).toHaveProperty("redirect");
+    expect(result.timings).toHaveProperty("total");
+    expect(result).toHaveProperty("url");
+    expect(typeof result.url).toBe("string");
+    expect(result.url.length).toBeGreaterThan(0);
   }
 });
 

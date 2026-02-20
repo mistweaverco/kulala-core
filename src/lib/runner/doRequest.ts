@@ -1,5 +1,4 @@
-import got, { type Method, type Response } from "got";
-import type { FormDataLike } from "form-data-encoder";
+import { nodeHttpRequest } from "./http-client";
 import type { KulalaBlock } from "../parser/types/block";
 import {
   substituteInObject,
@@ -215,56 +214,48 @@ export async function doRequestFromBlock(
   );
 
   try {
-    const baseOptions = {
-      retry: { limit: 0 },
-      method: method as Method,
-      headers: requestHeaders,
-    };
-
-    let res: Response;
+    let bodyPayload: string | Buffer | FormData | undefined;
     if (multipartBody) {
-      res = await got(url, {
-        ...baseOptions,
-        body: multipartBody as unknown as FormDataLike,
-      });
+      bodyPayload = multipartBody;
     } else if (graphqlBody !== undefined) {
-      // Send plain { query, variables } per GraphQL over HTTP; never wrap or pre-stringify.
       const payload: { query: string; variables?: Record<string, unknown> } = {
         query: typeof graphqlBody.query === "string" ? graphqlBody.query : "",
         ...(graphqlBody.variables != null
           ? { variables: graphqlBody.variables }
           : {}),
       };
-      res = await got(url, { ...baseOptions, json: payload });
+      bodyPayload = JSON.stringify(payload);
     } else if (json !== undefined) {
-      res = await got(url, { ...baseOptions, json });
+      bodyPayload = JSON.stringify(json);
     } else if (form !== undefined) {
-      res = await got(url, {
-        ...baseOptions,
-        form: form as Record<string, string>,
-      });
+      bodyPayload = new URLSearchParams(
+        form as Record<string, string>,
+      ).toString();
     } else if (typeof body === "string" && body.length > 0) {
-      res = await got(url, { ...baseOptions, body });
-    } else {
-      res = await got(url, baseOptions);
+      bodyPayload = body;
     }
 
+    const res = await nodeHttpRequest({
+      url,
+      method,
+      headers: requestHeaders,
+      body: bodyPayload,
+      httpVersion: block.request.httpVersion,
+    });
+
     const rawBody = res.body;
+    const rawBodyStr =
+      typeof rawBody === "string" ? rawBody : String(rawBody ?? "");
     const contentType = res.headers["content-type"] || "";
     const isJson = contentType.includes("application/json");
     const responseBody = isJson
       ? {
           type: "json" as const,
-          content: (typeof rawBody === "object" && rawBody !== null
-            ? rawBody
-            : JSON.parse(
-                typeof rawBody === "string" ? rawBody : String(rawBody ?? ""),
-              )) as Record<string, unknown>,
+          content: JSON.parse(rawBodyStr) as Record<string, unknown>,
         }
       : {
           type: "text" as const,
-          content:
-            typeof rawBody === "string" ? rawBody : String(rawBody ?? ""),
+          content: rawBodyStr,
         };
 
     // Redirect response to file (>> path or >>! path)
@@ -304,11 +295,19 @@ export async function doRequestFromBlock(
       }
     }
 
+    const { phases } = res.timings;
+    const total = phases.total ?? 0;
+    const firstByte = phases.firstByte ?? 0;
+    const startTransfer = phases.startTransfer ?? 0;
+    const redirectTime = phases.redirect ?? 0;
+    const timingsForScripts: RunnerResponseLike["timings"] = {
+      phases: { ...phases },
+    };
     const responseLike: RunnerResponseLike = {
       body: rawBody,
       statusCode: res.statusCode,
-      headers: res.headers as Record<string, string>,
-      timings: res.timings,
+      headers: res.headers,
+      timings: timingsForScripts,
     };
 
     await runScripts(
@@ -321,20 +320,20 @@ export async function doRequestFromBlock(
 
     incrementReplayCount(stableDocIdForReplay ?? filePath ?? "", block.name);
 
-    const { phases } = res.timings;
-    const total = phases.total ?? 0;
-    const firstByte = phases.firstByte ?? 0;
     return {
       success: true,
       status: res.statusCode,
-      headers: res.headers as Record<string, string>,
+      headers: res.headers,
+      url: res.url,
       timings: {
         dns: phases.dns ?? 0,
         tcp: phases.tcp ?? 0,
         tls: phases.tls ?? 0,
         request: phases.request ?? 0,
-        redirect: total && firstByte ? total - firstByte : 0,
+        redirect: redirectTime,
         firstByte,
+        startTransfer,
+        total,
       },
       body: responseBody,
     } as KulalaRequestSuccessResponse;

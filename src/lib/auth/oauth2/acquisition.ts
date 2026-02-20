@@ -1,4 +1,4 @@
-import got from "got";
+import { nodeHttpRequest } from "../../runner/http-client";
 import { setUserAgentHeaderIfNotPresent } from "./../../runner/headers";
 import type { OAuth2Config, OAuth2TokenData } from "./types";
 import {
@@ -105,13 +105,13 @@ export async function acquireClientCredentialsToken(
 
   const formBody = new URLSearchParams(bodyParams).toString();
 
-  const response = await got.post(config["Token URL"], {
+  const response = await nodeHttpRequest({
+    url: config["Token URL"],
+    method: "POST",
     headers,
     body: formBody,
-    retry: { limit: 0 },
   });
-
-  const tokenData = JSON.parse(response.body) as OAuth2TokenData;
+  const tokenData = parseTokenResponse(response);
 
   // Calculate expires_at if expires_in is provided
   if (tokenData.expires_in && !tokenData.expires_at) {
@@ -123,6 +123,29 @@ export async function acquireClientCredentialsToken(
   }
 
   return tokenData;
+}
+
+/**
+ * Parse token endpoint response; throws on non-2xx (same behavior as got).
+ */
+function parseTokenResponse(response: {
+  statusCode: number;
+  body: string | Buffer;
+}): OAuth2TokenData {
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    const bodyStr =
+      typeof response.body === "string"
+        ? response.body
+        : response.body.toString();
+    throw new Error(
+      `Token request failed (${response.statusCode}): ${bodyStr}`,
+    );
+  }
+  const bodyStr =
+    typeof response.body === "string"
+      ? response.body
+      : response.body.toString();
+  return JSON.parse(bodyStr) as OAuth2TokenData;
 }
 
 /**
@@ -249,13 +272,13 @@ export async function exchangeAuthorizationCode(
 
   const formBody = new URLSearchParams(bodyParams).toString();
 
-  const response = await got.post(config["Token URL"], {
+  const response = await nodeHttpRequest({
+    url: config["Token URL"],
+    method: "POST",
     headers,
     body: formBody,
-    retry: { limit: 0 },
   });
-
-  const tokenData = JSON.parse(response.body) as OAuth2TokenData;
+  const tokenData = parseTokenResponse(response);
 
   // Calculate expires_at if expires_in is provided
   if (tokenData.expires_in && !tokenData.expires_at) {
@@ -590,13 +613,13 @@ export async function acquirePasswordToken(
 
   const formBody = new URLSearchParams(bodyParams).toString();
 
-  const response = await got.post(config["Token URL"], {
+  const response = await nodeHttpRequest({
+    url: config["Token URL"],
+    method: "POST",
     headers,
     body: formBody,
-    retry: { limit: 0 },
   });
-
-  const tokenData = JSON.parse(response.body) as OAuth2TokenData;
+  const tokenData = parseTokenResponse(response);
 
   // Calculate expires_at if expires_in is provided
   if (tokenData.expires_in && !tokenData.expires_at) {
@@ -636,13 +659,13 @@ export async function refreshOAuth2Token(
 
   const formBody = new URLSearchParams(bodyParams).toString();
 
-  const response = await got.post(config["Token URL"], {
+  const response = await nodeHttpRequest({
+    url: config["Token URL"],
+    method: "POST",
     headers,
     body: formBody,
-    retry: { limit: 0 },
   });
-
-  const tokenData = JSON.parse(response.body) as OAuth2TokenData;
+  const tokenData = parseTokenResponse(response);
 
   // Calculate expires_at if expires_in is provided
   if (tokenData.expires_in && !tokenData.expires_at) {
