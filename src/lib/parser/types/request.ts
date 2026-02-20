@@ -4,13 +4,16 @@ export type KulalaHttpMethodAvailable =
   | "DELETE"
   | "GET"
   | "GRAPHQL"
+  | "GRPC"
   | "HEAD"
   | "OPTIONS"
   | "PATCH"
   | "POST"
-  | "PUT";
+  | "PUT"
+  | "WS"
+  | "WSS";
 
-export type KulalaHttpVersion = "HTTP/1.0" | "HTTP/1.1" | "HTTP/2" | "HTTP/3";
+export type KulalaHttpVersion = "HTTP/1.0" | "HTTP/1.1" | "HTTP/2";
 
 export type KulalaHttpMethodWithBody = Exclude<
   KulalaHttpMethodAvailable,
@@ -80,6 +83,8 @@ export type KulalaRequest = {
   method: KulalaHttpMethod;
   // Resolved URL used for execution (single line, no comments).
   url: KulalaHttpURL;
+  /** HTTP version from the request line (e.g. HTTP/1.1, HTTP/2). Omitted if not present. */
+  httpVersion?: KulalaHttpVersion;
   // Ordered list of headers and comments so comments are preserved in place.
   headerSection: KulalaHeaderSectionEntry[];
   // Optional: when request line spans multiple lines or has comments, for round-trip.

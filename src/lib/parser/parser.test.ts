@@ -22,6 +22,7 @@ query Person($id: ID) {
 
   expect(block.errors).toEqual([]);
   expect(block.request.method).toBe("GRAPHQL");
+  expect(block.request.httpVersion).toBe("HTTP/1.1");
   expect(
     block.request.headerSection.filter((h) => h.type === "header"),
   ).toHaveLength(1);
@@ -183,4 +184,20 @@ Content-Type: application/json
     filePath: "output/result.json",
     overwrite: true,
   });
+});
+
+test("parser: request line sets httpVersion (HTTP/1.1, HTTP/2)", async () => {
+  const contentHttp11 = `### GET_HTTP_1_1
+GET https://example.com/ HTTP/1.1
+
+### GET_HTTP_2
+GET https://example.com/ HTTP/2
+`;
+
+  const doc = await getDocument(contentHttp11);
+  expect(doc.blocks).toHaveLength(2);
+  expect(doc.blocks[0]?.request.method).toBe("GET");
+  expect(doc.blocks[0]?.request.httpVersion).toBe("HTTP/1.1");
+  expect(doc.blocks[1]?.request.method).toBe("GET");
+  expect(doc.blocks[1]?.request.httpVersion).toBe("HTTP/2");
 });

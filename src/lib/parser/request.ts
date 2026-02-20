@@ -2,6 +2,7 @@ import type {
   KulalaHttpMethod,
   KulalaHttpScheme,
   KulalaHttpURL,
+  KulalaHttpVersion,
   KulalaRequest,
   KulalaRequestLinePart,
 } from "./types/request";
@@ -20,6 +21,17 @@ const getValidHttpMethods = (): KulalaHttpMethod[] => [
 ];
 
 const HTTP_VERSION = /^HTTP\/\d+(\.\d+)?$/;
+
+const VALID_HTTP_VERSIONS: KulalaHttpVersion[] = [
+  "HTTP/1.0",
+  "HTTP/1.1",
+  "HTTP/2",
+];
+
+const parseHttpVersion = (s: string): KulalaHttpVersion | undefined =>
+  VALID_HTTP_VERSIONS.includes(s as KulalaHttpVersion)
+    ? (s as KulalaHttpVersion)
+    : undefined;
 
 const isValidUrl = (url: KulalaHttpURL): boolean => {
   const schemes: KulalaHttpScheme[] = ["http", "https", "ws", "wss"];
@@ -73,10 +85,12 @@ export const getRequest = (
         1,
       ];
     }
+    const httpVersion = parseHttpVersion(tokens[2]);
     return [
       {
         method,
         url: urlResolved,
+        ...(httpVersion !== undefined ? { httpVersion } : {}),
         headerSection: [],
       },
       1,
@@ -97,8 +111,9 @@ export const getRequest = (
 
   const urlParts: string[] = [firstUrlPart];
   requestLineParts.push({ type: "url", line: firstUrlPart });
+  let httpVersion: KulalaHttpVersion | undefined;
 
-  // Consume continuation lines
+  // Consume continuation lines (URL parts, comments, or final HTTP version line)
   while (startLineIdx + consumed < lines.length) {
     const line = lines[startLineIdx + consumed];
     if (!isRequestContinuationLine(line)) break;
@@ -112,6 +127,7 @@ export const getRequest = (
       continue;
     }
     if (HTTP_VERSION.test(trimmed)) {
+      httpVersion = parseHttpVersion(trimmed);
       break;
     }
     requestLineParts.push({ type: "url", line: trimmed });
@@ -133,6 +149,7 @@ export const getRequest = (
     {
       method,
       url: urlResolved,
+      ...(httpVersion !== undefined ? { httpVersion } : {}),
       headerSection: [],
       requestLineParts:
         requestLineParts.length > 0 ? requestLineParts : undefined,
