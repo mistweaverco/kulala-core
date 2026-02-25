@@ -247,16 +247,24 @@ export async function doRequestFromBlock(
     const rawBodyStr =
       typeof rawBody === "string" ? rawBody : String(rawBody ?? "");
     const contentType = res.headers["content-type"] || "";
-    const isJson = contentType.includes("application/json");
-    const responseBody = isJson
-      ? {
-          type: "json" as const,
-          content: JSON.parse(rawBodyStr) as Record<string, unknown>,
-        }
-      : {
-          type: "text" as const,
-          content: rawBodyStr,
-        };
+    let jsonBody: Record<string, unknown> | null = null;
+    if (contentType.toLowerCase().includes("json")) {
+      try {
+        jsonBody = JSON.parse(rawBodyStr);
+      } catch {
+        // ignore JSON parse errors, treat as text
+      }
+    }
+    const responseBody =
+      jsonBody !== null
+        ? {
+            type: "json" as const,
+            content: jsonBody as Record<string, unknown>,
+          }
+        : {
+            type: "text" as const,
+            content: rawBodyStr,
+          };
 
     // Redirect response to file (>> path or >>! path)
     const redirect = block.request.responseRedirect;
