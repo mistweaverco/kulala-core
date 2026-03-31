@@ -1,0 +1,12 @@
+{
+  "name": "kulala-lua-scripting-example",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@mistweaverco/kulala-core": "workspace:*"
+  },
+  "scripts": {
+    "build": "bun build src/main.ts --compile --outfile dist/kulala-lua-scripting",
+    "run": "bun run build && ./dist/kulala-lua-scripting"
+  }
+}

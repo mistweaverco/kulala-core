@@ -16,6 +16,10 @@ export default ts.config(
     },
   },
   {
-    ignores: ["build/", "dist/"],
+    ignores: [
+      "build/",
+      "dist/",
+      "packages/core/src/lib/runner/vendored-curl.generated.ts",
+    ],
   },
 );

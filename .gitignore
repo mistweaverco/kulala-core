@@ -43,4 +43,4 @@ http-client.private.env.json
 http-example-files/*.tmp*
 
 # Generated vendored curl code
-/src/lib/runner/vendored-curl.generated.ts
+/packages/core/src/lib/runner/vendored-curl.generated.ts

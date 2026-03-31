@@ -1,4 +1,10 @@
 {
+  "include": ["packages/core/src/**/*.ts", "scripts/**/*.ts"],
+  "exclude": [
+    "node_modules",
+    "**/node_modules",
+    "packages/core/src/lib/runner/vendored-curl.generated.ts"
+  ],
   "compilerOptions": {
     // Enable latest features
     "lib": ["ESNext", "DOM"],
@@ -23,6 +29,6 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false,
-    "types": ["node", "vite/client", "bun"]
+    "types": ["node", "bun"]
   }
 }

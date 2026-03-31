@@ -1,0 +1,26 @@
+{
+  "name": "@mistweaverco/kulala-core",
+  "version": "0.1.0",
+  "module": "src/index.ts",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src",
+    "vendor/curl",
+    "scripts/ensure-vendored-curl.ts",
+    "scripts/generate-vendored-curl.ts"
+  ],
+  "scripts": {
+    "format": "prettier --write .",
+    "lint": "prettier --check . && eslint .",
+    "test": "bun test"
+  },
+  "pkg": {
+    "assets": [
+      "../../vendor/curl/**/*"
+    ]
+  }
+}
