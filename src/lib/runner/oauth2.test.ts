@@ -35,8 +35,6 @@ beforeAll(() => {
 
       // OAuth2 token endpoint
       if (path === "/token" && req.method === "POST") {
-        const body = await req.text();
-        const params = new URLSearchParams(body);
         const authHeader = req.headers.get("authorization");
 
         if (authHeader?.startsWith("Basic ")) {

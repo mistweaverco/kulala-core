@@ -22,10 +22,15 @@ import {
   parseRunDirective,
   isDirective,
 } from "./directive";
-import type { KulalaDirective } from "./types/directive";
+import type { KulalaDirective, KulalaRunDirective } from "./types/directive";
 import { resolve, dirname } from "path";
 const blockRegex = /###(.*?)\n([\s\S]+?)(?=###|$)/g;
 const nameRegex = /### (.+?)\n/;
+
+type BlockWithRunDirective = KulalaBlock & {
+  __runDirective?: KulalaRunDirective;
+  __blockRunDirective?: KulalaRunDirective;
+};
 
 const getBlockName = (rawBlock: string, idx: number): string => {
   return rawBlock.match(nameRegex)?.[1] || `REQUEST_${pad(idx + 1, 3, "0")}`;
@@ -145,7 +150,8 @@ const getParsedBlock = async (
         const runDirective = parseRunDirective(line, lineIdx);
         if (!isError(runDirective)) {
           // Store run directive on block for later processing
-          (result as any).__blockRunDirective = runDirective;
+          (result as unknown as BlockWithRunDirective).__blockRunDirective =
+            runDirective;
         } else {
           result.errors.push(runDirective);
         }
@@ -427,7 +433,7 @@ export const getDocument = async (
               name: `${block.name}_from_${importPath.split("/").pop()}`,
             };
             // Store variable overrides in a custom property (we'll handle this in runner)
-            (runBlock as any).__runDirective = directive;
+            (runBlock as BlockWithRunDirective).__runDirective = directive;
             runBlocks.push(runBlock);
             break;
           }
@@ -441,7 +447,7 @@ export const getDocument = async (
             const runBlock: KulalaBlock = {
               ...block,
             };
-            (runBlock as any).__runDirective = directive;
+            (runBlock as BlockWithRunDirective).__runDirective = directive;
             runBlocks.push(runBlock);
           }
         }
@@ -466,7 +472,7 @@ export const getDocument = async (
             const runBlock: KulalaBlock = {
               ...block,
             };
-            (runBlock as any).__runDirective = directive;
+            (runBlock as BlockWithRunDirective).__runDirective = directive;
             runBlocks.push(runBlock);
           }
         }
@@ -476,7 +482,8 @@ export const getDocument = async (
 
   // Process run directives inside blocks (blocks that contain "run #BLOCK_NAME")
   for (const block of blocks) {
-    const blockRunDirective = (block as any).__blockRunDirective;
+    const blockRunDirective = (block as BlockWithRunDirective)
+      .__blockRunDirective;
     if (blockRunDirective) {
       const target = blockRunDirective.target.trim();
       if (target.startsWith("#")) {
@@ -485,7 +492,7 @@ export const getDocument = async (
         let found = false;
 
         // Search in imported documents first
-        for (const [importPath, doc] of importedDocuments.entries()) {
+        for (const [, doc] of importedDocuments.entries()) {
           const referencedBlock = doc.blocks.find((b) => b.name === blockName);
           if (referencedBlock) {
             found = true;
@@ -493,8 +500,8 @@ export const getDocument = async (
             block.request = referencedBlock.request;
             block.scripts = referencedBlock.scripts;
             // Store run directive for variable overrides
-            (block as any).__runDirective = blockRunDirective;
-            delete (block as any).__blockRunDirective;
+            (block as BlockWithRunDirective).__runDirective = blockRunDirective;
+            delete (block as BlockWithRunDirective).__blockRunDirective;
             break;
           }
         }
@@ -508,8 +515,8 @@ export const getDocument = async (
             block.request = referencedBlock.request;
             block.scripts = referencedBlock.scripts;
             // Store run directive for variable overrides
-            (block as any).__runDirective = blockRunDirective;
-            delete (block as any).__blockRunDirective;
+            (block as BlockWithRunDirective).__runDirective = blockRunDirective;
+            delete (block as BlockWithRunDirective).__blockRunDirective;
           }
         }
 

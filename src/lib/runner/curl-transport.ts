@@ -1,0 +1,254 @@
+import { randomUUID } from "node:crypto";
+import { promises as fs } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { spawn } from "node:child_process";
+import type {
+  NodeHttpClientOptions,
+  NodeHttpClientResponse,
+  NodeHttpClientTimings,
+} from "./http-client";
+import { resolveCurlPath } from "./embedded-curl";
+
+type CurlWriteOut = {
+  http_code: number;
+  url_effective: string;
+  time_namelookup: number;
+  time_connect: number;
+  time_appconnect: number;
+  time_pretransfer: number;
+  time_starttransfer: number;
+  time_total: number;
+  time_redirect: number;
+};
+
+function parseCurlWriteOut(stdout: string): CurlWriteOut {
+  const out: Partial<Record<keyof CurlWriteOut, string>> = {};
+  for (const line of stdout.split(/\r?\n/)) {
+    if (!line) continue;
+    const eq = line.indexOf("=");
+    if (eq === -1) continue;
+    const k = line.slice(0, eq) as keyof CurlWriteOut;
+    const v = line.slice(eq + 1);
+    out[k] = v;
+  }
+
+  const num = (k: keyof CurlWriteOut): number => {
+    const raw = out[k];
+    if (raw == null || raw === "") return 0;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  return {
+    http_code: Math.trunc(num("http_code")),
+    url_effective: out.url_effective ?? "",
+    time_namelookup: num("time_namelookup"),
+    time_connect: num("time_connect"),
+    time_appconnect: num("time_appconnect"),
+    time_pretransfer: num("time_pretransfer"),
+    time_starttransfer: num("time_starttransfer"),
+    time_total: num("time_total"),
+    time_redirect: num("time_redirect"),
+  };
+}
+
+function secondsToMs(sec: number): number {
+  if (!Number.isFinite(sec) || sec < 0) return 0;
+  return sec * 1000;
+}
+
+function headersFromDump(dump: string): {
+  statusCode: number;
+  headers: Record<string, string>;
+} {
+  // curl --dump-header includes headers for redirects too; pick the last HTTP/* block.
+  const normalized = dump.replace(/\r\n/g, "\n");
+  const blocks = normalized
+    .split("\n\n")
+    .map((b) => b.trim())
+    .filter((b) => b.startsWith("HTTP/"));
+  const last = blocks.length ? blocks[blocks.length - 1] : "";
+  if (!last) return { statusCode: 0, headers: {} };
+
+  const lines = last.split("\n").filter(Boolean);
+  const statusLine = lines[0] ?? "";
+  const m = statusLine.match(/^HTTP\/\d(?:\.\d)?\s+(\d{3})/);
+  const statusCode = m ? parseInt(m[1], 10) : 0;
+
+  const headers: Record<string, string> = {};
+  for (const line of lines.slice(1)) {
+    const idx = line.indexOf(":");
+    if (idx === -1) continue;
+    const k = line.slice(0, idx).trim().toLowerCase();
+    const v = line.slice(idx + 1).trim();
+    if (!k) continue;
+    headers[k] = headers[k] ? `${headers[k]}, ${v}` : v;
+  }
+  return { statusCode, headers };
+}
+
+function buildTimings(w: CurlWriteOut): NodeHttpClientTimings {
+  const dns = secondsToMs(w.time_namelookup);
+  const connect = secondsToMs(w.time_connect);
+  const appconnect = secondsToMs(w.time_appconnect);
+  const pretransfer = secondsToMs(w.time_pretransfer);
+  const startTransfer = secondsToMs(w.time_starttransfer);
+  const total = secondsToMs(w.time_total);
+  const redirect = secondsToMs(w.time_redirect);
+
+  const tcp = Math.max(0, connect - dns);
+  const tls =
+    appconnect > 0 && connect > 0 ? Math.max(0, appconnect - connect) : 0;
+
+  // Approximate: pretransfer is "ready to transfer"; treat it as request time.
+  // Then firstByte = startTransfer - pretransfer (server think + network to first byte).
+  const request = Math.max(0, pretransfer - (dns + tcp + tls));
+  const firstByte = Math.max(0, startTransfer - pretransfer);
+
+  return {
+    phases: {
+      dns,
+      tcp,
+      tls,
+      request,
+      firstByte,
+      startTransfer,
+      redirect,
+      total,
+    },
+  };
+}
+
+async function runCurl(args: string[]): Promise<{
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+}> {
+  const curlPath = await resolveCurlPath();
+  return await new Promise((resolve, reject) => {
+    const child = spawn(curlPath, args, {
+      stdio: ["ignore", "pipe", "pipe"],
+      env: process.env,
+    });
+    const stdoutChunks: Buffer[] = [];
+    const stderrChunks: Buffer[] = [];
+    child.stdout.on("data", (c: Buffer) => stdoutChunks.push(c));
+    child.stderr.on("data", (c: Buffer) => stderrChunks.push(c));
+    child.on("error", reject);
+    child.on("close", (code) => {
+      resolve({
+        stdout: Buffer.concat(stdoutChunks).toString("utf-8"),
+        stderr: Buffer.concat(stderrChunks).toString("utf-8"),
+        exitCode: code ?? 0,
+      });
+    });
+  });
+}
+
+export async function curlHttpRequest(
+  options: NodeHttpClientOptions,
+): Promise<NodeHttpClientResponse> {
+  const method = (options.method || "GET").toUpperCase();
+  const url = options.url;
+
+  const tempBase = await fs.mkdtemp(join(tmpdir(), "kulala-curl-"));
+  const bodyPath = join(tempBase, `body-${randomUUID()}`);
+  const headerPath = join(tempBase, `headers-${randomUUID()}`);
+  const cleanup = async (): Promise<void> => {
+    await fs.rm(tempBase, { recursive: true, force: true });
+  };
+
+  const writeOut = [
+    "http_code=%{http_code}",
+    "url_effective=%{url_effective}",
+    "time_namelookup=%{time_namelookup}",
+    "time_connect=%{time_connect}",
+    "time_appconnect=%{time_appconnect}",
+    "time_pretransfer=%{time_pretransfer}",
+    "time_starttransfer=%{time_starttransfer}",
+    "time_total=%{time_total}",
+    "time_redirect=%{time_redirect}",
+    "",
+  ].join("\n");
+
+  const args: string[] = [
+    "--silent",
+    "--show-error",
+    "--location",
+    "--max-redirs",
+    "10",
+    "--request",
+    method,
+    "--dump-header",
+    headerPath,
+    "--output",
+    bodyPath,
+    "--write-out",
+    writeOut,
+  ];
+  if (process.env.KULALA_HTTP_INSECURE === "1") {
+    args.push("--insecure");
+  }
+
+  // Protocol selection
+  if (options.httpVersion === "HTTP/1.0") args.push("--http1.0");
+  else if (options.httpVersion === "HTTP/1.1") args.push("--http1.1");
+  else if (options.httpVersion === "HTTP/2") {
+    const parsed = new URL(url);
+    if (parsed.protocol === "https:") {
+      args.push("--http2");
+    } else if (parsed.protocol === "http:") {
+      // h2c prior knowledge (cleartext HTTP/2). Useful for local testing and some internal services.
+      args.push("--http2-prior-knowledge");
+    } else {
+      throw new Error("HTTP/2 is only supported for http/https URLs");
+    }
+  }
+
+  // Headers
+  for (const [k, v] of Object.entries(options.headers ?? {})) {
+    // curl treats an empty header value as "Header:" which is fine.
+    args.push("--header", `${k}: ${v}`);
+  }
+
+  // Body
+  if (options.body !== undefined) {
+    const body =
+      typeof options.body === "string" || Buffer.isBuffer(options.body)
+        ? options.body
+        : Buffer.from(String(options.body));
+    // Avoid shell quoting issues by writing to a temp file.
+    const uploadPath = join(tempBase, `upload-${randomUUID()}`);
+    await fs.writeFile(uploadPath, body);
+    args.push("--data-binary", `@${uploadPath}`);
+  }
+
+  args.push(url);
+
+  try {
+    const { stdout, stderr, exitCode } = await runCurl(args);
+    if (exitCode !== 0) {
+      const msg = stderr.trim() || `curl failed with exit code ${exitCode}`;
+      throw new Error(msg);
+    }
+
+    const w = parseCurlWriteOut(stdout);
+    const dump = await fs.readFile(headerPath, "utf-8");
+    const { statusCode, headers } = headersFromDump(dump);
+    const body = await fs.readFile(bodyPath);
+
+    const timings = buildTimings(w);
+    return {
+      statusCode: statusCode || w.http_code || 0,
+      headers,
+      body,
+      timings,
+      url: w.url_effective || url,
+      // Not available from curl; keep 0. Callers only use this to adjust wall-clock startTransfer.
+      firstByteTime: 0,
+    };
+  } finally {
+    await cleanup();
+  }
+}

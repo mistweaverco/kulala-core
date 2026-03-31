@@ -1,6 +1,7 @@
 import type { KulalaDocument } from "../parser/types";
 import type { KulalaBlock } from "../parser/types/block";
 import type { KulalaStdinActionRunLimit } from "../parser/types/stdinparsed";
+import type { KulalaRunDirective } from "../parser/types/directive";
 import {
   writeRequestResponseToStderr,
   writeRequestResponseToStdout,
@@ -84,7 +85,8 @@ const run = async (
     const vars = await resolveVariables(env, stableDocId, block.name, startDir);
 
     // Apply variable overrides from run directive if present
-    const runDirective = (block as any).__runDirective;
+    const runDirective = (block as { __runDirective?: KulalaRunDirective })
+      .__runDirective;
     if (runDirective?.variableOverrides) {
       for (const [key, value] of Object.entries(
         runDirective.variableOverrides,

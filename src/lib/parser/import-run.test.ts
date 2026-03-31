@@ -1,7 +1,13 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { getDocument } from "./parser";
-import { writeFileSync, unlinkSync, mkdirSync, rmSync } from "fs";
+import { writeFileSync, mkdirSync, rmSync } from "fs";
 import { join } from "path";
+import type { KulalaBlock } from "./types/block";
+import type { KulalaRunDirective } from "./types/directive";
+
+type BlockWithRunDirective = KulalaBlock & {
+  __runDirective?: KulalaRunDirective;
+};
 
 const testDir = join(process.cwd(), ".test-import-run");
 const importedFile = join(testDir, "imported.http");
@@ -78,7 +84,7 @@ POST https://example.com/post HTTP/1.1
   // Should have: MAIN_BLOCK + BLOCK_A (from import) + BLOCK_A (from run)
   expect(doc.blocks.length).toBeGreaterThanOrEqual(2);
   const runBlock = doc.blocks.find(
-    (b) => (b as any).__runDirective?.target === "#BLOCK_A",
+    (b) => (b as BlockWithRunDirective).__runDirective?.target === "#BLOCK_A",
   );
   expect(runBlock).toBeDefined();
   expect(runBlock?.request.url).toBe("https://example.com/a");
@@ -99,10 +105,13 @@ run #BLOCK_WITH_VAR (@host=api.example.com, @user=testuser)
   const doc = await getDocument(mainContent, join(testDir, "main.http"));
 
   const runBlock = doc.blocks.find(
-    (b) => (b as any).__runDirective?.target === "#BLOCK_WITH_VAR",
+    (b) =>
+      (b as BlockWithRunDirective).__runDirective?.target === "#BLOCK_WITH_VAR",
   );
   expect(runBlock).toBeDefined();
-  expect((runBlock as any).__runDirective?.variableOverrides).toEqual({
+  expect(
+    (runBlock as BlockWithRunDirective).__runDirective?.variableOverrides,
+  ).toEqual({
     host: "api.example.com",
     user: "testuser",
   });
@@ -129,7 +138,9 @@ POST https://example.com/post HTTP/1.1
 
   // Should have MAIN_BLOCK + BLOCK_1 + BLOCK_2 (from run)
   expect(doc.blocks.length).toBeGreaterThanOrEqual(3);
-  const runBlocks = doc.blocks.filter((b) => (b as any).__runDirective);
+  const runBlocks = doc.blocks.filter(
+    (b) => (b as BlockWithRunDirective).__runDirective,
+  );
   expect(runBlocks.length).toBeGreaterThanOrEqual(2);
 });
 
@@ -222,10 +233,10 @@ run #IMPORTED_BLOCK
   expect(wrapperBlock?.request.url).toBe("https://example.com/api");
   expect(
     wrapperBlock?.request.headerSection.some(
-      (h) => h.type === "header" && (h as any).name === "Accept",
+      (h) => h.type === "header" && "name" in h && h.name === "Accept",
     ),
   ).toBe(true);
-  expect((wrapperBlock as any).__runDirective).toBeDefined();
+  expect((wrapperBlock as BlockWithRunDirective).__runDirective).toBeDefined();
 });
 
 test("parser: run directive inside block with variable overrides", async () => {
@@ -245,8 +256,10 @@ run #IMPORTED_BLOCK (@baseUrl=https://example.com)
   const wrapperBlock = doc.blocks.find((b) => b.name === "WRAPPER_BLOCK");
   expect(wrapperBlock).toBeDefined();
   expect(wrapperBlock?.request.method).toBe("GET");
-  expect((wrapperBlock as any).__runDirective).toBeDefined();
-  expect((wrapperBlock as any).__runDirective.variableOverrides).toEqual({
+  expect((wrapperBlock as BlockWithRunDirective).__runDirective).toBeDefined();
+  expect(
+    (wrapperBlock as BlockWithRunDirective).__runDirective?.variableOverrides,
+  ).toEqual({
     baseUrl: "https://example.com",
   });
 });

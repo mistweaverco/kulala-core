@@ -30,10 +30,18 @@ const wrapScriptContent = (
 const executeScript = async (filePath: string): Promise<void> => {
   try {
     globalThis.console = {
-      log: (...args: any[]) => {},
-      error: (...args: any[]) => {},
-      warn: (...args: any[]) => {},
-      info: (...args: any[]) => {},
+      log: (...args: unknown[]) => {
+        void args;
+      },
+      error: (...args: unknown[]) => {
+        void args;
+      },
+      warn: (...args: unknown[]) => {
+        void args;
+      },
+      info: (...args: unknown[]) => {
+        void args;
+      },
     };
     // TODO: Pass actual response data to the script context
     globalThis.response = {
@@ -58,6 +66,9 @@ export const runScripts = async (
   filePath?: string,
   response?: RunnerResponseLike,
 ): Promise<void> => {
+  void type;
+  void block;
+  void response;
   for (const script of scripts) {
     try {
       const tmpName = path.resolve(getTempName());

@@ -1,5 +1,5 @@
-import { expect, test, beforeAll, afterAll, beforeEach } from "bun:test";
-import { writeFileSync, unlinkSync, mkdirSync, existsSync } from "fs";
+import { expect, test, beforeAll, afterAll } from "bun:test";
+import { unlinkSync, mkdirSync, existsSync } from "fs";
 import { join } from "path";
 import {
   acquireAuthorizationCodeToken,
@@ -12,7 +12,6 @@ import {
   generatePKCEPlain,
   isLocalhostRedirect,
   startRedirectServer,
-  openBrowser,
 } from "./browser-flow";
 import type { OAuth2Config } from "./types";
 import { setDbForTesting, getDbInMemory, closeDb } from "../../persistence";
@@ -72,7 +71,6 @@ beforeAll(() => {
 
         if (grantType === "authorization_code") {
           const code = params.get("code");
-          const codeVerifier = params.get("code_verifier");
 
           if (code === "test-auth-code-123") {
             return Response.json({

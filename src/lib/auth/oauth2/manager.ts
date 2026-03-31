@@ -55,7 +55,7 @@ export class OAuth2Manager {
         tokenData = await refreshOAuth2Token(config, tokenData.refresh_token);
         this.tokens.set(authId, tokenData);
         saveOAuth2AuthData(this.env, this.startDir, authId, tokenData);
-      } catch (error) {
+      } catch {
         // Refresh failed, try acquiring new token
         tokenData = undefined;
       }

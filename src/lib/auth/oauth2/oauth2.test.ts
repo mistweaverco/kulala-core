@@ -2,12 +2,7 @@ import { expect, test, beforeAll, afterAll } from "bun:test";
 import { writeFileSync, unlinkSync, mkdirSync, existsSync } from "fs";
 import { join } from "path";
 import { OAuth2Manager } from "./manager";
-import {
-  acquireAuthorizationCodeToken,
-  acquireClientCredentialsToken,
-  acquireImplicitToken,
-  acquirePasswordToken,
-} from "./acquisition";
+import { acquireClientCredentialsToken } from "./acquisition";
 import { generatePKCE, generatePKCEPlain } from "./browser-flow";
 import type { OAuth2Config } from "./types";
 

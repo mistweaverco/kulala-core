@@ -1,6 +1,5 @@
 import type { KulalaError } from "./types/error";
 import type {
-  KulalaDirective,
   KulalaImportDirective,
   KulalaRunDirective,
 } from "./types/directive";
