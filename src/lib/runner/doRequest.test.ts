@@ -60,6 +60,15 @@ beforeAll(() => {
         return Response.json({ echoed: raw });
       }
       if (path === "/graphql" && method === "POST") {
+        const contentType = req.headers.get("content-type") ?? "";
+        if (!contentType.toLowerCase().includes("application/json")) {
+          return new Response(
+            JSON.stringify({
+              errors: [{ message: "Content-Type must be application/json" }],
+            }),
+            { status: 400, headers: { "Content-Type": "application/json" } },
+          );
+        }
         const raw = await req.text();
         let parsed: unknown;
         try {
@@ -94,6 +103,18 @@ beforeAll(() => {
           return new Response(
             JSON.stringify({
               errors: [{ message: "Body must have query as a string" }],
+            }),
+            { status: 400, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        if (
+          "variables" in obj &&
+          obj.variables !== undefined &&
+          (typeof obj.variables !== "object" || obj.variables === null)
+        ) {
+          return new Response(
+            JSON.stringify({
+              errors: [{ message: "variables must be an object when present" }],
             }),
             { status: 400, headers: { "Content-Type": "application/json" } },
           );
@@ -323,6 +344,35 @@ test("doRequestFromBlock: GRAPHQL sends as POST with query and variables", async
       body: {
         query: "query { user { name } }",
         variables: { id: "1" },
+      },
+    },
+  });
+
+  const result = await doRequestFromBlock(
+    block,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+  );
+
+  expect(result).toHaveProperty("success", true);
+  if (result.success) {
+    expect(result.body.type).toBe("json");
+    if (result.body.type === "json") {
+      expect(result.body.content).toEqual({ data: {} });
+    }
+  }
+});
+
+test("doRequestFromBlock: GRAPHQL sends as POST with query only", async () => {
+  const block = makeBlock({
+    request: {
+      method: "GRAPHQL",
+      url: `${baseUrl}/graphql`,
+      headerSection: [],
+      body: {
+        query: "query { viewer { id } }",
       },
     },
   });

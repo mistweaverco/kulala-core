@@ -7,7 +7,12 @@
   "scripts": {
     "format": "prettier --write .",
     "lint": "prettier --check . && eslint .",
-    "test": "bun test"
+    "test": "bun test",
+    "build": "bun run scripts/generate-vendored-curl.ts && bun build src/index.ts --compile --outfile dist/kulala-core",
+    "build:linux-x64": "bun run scripts/generate-vendored-curl.ts --target=bun-linux-x64 && bun build src/index.ts --compile --target=bun-linux-x64 --outfile dist/kulala-core-linux-x64",
+    "build:linux-arm64": "bun run scripts/generate-vendored-curl.ts --target=bun-linux-arm64 && bun build src/index.ts --compile --target=bun-linux-arm64 --outfile dist/kulala-core-linux-arm64",
+    "build:darwin-arm64": "bun run scripts/generate-vendored-curl.ts --target=bun-darwin-arm64 && bun build src/index.ts --compile --target=bun-darwin-arm64 --outfile dist/kulala-core-darwin-arm64",
+    "build:windows-x64": "bun run scripts/generate-vendored-curl.ts --target=bun-windows-x64 && bun build src/index.ts --compile --target=bun-windows-x64 --outfile dist/kulala-core-windows-x64.exe"
   },
   "pkg": {
     "assets": [

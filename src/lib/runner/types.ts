@@ -4,6 +4,25 @@ export type KulalaRequestSuccessResponse = {
   headers: Record<string, string>;
   /** Final resolved URL (after redirects). */
   url: string;
+  /** Redirect response chain (including the final response). */
+  redirectChain?: Array<{
+    status: number;
+    headers: Record<string, string>;
+    url: string;
+    body:
+      | { type: "text"; content: string }
+      | { type: "json"; content: Record<string, unknown> };
+    timings: {
+      dns: number;
+      tcp: number;
+      tls: number;
+      request: number;
+      redirect: number;
+      firstByte: number;
+      startTransfer: number;
+      total: number;
+    };
+  }>;
   timings: {
     dns: number;
     tcp: number;

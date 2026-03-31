@@ -266,6 +266,43 @@ export async function doRequestFromBlock(
             content: rawBodyStr,
           };
 
+    const mapChainEntry = (
+      entry: NonNullable<typeof res.redirectChain>[number],
+    ): NonNullable<KulalaRequestSuccessResponse["redirectChain"]>[number] => {
+      const raw = entry.body;
+      const rawStr = typeof raw === "string" ? raw : String(raw ?? "");
+      const ct = entry.headers["content-type"] || "";
+      let json: Record<string, unknown> | null = null;
+      if (ct.toLowerCase().includes("json")) {
+        try {
+          json = JSON.parse(rawStr);
+        } catch {
+          // ignore
+        }
+      }
+      const body =
+        json !== null
+          ? { type: "json" as const, content: json }
+          : { type: "text" as const, content: rawStr };
+      const p = entry.timings.phases;
+      return {
+        status: entry.statusCode,
+        headers: entry.headers,
+        url: entry.url,
+        body,
+        timings: {
+          dns: p.dns ?? 0,
+          tcp: p.tcp ?? 0,
+          tls: p.tls ?? 0,
+          request: p.request ?? 0,
+          redirect: p.redirect ?? 0,
+          firstByte: p.firstByte ?? 0,
+          startTransfer: p.startTransfer ?? 0,
+          total: p.total ?? 0,
+        },
+      };
+    };
+
     // Redirect response to file (>> path or >>! path)
     const redirect = block.request.responseRedirect;
     if (redirect?.filePath) {
@@ -333,6 +370,9 @@ export async function doRequestFromBlock(
       status: res.statusCode,
       headers: res.headers,
       url: res.url,
+      ...(res.redirectChain
+        ? { redirectChain: res.redirectChain.map(mapChainEntry) }
+        : {}),
       timings: {
         dns: phases.dns ?? 0,
         tcp: phases.tcp ?? 0,

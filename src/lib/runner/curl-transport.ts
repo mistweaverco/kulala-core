@@ -9,6 +9,7 @@ import type {
   NodeHttpClientTimings,
 } from "./http-client";
 import { resolveCurlPath } from "./embedded-curl";
+import { performance } from "node:perf_hooks";
 
 type CurlWriteOut = {
   http_code: number;
@@ -149,106 +150,177 @@ async function runCurl(args: string[]): Promise<{
 export async function curlHttpRequest(
   options: NodeHttpClientOptions,
 ): Promise<NodeHttpClientResponse> {
-  const method = (options.method || "GET").toUpperCase();
-  const url = options.url;
+  const MAX_REDIRECTS = 10;
+  const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
-  const tempBase = await fs.mkdtemp(join(tmpdir(), "kulala-curl-"));
-  const bodyPath = join(tempBase, `body-${randomUUID()}`);
-  const headerPath = join(tempBase, `headers-${randomUUID()}`);
-  const cleanup = async (): Promise<void> => {
-    await fs.rm(tempBase, { recursive: true, force: true });
+  const wallStart = performance.now();
+  let redirectTime = 0;
+  let elapsedBeforeFinal = 0;
+
+  let currentUrl = options.url;
+  let currentMethod = (options.method || "GET").toUpperCase();
+  let currentHeaders = { ...(options.headers ?? {}) };
+  let currentBody: string | Buffer | undefined = options.body as
+    | string
+    | Buffer
+    | undefined;
+
+  const chain: NonNullable<NodeHttpClientResponse["redirectChain"]> = [];
+
+  const requestOnce = async (): Promise<NodeHttpClientResponse> => {
+    const tempBase = await fs.mkdtemp(join(tmpdir(), "kulala-curl-"));
+    const bodyPath = join(tempBase, `body-${randomUUID()}`);
+    const headerPath = join(tempBase, `headers-${randomUUID()}`);
+    const cleanup = async (): Promise<void> => {
+      await fs.rm(tempBase, { recursive: true, force: true });
+    };
+
+    const writeOut = [
+      "http_code=%{http_code}",
+      "url_effective=%{url_effective}",
+      "time_namelookup=%{time_namelookup}",
+      "time_connect=%{time_connect}",
+      "time_appconnect=%{time_appconnect}",
+      "time_pretransfer=%{time_pretransfer}",
+      "time_starttransfer=%{time_starttransfer}",
+      "time_total=%{time_total}",
+      "time_redirect=%{time_redirect}",
+      "",
+    ].join("\n");
+
+    const args: string[] = [
+      "--silent",
+      "--show-error",
+      "--request",
+      currentMethod,
+      "--dump-header",
+      headerPath,
+      "--output",
+      bodyPath,
+      "--write-out",
+      writeOut,
+    ];
+
+    if (process.env.KULALA_HTTP_INSECURE === "1") {
+      args.push("--insecure");
+    }
+
+    // Protocol selection
+    if (options.httpVersion === "HTTP/1.0") args.push("--http1.0");
+    else if (options.httpVersion === "HTTP/1.1") args.push("--http1.1");
+    else if (options.httpVersion === "HTTP/2") {
+      const parsed = new URL(currentUrl);
+      if (parsed.protocol === "https:") {
+        args.push("--http2");
+      } else if (parsed.protocol === "http:") {
+        args.push("--http2-prior-knowledge");
+      } else {
+        throw new Error("HTTP/2 is only supported for http/https URLs");
+      }
+    }
+
+    // Headers
+    for (const [k, v] of Object.entries(currentHeaders)) {
+      args.push("--header", `${k}: ${v}`);
+    }
+
+    // Body
+    if (currentBody !== undefined) {
+      const body =
+        typeof currentBody === "string" || Buffer.isBuffer(currentBody)
+          ? currentBody
+          : Buffer.from(String(currentBody));
+      const uploadPath = join(tempBase, `upload-${randomUUID()}`);
+      await fs.writeFile(uploadPath, body);
+      args.push("--data-binary", `@${uploadPath}`);
+    }
+
+    args.push(currentUrl);
+
+    try {
+      const { stdout, stderr, exitCode } = await runCurl(args);
+      if (exitCode !== 0) {
+        const msg = stderr.trim() || `curl failed with exit code ${exitCode}`;
+        throw new Error(msg);
+      }
+
+      const w = parseCurlWriteOut(stdout);
+      const dump = await fs.readFile(headerPath, "utf-8");
+      const { statusCode, headers } = headersFromDump(dump);
+      const body = await fs.readFile(bodyPath);
+      const timings = buildTimings(w);
+      return {
+        statusCode: statusCode || w.http_code || 0,
+        headers,
+        body,
+        timings,
+        url: w.url_effective || currentUrl,
+        firstByteTime: 0,
+      };
+    } finally {
+      await cleanup();
+    }
   };
 
-  const writeOut = [
-    "http_code=%{http_code}",
-    "url_effective=%{url_effective}",
-    "time_namelookup=%{time_namelookup}",
-    "time_connect=%{time_connect}",
-    "time_appconnect=%{time_appconnect}",
-    "time_pretransfer=%{time_pretransfer}",
-    "time_starttransfer=%{time_starttransfer}",
-    "time_total=%{time_total}",
-    "time_redirect=%{time_redirect}",
-    "",
-  ].join("\n");
+  for (let i = 0; i <= MAX_REDIRECTS; i++) {
+    const res = await requestOnce();
+    chain.push({
+      statusCode: res.statusCode,
+      headers: res.headers,
+      body: res.body,
+      timings: res.timings,
+      url: res.url,
+    });
 
-  const args: string[] = [
-    "--silent",
-    "--show-error",
-    "--location",
-    "--max-redirs",
-    "10",
-    "--request",
-    method,
-    "--dump-header",
-    headerPath,
-    "--output",
-    bodyPath,
-    "--write-out",
-    writeOut,
-  ];
-  if (process.env.KULALA_HTTP_INSECURE === "1") {
-    args.push("--insecure");
-  }
+    const location = res.headers["location"];
+    const isRedirect = REDIRECT_STATUSES.has(res.statusCode) && !!location;
 
-  // Protocol selection
-  if (options.httpVersion === "HTTP/1.0") args.push("--http1.0");
-  else if (options.httpVersion === "HTTP/1.1") args.push("--http1.1");
-  else if (options.httpVersion === "HTTP/2") {
-    const parsed = new URL(url);
-    if (parsed.protocol === "https:") {
-      args.push("--http2");
-    } else if (parsed.protocol === "http:") {
-      // h2c prior knowledge (cleartext HTTP/2). Useful for local testing and some internal services.
-      args.push("--http2-prior-knowledge");
-    } else {
-      throw new Error("HTTP/2 is only supported for http/https URLs");
+    if (!isRedirect) {
+      // Aggregate redirect + wall-clock total across hops.
+      const wallTotal = performance.now() - wallStart;
+      elapsedBeforeFinal = wallTotal - (res.timings.phases.total ?? 0);
+
+      const phases = { ...res.timings.phases };
+      phases.redirect = redirectTime;
+      phases.total = wallTotal;
+      // Adjust startTransfer to include time spent in previous hops (best-effort).
+      phases.startTransfer =
+        (phases.startTransfer ?? 0) > 0
+          ? elapsedBeforeFinal + (phases.startTransfer ?? 0)
+          : phases.startTransfer;
+      res.timings.phases = phases;
+
+      return { ...res, redirectChain: chain, url: res.url };
+    }
+
+    if (i === MAX_REDIRECTS) {
+      throw new Error(`Maximum redirects (${MAX_REDIRECTS}) exceeded`);
+    }
+
+    redirectTime += res.timings.phases.total ?? 0;
+
+    currentUrl = new URL(location!, currentUrl).href;
+
+    if (
+      (res.statusCode === 301 ||
+        res.statusCode === 302 ||
+        res.statusCode === 303) &&
+      !(currentMethod === "POST" && currentBody !== undefined)
+    ) {
+      // Historically many clients switch POST to GET for 301/302/303.
+      // However, GraphQL endpoints frequently redirect and require the POST body.
+      // Preserve POST+body by default; only switch for non-POST or bodyless requests.
+      currentMethod = "GET";
+      currentBody = undefined;
+      currentHeaders = Object.fromEntries(
+        Object.entries(currentHeaders).filter(
+          ([k]) =>
+            k.toLowerCase() !== "content-length" &&
+            k.toLowerCase() !== "content-type",
+        ),
+      );
     }
   }
 
-  // Headers
-  for (const [k, v] of Object.entries(options.headers ?? {})) {
-    // curl treats an empty header value as "Header:" which is fine.
-    args.push("--header", `${k}: ${v}`);
-  }
-
-  // Body
-  if (options.body !== undefined) {
-    const body =
-      typeof options.body === "string" || Buffer.isBuffer(options.body)
-        ? options.body
-        : Buffer.from(String(options.body));
-    // Avoid shell quoting issues by writing to a temp file.
-    const uploadPath = join(tempBase, `upload-${randomUUID()}`);
-    await fs.writeFile(uploadPath, body);
-    args.push("--data-binary", `@${uploadPath}`);
-  }
-
-  args.push(url);
-
-  try {
-    const { stdout, stderr, exitCode } = await runCurl(args);
-    if (exitCode !== 0) {
-      const msg = stderr.trim() || `curl failed with exit code ${exitCode}`;
-      throw new Error(msg);
-    }
-
-    const w = parseCurlWriteOut(stdout);
-    const dump = await fs.readFile(headerPath, "utf-8");
-    const { statusCode, headers } = headersFromDump(dump);
-    const body = await fs.readFile(bodyPath);
-
-    const timings = buildTimings(w);
-    return {
-      statusCode: statusCode || w.http_code || 0,
-      headers,
-      body,
-      timings,
-      url: w.url_effective || url,
-      // Not available from curl; keep 0. Callers only use this to adjust wall-clock startTransfer.
-      firstByteTime: 0,
-    };
-  } finally {
-    await cleanup();
-  }
+  throw new Error(`Maximum redirects (${MAX_REDIRECTS}) exceeded`);
 }

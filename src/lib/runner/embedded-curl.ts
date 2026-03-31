@@ -24,6 +24,19 @@ async function tryResolveBundledCurl(): Promise<{
   bytes: Buffer;
   filename: string;
 } | null> {
+  // Prefer Bun-embedded asset path when available (bun build --compile).
+  if (typeof Bun !== "undefined") {
+    try {
+      const mod = await import("./vendored-curl.generated.ts");
+      if (typeof mod.getVendoredCurl === "function") {
+        const res = await mod.getVendoredCurl();
+        if (res) return res;
+      }
+    } catch {
+      // ignore; fall back to filesystem-based lookup
+    }
+  }
+
   // TODO:
   // make sure this gets bundled into the final build.
   // Some packagers don't like dynamic file URL reads,

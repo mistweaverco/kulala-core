@@ -31,6 +31,14 @@ export type NodeHttpClientResponse = {
   url: string;
   /** performance.now() when first byte of this response was received (for startTransfer from wall start). */
   firstByteTime: number;
+  /** Redirect response chain, in order (including the final response). */
+  redirectChain?: Array<{
+    statusCode: number;
+    headers: Record<string, string>;
+    body: string | Buffer;
+    timings: NodeHttpClientTimings;
+    url: string;
+  }>;
 };
 
 export type NodeHttpClientOptions = {

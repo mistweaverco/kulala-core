@@ -41,3 +41,6 @@ http-client.private.env.json
 
 # Test redirects
 http-example-files/*.tmp*
+
+# Generated vendored curl code
+/src/lib/runner/vendored-curl.generated.ts

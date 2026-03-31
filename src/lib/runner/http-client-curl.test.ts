@@ -86,8 +86,52 @@ describe("curl transport", () => {
     server.close();
     expect(res.statusCode).toBe(200);
     expect(res.url).toContain("/final");
+    expect(res.redirectChain?.length).toBe(2);
+    expect(res.redirectChain?.[0]?.statusCode).toBe(302);
+    expect(res.redirectChain?.[1]?.statusCode).toBe(200);
     expect(res.timings.phases.redirect).toBeGreaterThanOrEqual(0);
     expect(res.timings.phases.total).toBeGreaterThanOrEqual(0);
+  });
+
+  test("keeps POST body across 301/302/303 redirects (GraphQL-style)", async () => {
+    if (!(await hasCurl())) return;
+
+    const server = createServer(async (req, res) => {
+      if (req.url === "/start") {
+        res.statusCode = 302;
+        res.setHeader("location", "/graphql");
+        res.end();
+        return;
+      }
+      if (req.url === "/graphql") {
+        const chunks: Buffer[] = [];
+        for await (const c of req) chunks.push(c as Buffer);
+        const raw = Buffer.concat(chunks).toString("utf-8");
+        if (req.method !== "POST" || raw.trim() === "") {
+          res.statusCode = 400;
+          res.setHeader("content-type", "application/json");
+          res.end(JSON.stringify({ errors: [{ message: "Missing body" }] }));
+          return;
+        }
+        res.statusCode = 200;
+        res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify({ ok: true }));
+        return;
+      }
+      res.statusCode = 404;
+      res.end();
+    });
+
+    const port = await listenHttp(server);
+    const res = await nodeHttpRequest({
+      url: `http://127.0.0.1:${port}/start`,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: "query { __typename }" }),
+    });
+
+    server.close();
+    expect(res.statusCode).toBe(200);
   });
 
   test("supports HTTP/2 (h2c prior knowledge) locally", async () => {
