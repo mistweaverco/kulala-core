@@ -30,7 +30,9 @@ export type KulalaHttpMethod =
   | KulalaHttpMethodWithoutBody;
 
 export type KulalaHttpScheme = "http" | "https" | "ws" | "wss";
-export type KulalaHttpURL = `${KulalaHttpScheme}://${string}` | `/${string}`;
+
+/** Request target as written in the file; may be a JetBrains-style `{{var}}` template (including full URLs). */
+export type KulalaHttpURL = string;
 
 // Per specification, the request line consists of three parts:
 // 1. The HTTP method (e.g., GET, POST, PUT, DELETE).

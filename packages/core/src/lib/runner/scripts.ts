@@ -7,7 +7,7 @@ import {
 } from "./../parser/types/script";
 import { existsSync, unlinkSync, writeFileSync } from "fs";
 import { createRequire } from "node:module";
-import { setVariable, deleteVariable, getVariable } from "../persistence";
+import { deleteVariable, getVariable, setVariable } from "../persistence";
 import {
   exec,
   execFile,
@@ -99,17 +99,29 @@ const getTempName = (): string => {
   return path.join(osTempDir, `kulala_script_${timestamp}_${uuid}.js`);
 };
 
-const transpiler = new Bun.Transpiler();
+// Bun.Transpiler must be constructed with the target loader: passing `{ loader: "ts" }`
+// only to transformSync() is ignored (input is parsed as JS/JSX, so `const x: string` fails).
+const jsTranspiler = new Bun.Transpiler({ loader: "js" });
+const tsTranspiler = new Bun.Transpiler({ loader: "ts" });
+const tsxTranspiler = new Bun.Transpiler({ loader: "tsx" });
 
 const wrapScriptContent = (
   content: string,
   loader: "js" | "jsx" | "ts" | "tsx" = "js",
 ): string => {
+  // Default export must be awaited: a fire-and-forget `(async()=>{...})()` completes
+  // module evaluation before `await` boundaries, so `finally` clears global `request`
+  // while the script is still running (breaks substitution and can throw).
+  const transpiler =
+    loader === "tsx"
+      ? tsxTranspiler
+      : loader === "ts"
+        ? tsTranspiler
+        : loader === "jsx"
+          ? tsxTranspiler
+          : jsTranspiler;
   return transpiler.transformSync(
-    `(async() => {
-    ${content}
-  })();`,
-    { loader },
+    `export default async function kulalaWrappedScript() {\n${content}\n}`,
   );
 };
 
@@ -170,7 +182,11 @@ async function executeJsTsScript(
       ) => Buffer.from(data, "binary").toString("base64");
     }
 
-    await import(filePath);
+    const mod = (await import(filePath)) as { default?: unknown };
+    const run = mod.default;
+    if (typeof run === "function") {
+      await (run as () => unknown)();
+    }
   } finally {
     (globalThis as unknown as Record<string, unknown>).client = prev.client;
     (globalThis as unknown as Record<string, unknown>).request = prev.request;
@@ -270,10 +286,10 @@ export const runScripts = async (
   void block;
   const mutableVars = vars ?? {};
   for (const script of scripts) {
+    const tmpName = path.resolve(getTempName());
+    const cwd = path.resolve(process.cwd());
+    const tempCwd = path.resolve(path.dirname(filePath || tmpName));
     try {
-      const tmpName = path.resolve(getTempName());
-      const cwd = path.resolve(process.cwd());
-      const tempCwd = path.resolve(path.dirname(filePath || tmpName));
       process.chdir(tempCwd);
 
       const requestObj: ScriptRequest = {
@@ -325,17 +341,21 @@ export const runScripts = async (
           response: responseObj,
         });
       }
-
-      process.chdir(cwd);
-      if (existsSync(tmpName)) {
-        unlinkSync(tmpName);
-      }
     } catch (error) {
       console.error(
         `Error executing script: ${
           error instanceof Error ? error.message : String(error)
         }`,
       );
+    } finally {
+      try {
+        process.chdir(cwd);
+      } catch {
+        // ignore chdir restore failure
+      }
+      if (existsSync(tmpName)) {
+        unlinkSync(tmpName);
+      }
     }
   }
 };

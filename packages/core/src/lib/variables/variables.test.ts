@@ -80,6 +80,15 @@ test("resolveVariables includes persistence vars", async () => {
   expect(vars.baseUrl).toBe("https://api.example.com");
 });
 
+test("resolveVariables includes JetBrains @-file variables (fileHeader + blockPreamble)", async () => {
+  const vars = await resolveVariables("default", "d", "b", process.cwd(), {
+    fileHeader: { DOC_ENV_TEST: "production" },
+    blockPreamble: { SEGMENT: "beta" },
+  });
+  expect(vars.DOC_ENV_TEST).toBe("production");
+  expect(vars.SEGMENT).toBe("beta");
+});
+
 test("substituteInString uses resolver when var is missing", () => {
   const resolver = (name: string) =>
     name === "fromResolver" ? "resolved" : undefined;

@@ -20,6 +20,10 @@ export type KulalaBlock = {
     start: number;
     end: number;
   };
+  /** @name=value lines in this block before the request (JetBrains in-file variables). */
+  preambleVariables?: Record<string, string>;
+  /** @ variables from the start of the .http file this block was parsed from (imports / run file). */
+  sourceFileHeaderVariables?: Record<string, string>;
 };
 
 export type KulalaBlockLineNumber = number;
@@ -29,6 +33,7 @@ export type KulalaBlockLineTypeName =
   | "afterHeaders"
   | "body"
   | "comment"
+  | "docVariable"
   | "headers"
   | "name"
   | "operator"

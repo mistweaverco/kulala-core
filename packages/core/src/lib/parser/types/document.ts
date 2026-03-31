@@ -4,6 +4,8 @@ import type { KulalaDirective } from "./directive";
 export type KulalaDocument = {
   filepath?: string;
   variables?: Record<string, KulalaVariable>;
+  /** @name=value definitions before the first ### block (JetBrains in-file variables). */
+  fileHeaderVariables?: Record<string, string>;
   directives: KulalaDirective[];
   blocks: KulalaBlock[];
   hasErrors?: boolean;

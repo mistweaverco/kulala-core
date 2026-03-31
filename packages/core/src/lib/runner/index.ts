@@ -81,7 +81,19 @@ export async function runDocument(
   )[] = [];
   const previousResults = new Map<string, PreviousResponse>();
   for (const block of blocks) {
-    const vars = await resolveVariables(env, stableDocId, block.name, startDir);
+    const vars = await resolveVariables(
+      env,
+      stableDocId,
+      block.name,
+      startDir,
+      {
+        fileHeader:
+          block.sourceFileHeaderVariables ??
+          doc.fileHeaderVariables ??
+          undefined,
+        blockPreamble: block.preambleVariables,
+      },
+    );
 
     // Apply variable overrides from run directive if present
     const runDirective = (block as { __runDirective?: KulalaRunDirective })

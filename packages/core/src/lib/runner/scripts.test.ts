@@ -45,6 +45,28 @@ describe("scripts", () => {
     expect(vars.FOO).toBe("bar");
   });
 
+  test("pre-request JS awaits complete before globals are cleared (regression)", async () => {
+    const vars: Record<string, string> = {};
+    await runScripts(
+      [
+        {
+          type: "preRequest",
+          lang: "js",
+          content: `await new Promise((r) => setTimeout(r, 30));
+request.variables.set("NAME", "kulala");`,
+          lineNumber: 1,
+        },
+      ],
+      "preRequest",
+      dummyBlock,
+      "/tmp/example.http",
+      undefined,
+      vars,
+    );
+
+    expect(vars.NAME).toBe("kulala");
+  });
+
   test("post-request JS can read response and set vars", async () => {
     const vars: Record<string, string> = {};
     await runScripts(
@@ -78,6 +100,37 @@ describe("scripts", () => {
     expect(vars.STATUS).toBe("200");
     expect(vars.DATE).toBe("Mon, 01 Jan 2024 00:00:00 GMT");
     expect(vars.TOKEN).toBe("abc");
+  });
+
+  test("post-request TS transpiles type annotations (lang=ts)", async () => {
+    const vars: Record<string, string> = {};
+    await runScripts(
+      [
+        {
+          type: "postRequest",
+          lang: "ts",
+          content: `const foo: string = "bar";
+void foo;
+request.variables.set("DATE", response.headers.valueOf("Date") || "");`,
+          lineNumber: 1,
+        },
+      ],
+      "postRequest",
+      dummyBlock,
+      "/tmp/example.http",
+      {
+        statusCode: 200,
+        headers: {
+          Date: "Mon, 01 Jan 2024 00:00:00 GMT",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ ok: true }),
+        timings: { phases: { total: 1 } },
+      },
+      vars,
+    );
+
+    expect(vars.DATE).toBe("Mon, 01 Jan 2024 00:00:00 GMT");
   });
 
   test("pre-request Lua can inject request variables and set global vars", async () => {

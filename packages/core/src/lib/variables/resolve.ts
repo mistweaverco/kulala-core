@@ -14,10 +14,18 @@ function toString(v: unknown): string {
   return String(v);
 }
 
+export type HttpFileVariableSources = {
+  /** @name=value lines before the first ### in the .http file (or imported file). */
+  fileHeader?: Record<string, string>;
+  /** @name=value lines in the current block preamble before the request line. */
+  blockPreamble?: Record<string, string>;
+};
+
 /**
  * Resolve all variables for a request.
- * Order (later overrides earlier): kuba → system/env files (http-client.env.json, .env) →
- * persistence (global → document → request) → magic variables ($uuid, $timestamp, etc.).
+ * Order (later overrides earlier): kuba → @-lines from .http (file header + block preamble) →
+ * system/env files (http-client.env.json, .env) → persistence (global → document → request) →
+ * magic variables ($uuid, $timestamp, etc.).
  * See https://neovim.getkulala.net/docs/usage/magic-variables and
  * https://neovim.getkulala.net/docs/usage/dotenv-and-http-client.env.json-support
  */
@@ -26,6 +34,7 @@ export async function resolveVariables(
   stableDocId: string,
   blockName: string,
   startDir: string,
+  httpFileVars?: HttpFileVariableSources,
 ): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
 
@@ -36,6 +45,17 @@ export async function resolveVariables(
       for (const [k, v] of Object.entries(kubaVars)) {
         out[k] = v;
       }
+    }
+  }
+
+  if (httpFileVars?.fileHeader) {
+    for (const [k, v] of Object.entries(httpFileVars.fileHeader)) {
+      out[k] = v;
+    }
+  }
+  if (httpFileVars?.blockPreamble) {
+    for (const [k, v] of Object.entries(httpFileVars.blockPreamble)) {
+      out[k] = v;
     }
   }
 

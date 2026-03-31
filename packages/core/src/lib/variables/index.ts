@@ -9,13 +9,14 @@
  * - Request variables: {{REQUEST_NAME.response.body.$.path}}, {{REQUEST_NAME.response.headers.Name}}.
  * - JSONPath-style in env/kuba: nested JSON flattened to dotted paths (client.host.url, client.['host.url']).
  * - Substitution: {{variableName}} or compound paths; optional spaces {{ var }} in URL, headers, body.
+ * - In-file @ variables: @name=value before the first ### or in a block preamble (JetBrains).
  */
 
 export { getStableDocumentId } from "./stable-id";
 export { findKubaYamlDir, getKubaEnv, isKubaInPath } from "./kuba";
 export { loadEnvVars } from "./env-files";
 export { getMagicVariables } from "./magic";
-export { resolveVariables } from "./resolve";
+export { resolveVariables, type HttpFileVariableSources } from "./resolve";
 export {
   substituteInString,
   substituteInStringAsync,

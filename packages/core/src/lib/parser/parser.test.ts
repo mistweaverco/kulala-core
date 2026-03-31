@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { resolveVariables, substituteInString } from "../variables";
 import { getDocument } from "./parser";
 
 test("parser: GraphQL query with type annotations not parsed as header", async () => {
@@ -200,4 +201,132 @@ GET https://example.com/ HTTP/2
   expect(doc.blocks[0]?.request.httpVersion).toBe("HTTP/1.1");
   expect(doc.blocks[1]?.request.method).toBe("GET");
   expect(doc.blocks[1]?.request.httpVersion).toBe("HTTP/2");
+});
+
+test("parser: @DOC_ENV_TEST=production before blocks is parsed and substitutes in URL", async () => {
+  const content = `@DOC_ENV_TEST=production
+
+### Req
+GET https://example.com/{{DOC_ENV_TEST}}/v1 HTTP/1.1
+`;
+
+  const doc = await getDocument(content.trim());
+  expect(doc.fileHeaderVariables?.DOC_ENV_TEST).toBe("production");
+  const block = doc.blocks[0];
+  expect(block?.errors).toEqual([]);
+  const vars = await resolveVariables(
+    "default",
+    "doc-id",
+    block!.name,
+    process.cwd(),
+    {
+      fileHeader: doc.fileHeaderVariables,
+      blockPreamble: block!.preambleVariables,
+    },
+  );
+  expect(vars.DOC_ENV_TEST).toBe("production");
+  expect(substituteInString(block!.request.url, vars)).toBe(
+    "https://example.com/production/v1",
+  );
+});
+
+test("parser: @ variable with spaces and POST full-URL template", async () => {
+  const content = `@API_URL = https://api.example.com
+
+### Create
+POST {{API_URL}}/items HTTP/1.1
+`;
+
+  const doc = await getDocument(content.trim());
+  expect(doc.fileHeaderVariables?.API_URL).toBe("https://api.example.com");
+  const block = doc.blocks[0];
+  expect(block?.errors).toEqual([]);
+  const vars = await resolveVariables(
+    "default",
+    "doc-id",
+    block!.name,
+    process.cwd(),
+    {
+      fileHeader: doc.fileHeaderVariables,
+      blockPreamble: block!.preambleVariables,
+    },
+  );
+  expect(substituteInString(block!.request.url, vars)).toBe(
+    "https://api.example.com/items",
+  );
+});
+
+test("parser: @ variable in block preamble before request", async () => {
+  const content = `### Req
+@SEGMENT = beta
+GET https://example.com/{{SEGMENT}}/x HTTP/1.1
+`;
+
+  const doc = await getDocument(content.trim());
+  const block = doc.blocks[0];
+  expect(block?.errors).toEqual([]);
+  expect(block?.preambleVariables?.SEGMENT).toBe("beta");
+  const vars = await resolveVariables(
+    "default",
+    "doc-id",
+    block!.name,
+    process.cwd(),
+    {
+      fileHeader: doc.fileHeaderVariables,
+      blockPreamble: block!.preambleVariables,
+    },
+  );
+  expect(substituteInString(block!.request.url, vars)).toBe(
+    "https://example.com/beta/x",
+  );
+});
+
+test("stdin-style JSON round-trip must preserve {{var}} (core.sh must not escape curlies)", () => {
+  const content =
+    "@DOC_ENV_TEST=production\n\n### R\nGET https://ex.test/{{NAME}} HTTP/1.1\n";
+  const payload = {
+    action: "run",
+    filepath: "/tmp/example.http",
+    content,
+    limit: [{ filter: "cursorPosition" as const, line: 5, column: 1 }],
+  };
+  const round = JSON.parse(JSON.stringify(payload)) as typeof payload;
+  expect(round.content).toContain("{{NAME}}");
+  expect(round.content).not.toContain("\\{\\{");
+});
+
+test("scripts-style block keeps {{NAME}} in request URL after parse (inlined fixture)", async () => {
+  const content = `@DOC_ENV_TEST=production
+
+### JS_SCRIPT_REQ
+
+< {%
+  request.variables.set("NAME", "kulala")
+  client.global.set("GLOBAL_FOO", "bar")
+%}
+
+POST https://httpbin.org/post?name={{NAME}}
+Content-Type: application/json
+X-Global-Foo: {{GLOBAL_FOO}}
+
+{
+  "username": "user123",
+  "password": "pass123",
+  "kuba_env_test": "{{ SOME_HARD_CODED_ENV }}",
+  "doc_env_test": "{{ DOC_ENV_TEST }}",
+  "OS_USER": "{{ $env.USER }}"
+}
+
+> {% lang=lua
+  request.variables.set("STATUS", tostring(response.status))
+  request.variables.set("DATE", response.headers.valueOf("Date") or "")
+%}
+`;
+
+  const doc = await getDocument(content, "/tmp/scripts-regression.http");
+  const block = doc.blocks.find((b) => b.name === "JS_SCRIPT_REQ");
+  expect(block).toBeDefined();
+  expect(block!.errors).toEqual([]);
+  expect(block!.request.url).toContain("{{NAME}}");
+  expect(block!.request.url).not.toMatch(/\\\{\{/);
 });

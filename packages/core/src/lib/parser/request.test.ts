@@ -49,3 +49,29 @@ test("getRequest: invalid HTTP version (HTTP/3) is omitted from httpVersion", ()
     expect(result.httpVersion).toBeUndefined();
   }
 });
+
+test("getRequest: full URL template on request line (POST {{API_URL}})", () => {
+  const lines = ["POST {{API_URL}} HTTP/1.1"];
+  const [result] = getRequest(lines, 0);
+  expect(result).not.toHaveProperty("errorMessage");
+  if (!("errorMessage" in result!)) {
+    expect(result.method).toBe("POST");
+    expect(result.url).toBe("{{API_URL}}");
+    expect(result.httpVersion).toBe("HTTP/1.1");
+  }
+});
+
+test("getRequest: template with spaces inside braces on request line", () => {
+  const lines = ["GET {{ base }}/items HTTP/1.1"];
+  const [result] = getRequest(lines, 0);
+  expect(result).not.toHaveProperty("errorMessage");
+  if (!("errorMessage" in result!)) {
+    expect(result.url).toBe("{{ base }}/items");
+  }
+});
+
+test("getRequest: rejects line with only HTTP version after method", () => {
+  const lines = ["GET HTTP/1.1"];
+  const [result] = getRequest(lines, 0);
+  expect(result).toHaveProperty("errorMessage");
+});

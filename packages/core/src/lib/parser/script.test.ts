@@ -19,6 +19,23 @@ describe("getScript", () => {
     expect(r.content.trim()).toBe('request.variables.set("NAME", "kulala")');
   });
 
+  test("parses inline post-request TS with lang=ts", async () => {
+    const blockLines = [
+      "> {% lang=ts",
+      '  const foo: string = "bar";',
+      '  request.variables.set("DATE", response.headers.valueOf("Date") || "")',
+      "%}",
+    ];
+    const r = await getScript(blockLines[0]!, blockLines, 0, "/tmp/foo.http");
+    if ("errorMessage" in r) {
+      throw new Error(r.errorMessage);
+    }
+    expect(r.type).toBe("postRequest");
+    expect(r.lang).toBe("ts");
+    expect(r.content).toContain("const foo: string");
+    expect(r.content).toContain("request.variables.set");
+  });
+
   test("parses inline post-request Lua with legacy %\\} closing", async () => {
     const line = "> {% lang=lua";
     const blockLines = [
@@ -59,5 +76,26 @@ GET https://example.com
     expect(post?.lang).toBe("lua");
     expect(pre?.content).toContain("NAME");
     expect(post?.content).toContain("response.status");
+  });
+});
+
+describe("getDocument + TypeScript scripts", () => {
+  test("parses block with inline post-request lang=ts", async () => {
+    const content = `### TS_POST
+GET https://example.com
+
+> {% lang=ts
+  const foo: string = "bar";
+  request.variables.set("DATE", response.headers.valueOf("Date") || "");
+%}
+`;
+    const doc = await getDocument(content);
+    const block = doc.blocks[0];
+    expect(block?.errors).toEqual([]);
+    expect(block?.scripts.postRequest).toHaveLength(1);
+    expect(block?.scripts.postRequest[0]?.lang).toBe("ts");
+    expect(block?.scripts.postRequest[0]?.content).toContain(
+      "const foo: string",
+    );
   });
 });

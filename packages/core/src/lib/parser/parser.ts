@@ -22,6 +22,10 @@ import {
   parseRunDirective,
   isDirective,
 } from "./directive";
+import {
+  extractFileHeaderAtVariables,
+  parseAtVariableLine,
+} from "./at-variables";
 import type { KulalaDirective, KulalaRunDirective } from "./types/directive";
 import { resolve, dirname } from "path";
 const blockRegex = /###(.*?)\n([\s\S]+?)(?=###|$)/g;
@@ -65,6 +69,11 @@ const getLineType = (
   }
   if (line.startsWith("< ")) {
     return { name: "preRequestScript", lineNumber: lineIdx };
+  }
+  if (!seenBlockTypes.has("request") && line.trim().startsWith("@")) {
+    if (parseAtVariableLine(line) !== undefined) {
+      return { name: "docVariable", lineNumber: lineIdx };
+    }
   }
   if (line.startsWith("# @")) return { name: "operator", lineNumber: lineIdx };
   if (line.startsWith("#")) return { name: "comment", lineNumber: lineIdx };
@@ -189,6 +198,14 @@ const getParsedBlock = async (
           });
         }
         break;
+      case "docVariable": {
+        const parsed = parseAtVariableLine(line);
+        if (parsed) {
+          if (!result.preambleVariables) result.preambleVariables = {};
+          result.preambleVariables[parsed.name] = parsed.value;
+        }
+        break;
+      }
       case "request": {
         const [requestResult, consumed] = getRequest(lines, lineIdx);
         if (isError(requestResult)) {
@@ -319,6 +336,14 @@ function extractDirectives(content: string): {
   };
 }
 
+function attachSourceFileHeaderVars(
+  blockList: KulalaBlock[],
+  vars: Record<string, string>,
+): KulalaBlock[] {
+  if (Object.keys(vars).length === 0) return blockList;
+  return blockList.map((b) => ({ ...b, sourceFileHeaderVariables: vars }));
+}
+
 const getBlocks = async (
   content: string,
   filepath?: string,
@@ -402,6 +427,9 @@ export const getDocument = async (
   } = extractDirectives(content);
 
   const blocks = await getBlocks(contentWithoutDirectives, filepath);
+  const fileHeaderVariables = extractFileHeaderAtVariables(
+    contentWithoutDirectives,
+  );
   const nativeBlockCount = blocks.length;
   const allErrors = [...directiveErrors];
 
@@ -433,8 +461,12 @@ export const getDocument = async (
         allErrors.push(result);
       } else {
         importedDocuments.set(directive.filepath, result);
-        // Add blocks from imported file
-        importedBlocks.push(...result.blocks);
+        importedBlocks.push(
+          ...attachSourceFileHeaderVars(
+            result.blocks,
+            result.fileHeaderVariables ?? {},
+          ),
+        );
       }
     }
   }
@@ -494,8 +526,10 @@ export const getDocument = async (
             lineNumber: directive.lineNumber,
           });
         } else {
-          // Add all blocks from the file
-          for (const block of result.blocks) {
+          for (const block of attachSourceFileHeaderVars(
+            result.blocks,
+            result.fileHeaderVariables ?? {},
+          )) {
             const runBlock: KulalaBlock = {
               ...block,
             };
@@ -526,6 +560,10 @@ export const getDocument = async (
             // Replace block's request with referenced block's request
             block.request = referencedBlock.request;
             block.scripts = referencedBlock.scripts;
+            if (referencedBlock.sourceFileHeaderVariables !== undefined) {
+              block.sourceFileHeaderVariables =
+                referencedBlock.sourceFileHeaderVariables;
+            }
             // Store run directive for variable overrides
             (block as BlockWithRunDirective).__runDirective = blockRunDirective;
             delete (block as BlockWithRunDirective).__blockRunDirective;
@@ -541,6 +579,10 @@ export const getDocument = async (
             // Replace block's request with referenced block's request
             block.request = referencedBlock.request;
             block.scripts = referencedBlock.scripts;
+            if (referencedBlock.sourceFileHeaderVariables !== undefined) {
+              block.sourceFileHeaderVariables =
+                referencedBlock.sourceFileHeaderVariables;
+            }
             // Store run directive for variable overrides
             (block as BlockWithRunDirective).__runDirective = blockRunDirective;
             delete (block as BlockWithRunDirective).__blockRunDirective;
@@ -567,5 +609,8 @@ export const getDocument = async (
     hasErrors: allErrors.length > 0,
     directiveLinesRemoved,
     nativeBlockCount,
+    ...(Object.keys(fileHeaderVariables).length > 0
+      ? { fileHeaderVariables }
+      : {}),
   };
 };

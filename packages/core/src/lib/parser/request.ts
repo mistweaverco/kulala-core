@@ -1,6 +1,5 @@
 import type {
   KulalaHttpMethod,
-  KulalaHttpScheme,
   KulalaHttpURL,
   KulalaHttpVersion,
   KulalaRequest,
@@ -33,14 +32,22 @@ const parseHttpVersion = (s: string): KulalaHttpVersion | undefined =>
     ? (s as KulalaHttpVersion)
     : undefined;
 
-const isValidUrl = (url: KulalaHttpURL): boolean => {
-  const schemes: KulalaHttpScheme[] = ["http", "https", "ws", "wss"];
-  const schemePattern = schemes.join("|");
-  // Regex to match URLs starting with / or a valid scheme followed by ://
-  const urlPattern = new RegExp(
-    `^(\\/|(${schemePattern}):\\/\\/)[\\w\\-]+(\\.[\\w\\-]+)+([\\w.,@?^=%&:/~+#\\-]*[\\w@?^=%&/~+#\\-])?$`,
-  );
-  return urlPattern.test(url);
+/** Allow templates and arbitrary text; final URL is validated after variable substitution at request time. */
+const isValidRequestTarget = (url: string): boolean => {
+  const u = url.trim();
+  return u.length > 0 && !/[\r\n]/.test(url);
+};
+
+/**
+ * Split `METHOD`-suffix into request target and optional trailing HTTP version.
+ * The target may contain spaces (e.g. `{{ API_URL }}`); version is only the final ` HTTP/x.x` token.
+ */
+const splitRequestTargetAndVersion = (
+  afterMethod: string,
+): { target: string; versionStr?: string } => {
+  const m = afterMethod.match(/^(.*)\s+(HTTP\/\d+(?:\.\d+)?)$/);
+  if (!m) return { target: afterMethod };
+  return { target: m[1]!.trimEnd(), versionStr: m[2] };
 };
 
 // Check if a line is a request continuation (indented URL part or comment).
@@ -57,8 +64,19 @@ export const getRequest = (
   startLineIdx: number,
 ): [KulalaRequest | KulalaError, number] => {
   const firstLine = lines[startLineIdx] ?? "";
-  const tokens = firstLine.trim().split(/\s+/);
-  const method = tokens[0] as KulalaHttpMethod;
+  const trimmed = firstLine.trim();
+  const firstSpace = trimmed.search(/\s/);
+  if (firstSpace === -1) {
+    return [
+      {
+        errorMessage: `Missing URL at line ${startLineIdx + 1}`,
+        lineNumber: startLineIdx,
+      },
+      1,
+    ];
+  }
+
+  const method = trimmed.slice(0, firstSpace) as KulalaHttpMethod;
   if (!getValidHttpMethods().includes(method)) {
     return [
       {
@@ -69,14 +87,35 @@ export const getRequest = (
     ];
   }
 
+  const afterMethod = trimmed.slice(firstSpace + 1).trimStart();
+  if (!afterMethod) {
+    return [
+      {
+        errorMessage: `Missing URL at line ${startLineIdx + 1}`,
+        lineNumber: startLineIdx,
+      },
+      1,
+    ];
+  }
+
+  if (HTTP_VERSION.test(afterMethod)) {
+    return [
+      {
+        errorMessage: `Missing URL at line ${startLineIdx + 1}`,
+        lineNumber: startLineIdx,
+      },
+      1,
+    ];
+  }
+
   const requestLineParts: KulalaRequestLinePart[] = [];
   let urlResolved: KulalaHttpURL;
   let consumed = 1;
 
-  // Single-line: METHOD url HTTP/1.1
-  if (tokens.length >= 3 && HTTP_VERSION.test(tokens[2])) {
-    urlResolved = tokens[1] as KulalaHttpURL;
-    if (!isValidUrl(urlResolved)) {
+  const firstSplit = splitRequestTargetAndVersion(afterMethod);
+  if (firstSplit.versionStr !== undefined && firstSplit.target.length > 0) {
+    urlResolved = firstSplit.target as KulalaHttpURL;
+    if (!isValidRequestTarget(urlResolved)) {
       return [
         {
           errorMessage: `Invalid URL: ${urlResolved}`,
@@ -85,7 +124,7 @@ export const getRequest = (
         1,
       ];
     }
-    const httpVersion = parseHttpVersion(tokens[2]);
+    const httpVersion = parseHttpVersion(firstSplit.versionStr);
     return [
       {
         method,
@@ -97,18 +136,7 @@ export const getRequest = (
     ];
   }
 
-  // First line is METHOD url (no version yet) or METHOD only
-  const firstUrlPart = tokens[1];
-  if (!firstUrlPart) {
-    return [
-      {
-        errorMessage: `Missing URL at line ${startLineIdx + 1}`,
-        lineNumber: startLineIdx,
-      },
-      1,
-    ];
-  }
-
+  const firstUrlPart = firstSplit.target;
   const urlParts: string[] = [firstUrlPart];
   requestLineParts.push({ type: "url", line: firstUrlPart });
   let httpVersion: KulalaHttpVersion | undefined;
@@ -135,7 +163,7 @@ export const getRequest = (
   }
 
   urlResolved = urlParts.join("") as KulalaHttpURL;
-  if (!isValidUrl(urlResolved)) {
+  if (!isValidRequestTarget(urlResolved)) {
     return [
       {
         errorMessage: `Invalid URL: ${urlResolved}`,

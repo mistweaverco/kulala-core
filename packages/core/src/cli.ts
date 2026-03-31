@@ -26,7 +26,7 @@ async function getInputPayload(): Promise<string> {
     if (!existsSync(inputFile)) {
       throw new Error(`Input file not found: ${inputFile}`);
     }
-    return readFileSync(inputFile, "utf8");
+    return readFileSync(inputFile, { encoding: "utf-8" });
   }
 
   const reader = Bun.stdin.stream().getReader();

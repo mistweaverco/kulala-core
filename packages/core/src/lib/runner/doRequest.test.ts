@@ -58,6 +58,9 @@ beforeAll(() => {
           },
         });
       }
+      if (path === "/post-query-echo" && method === "POST") {
+        return Response.json({ url: req.url });
+      }
       if (path === "/post" && method === "POST") {
         return Response.json({ received: true });
       }
@@ -234,6 +237,48 @@ test("doRequestFromBlock: pre-request Lua variables are available for substituti
           type: "preRequest",
           lang: "lua",
           content: `request.variables.set("NAME", "kulala")`,
+          lineNumber: 1,
+        },
+      ],
+      postRequest: [],
+    },
+  });
+
+  const result = await doRequestFromBlock(
+    block,
+    "/tmp/example.http",
+    undefined,
+    undefined,
+    undefined,
+  );
+
+  expect(result).toHaveProperty("success", true);
+  if (result.success) {
+    expect(result.body.type).toBe("json");
+    if (result.body.type === "json") {
+      const url = String(result.body.content.url ?? "");
+      expect(url).toContain("name=kulala");
+    }
+  }
+});
+
+test("doRequestFromBlock: pre-request JS with await still substitutes {{NAME}} in URL", async () => {
+  const block = makeBlock({
+    request: {
+      method: "POST",
+      url: `${baseUrl}/post-query-echo?name={{NAME}}` as KulalaHttpURL,
+      headerSection: [
+        { type: "header", name: "Content-Type", value: "application/json" },
+      ],
+      body: "{}",
+    },
+    scripts: {
+      preRequest: [
+        {
+          type: "preRequest",
+          lang: "js",
+          content: `await Promise.resolve();
+request.variables.set("NAME", "kulala");`,
           lineNumber: 1,
         },
       ],
