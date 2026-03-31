@@ -1,0 +1,12 @@
+{
+  "name": "kulala-core-consumer-app-example",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@mistweaverco/kulala-core": "workspace:*"
+  },
+  "scripts": {
+    "build": "bun build src/main.ts --compile --outfile dist/kulala-core-consumer-app",
+    "run": "bun run build && ./dist/kulala-core-consumer-app"
+  }
+}

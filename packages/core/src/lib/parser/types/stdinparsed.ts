@@ -1,0 +1,48 @@
+export type KulalaStdinActionParse = {
+  action: "parse";
+  /* The path to the file where the contents come from, if any */
+  filepath?: string;
+  /* The full contents of the document to be processed */
+  content: string;
+};
+
+export type KulalaStdinActionRunLimit =
+  | {
+      /* The cursor position is 1-based index
+       * line: The line number where the cursor is located
+       * column: The column number where the cursor is located
+       * If not provided, means that the whole document should be considered
+       */
+      filter: "cursorPosition";
+      line: number;
+      column: number;
+    }
+  | {
+      filter: "name";
+      name: string;
+    };
+
+export type KulalaStdinActionRun = {
+  action: "run";
+  /* The full contents of the document to be processed */
+  content: string;
+  /* The path to the file where the contents come from, if any */
+  filepath?: string;
+  /** Environment name for variable lookup (kuba, http-client.env.json). Defaults to "default". */
+  env?: string;
+  limit?: KulalaStdinActionRunLimit[];
+};
+
+export type KulalaStdinActionContinue = {
+  action: "continue";
+  promptId: string;
+  inputs: Array<{
+    id: string;
+    value: string;
+  }>;
+};
+
+export type KulalaStdinParsed =
+  | KulalaStdinActionParse
+  | KulalaStdinActionRun
+  | KulalaStdinActionContinue;

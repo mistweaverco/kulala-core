@@ -1,0 +1,7 @@
+### HTTP_1_1_REDIRECT_REQUEST
+
+GET https://httpbun.com/redirect?url=/redirect?url=/any HTTP/1.1
+
+### HTTP_2_0_REDIRECT_REQUEST
+
+GET https://httpbun.com/redirect?url=/redirect?url=/any HTTP/2

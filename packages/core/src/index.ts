@@ -1,0 +1,63 @@
+export { KulalaParser, writeErrorToStderr } from "./lib/parser";
+export { KulalaRunner } from "./lib/runner";
+
+export type { KulalaDocument } from "./lib/parser/types";
+export type { KulalaStdinParsed } from "./lib/parser/types/stdinparsed";
+
+export type { KulalaRunOptions } from "./lib/runner";
+export type {
+  KulalaRequestErrorResponse,
+  KulalaRequestSuccessResponse,
+  KulalaResponseWrapper,
+} from "./lib/runner";
+
+import { KulalaParser } from "./lib/parser";
+import { KulalaRunner } from "./lib/runner";
+import { getDocument } from "./lib/parser/parser";
+import type { KulalaStdinActionRunLimit } from "./lib/parser/types/stdinparsed";
+import type { KulalaResponseWrapper, KulalaRunOptions } from "./lib/runner";
+import { runDocument } from "./lib/runner";
+import type { KulalaDocument } from "./lib/parser/types";
+
+const parse = async (input: {
+  content: string;
+  filepath?: string;
+}): Promise<KulalaDocument> => {
+  return await getDocument(input.content, input.filepath);
+};
+
+export const kulalaCore = {
+  parser: KulalaParser,
+  runner: KulalaRunner(),
+  parse,
+  validate: parse,
+  run: async (input: {
+    content: string;
+    filepath?: string;
+    env?: string;
+    limit?: KulalaStdinActionRunLimit[];
+  }): Promise<{ doc: KulalaDocument; response: KulalaResponseWrapper }> => {
+    const doc = await getDocument(input.content, input.filepath);
+    if (doc.hasErrors) {
+      return {
+        doc,
+        response: {
+          type: "error",
+          data: [
+            {
+              success: false,
+              error: "Document has parse errors.",
+            },
+          ],
+        },
+      };
+    }
+
+    const options: KulalaRunOptions = {
+      content: input.content,
+      env: input.env ?? "default",
+    };
+    const response = await runDocument(doc, input.limit, options);
+    return { doc, response };
+  },
+} as const;

@@ -1,0 +1,11 @@
+### HTTP_1_0_REQUEST
+
+GET https://httpbun.com/any HTTP/1.0
+
+### HTTP_1_1_REQUEST
+
+GET https://httpbun.com/any HTTP/1.1
+
+### HTTP_2_0_REQUEST
+
+GET https://httpbun.com/any HTTP/2

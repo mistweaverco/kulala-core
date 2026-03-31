@@ -1,0 +1,14 @@
+### JSON_REQUEST
+
+POST https://httpbin.org/post HTTP/1.1
+Content-Type: application/json
+
+< ./read-body-from-file.json
+
+### RAW_REQUEST
+
+POST https://httpbin.org/post HTTP/1.1
+Content-Type: text/plain
+
+< ./read-body-from-file.txt
+
