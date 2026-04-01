@@ -24,55 +24,92 @@ let dbInstance: Database | null = null;
 let openedDbPath: string | null = null;
 let keychainMode = false;
 
-const SCHEMA = `
--- Parsed HTTP documents for replay (keyed by filepath, optional content hash for cache invalidation).
-CREATE TABLE IF NOT EXISTS documents (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  filepath TEXT NOT NULL,
-  content_hash TEXT,
-  parsed_json TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-  UNIQUE(filepath)
-);
+const SCHEMA_STATEMENTS: string[] = [
+  // Parsed HTTP documents for replay (keyed by filepath, optional content hash for cache invalidation).
+  `CREATE TABLE IF NOT EXISTS documents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    filepath TEXT NOT NULL,
+    content_hash TEXT,
+    parsed_json TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(filepath)
+  )`,
 
--- Replay count per request block.
-CREATE TABLE IF NOT EXISTS request_runs (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  document_filepath TEXT NOT NULL,
-  block_name TEXT NOT NULL,
-  run_count INTEGER NOT NULL DEFAULT 0,
-  last_run_at TEXT,
-  UNIQUE(document_filepath, block_name)
-);
+  // Request history (JetBrains-like requests history).
+  `CREATE TABLE IF NOT EXISTS request_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    stable_doc_id TEXT,
+    block_name TEXT,
+    method TEXT NOT NULL,
+    url TEXT NOT NULL,
+    request_headers_json TEXT,
+    request_body_text TEXT,
+    status_code INTEGER,
+    response_headers_json TEXT,
+    response_body_text TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`,
 
--- Variables: global, per-document, or per-request.
-CREATE TABLE IF NOT EXISTS variables (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  scope TEXT NOT NULL CHECK(scope IN ('global','document','request')),
-  name TEXT NOT NULL,
-  value_json TEXT NOT NULL,
-  scope_document TEXT,
-  scope_block_name TEXT,
-  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-  UNIQUE(scope, name, scope_document, scope_block_name)
-);
+  // Cookie jar (RFC6265-ish, best-effort).
+  `CREATE TABLE IF NOT EXISTS cookie_jar (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    domain TEXT NOT NULL,
+    path TEXT NOT NULL,
+    name TEXT NOT NULL,
+    value TEXT NOT NULL,
+    expires_at TEXT,
+    secure INTEGER NOT NULL DEFAULT 0,
+    http_only INTEGER NOT NULL DEFAULT 0,
+    same_site TEXT,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(domain, path, name)
+  )`,
 
--- Pending prompts for user input (OAuth2, etc.)
-CREATE TABLE IF NOT EXISTS pending_prompts (
-  id TEXT PRIMARY KEY,
-  prompt_type TEXT NOT NULL,
-  context_json TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  expires_at TEXT,
-  UNIQUE(id)
-);
+  // Replay count per request block.
+  `CREATE TABLE IF NOT EXISTS request_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    document_filepath TEXT NOT NULL,
+    block_name TEXT NOT NULL,
+    run_count INTEGER NOT NULL DEFAULT 0,
+    last_run_at TEXT,
+    UNIQUE(document_filepath, block_name)
+  )`,
 
-CREATE INDEX IF NOT EXISTS idx_request_runs_doc ON request_runs(document_filepath);
-CREATE INDEX IF NOT EXISTS idx_variables_scope ON variables(scope, scope_document, scope_block_name);
-CREATE INDEX IF NOT EXISTS idx_pending_prompts_type ON pending_prompts(prompt_type);
-CREATE INDEX IF NOT EXISTS idx_pending_prompts_expires ON pending_prompts(expires_at);
-`;
+  // Variables: global, per-document, or per-request.
+  `CREATE TABLE IF NOT EXISTS variables (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    scope TEXT NOT NULL CHECK(scope IN ('global','document','request')),
+    name TEXT NOT NULL,
+    value_json TEXT NOT NULL,
+    scope_document TEXT,
+    scope_block_name TEXT,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(scope, name, scope_document, scope_block_name)
+  )`,
+
+  // Pending prompts for user input (OAuth2, etc.)
+  `CREATE TABLE IF NOT EXISTS pending_prompts (
+    id TEXT PRIMARY KEY,
+    prompt_type TEXT NOT NULL,
+    context_json TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    expires_at TEXT,
+    UNIQUE(id)
+  )`,
+
+  `CREATE INDEX IF NOT EXISTS idx_request_runs_doc ON request_runs(document_filepath)`,
+  `CREATE INDEX IF NOT EXISTS idx_variables_scope ON variables(scope, scope_document, scope_block_name)`,
+  `CREATE INDEX IF NOT EXISTS idx_pending_prompts_type ON pending_prompts(prompt_type)`,
+  `CREATE INDEX IF NOT EXISTS idx_pending_prompts_expires ON pending_prompts(expires_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_request_history_created ON request_history(created_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_request_history_doc_block ON request_history(stable_doc_id, block_name)`,
+  `CREATE INDEX IF NOT EXISTS idx_cookie_jar_domain_path ON cookie_jar(domain, path)`,
+];
+
+function ensureSchema(db: Database): void {
+  for (const stmt of SCHEMA_STATEMENTS) db.run(stmt);
+}
 
 /**
  * Opens the Kulala SQLite database in the OS-specific data directory,
@@ -94,7 +131,7 @@ export function getDb(): Database {
   const dataDir = ensureDataDir();
   const dbPath = `${dataDir}/${DB_FILENAME}`;
   const db = new Database(dbPath, { create: true });
-  db.run(SCHEMA);
+  ensureSchema(db);
   dbInstance = db;
   return db;
 }
@@ -135,12 +172,12 @@ export async function unlockDb(): Promise<boolean> {
     const ok = await decryptFileToPath(realPath, tempPath, key);
     if (!ok) return false;
     const db = new Database(tempPath, { create: false });
-    db.run(SCHEMA);
+    ensureSchema(db);
     dbInstance = db;
     openedDbPath = tempPath;
   } else {
     const db = new Database(realPath, { create: true });
-    db.run(SCHEMA);
+    ensureSchema(db);
     dbInstance = db;
     openedDbPath = realPath;
   }
@@ -191,7 +228,7 @@ export { isKeychainAvailable };
  */
 export function getDbInMemory(): Database {
   const db = new Database(":memory:", { create: true });
-  db.run(SCHEMA);
+  ensureSchema(db);
   return db;
 }
 

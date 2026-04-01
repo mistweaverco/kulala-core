@@ -7,7 +7,12 @@ import {
 } from "./../parser/types/script";
 import { existsSync, unlinkSync, writeFileSync } from "fs";
 import { createRequire } from "node:module";
-import { deleteVariable, getVariable, setVariable } from "../persistence";
+import {
+  deleteVariable,
+  getVariable,
+  getVariables,
+  setVariable,
+} from "../persistence";
 import {
   exec,
   execFile,
@@ -17,6 +22,11 @@ import {
   spawnSync,
 } from "node:child_process";
 import type { Lua } from "wasmoon-lua5.1";
+
+export type ScriptFlowContext = {
+  /** "Execution flow" local headers (not persisted). */
+  globalHeaders: Record<string, string>;
+};
 
 type ScriptHeaders = {
   valueOf: (name: string) => string | undefined;
@@ -41,10 +51,20 @@ type ScriptRequest = {
 };
 
 type ScriptClient = {
+  test: (testName: string, func: () => unknown) => void;
+  assert: (condition: unknown, message?: string) => void;
+  exit: () => never;
   global: {
     set: (name: string, value: unknown) => void;
     get: (name: string) => string | undefined;
-    delete: (name: string) => boolean;
+    isEmpty: () => boolean;
+    clear: (name: string) => boolean;
+    clearAll: () => void;
+    delete: (name: string) => boolean; // alias for clear (legacy)
+    headers: {
+      set: (headerName: string, headerValue: string) => void;
+      clear: (headerName: string) => void;
+    };
   };
   log: (...args: unknown[]) => void;
 };
@@ -90,6 +110,28 @@ function makeResponseForScripts(response?: RunnerResponseLike): ScriptResponse {
       ...(json !== undefined ? { json } : {}),
     },
   };
+}
+
+class ScriptExitError extends Error {
+  override name = "ScriptExitError";
+}
+
+function normalizeHeaderName(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+function setHeaderCaseInsensitive(
+  map: Record<string, string>,
+  name: string,
+  value: string | null,
+): void {
+  const targetLc = normalizeHeaderName(name);
+  for (const k of Object.keys(map)) {
+    if (normalizeHeaderName(k) === targetLc) delete map[k];
+  }
+  if (value !== null) {
+    map[name] = value;
+  }
 }
 
 const getTempName = (): string => {
@@ -146,6 +188,7 @@ async function executeJsTsScript(
     spawnSync: (globalThis as Record<string, unknown>).spawnSync,
     atob: (globalThis as Record<string, unknown>).atob,
     btoa: (globalThis as Record<string, unknown>).btoa,
+    sleep: (globalThis as Record<string, unknown>).sleep,
   };
 
   try {
@@ -182,6 +225,14 @@ async function executeJsTsScript(
       ) => Buffer.from(data, "binary").toString("base64");
     }
 
+    // JetBrains parity: sleep(ms) helper.
+    if (
+      typeof (globalThis as unknown as { sleep?: unknown }).sleep !== "function"
+    ) {
+      (globalThis as unknown as Record<string, unknown>).sleep = (ms: number) =>
+        new Promise<void>((resolve) => setTimeout(resolve, Math.max(0, ms)));
+    }
+
     const mod = (await import(filePath)) as { default?: unknown };
     const run = mod.default;
     if (typeof run === "function") {
@@ -202,6 +253,7 @@ async function executeJsTsScript(
       prev.spawnSync;
     (globalThis as unknown as Record<string, unknown>).atob = prev.atob;
     (globalThis as unknown as Record<string, unknown>).btoa = prev.btoa;
+    (globalThis as unknown as Record<string, unknown>).sleep = prev.sleep;
   }
 }
 
@@ -230,10 +282,25 @@ async function executeLuaScript(
   // Bridge: mirror the JS shape closely.
   luaCtx.client = {
     log: (...args: unknown[]) => ctx.client.log(...args),
+    test: (name: string, func: unknown) => {
+      // Lua cannot pass JS functions; keep API present for parity.
+      void name;
+      void func;
+      throw new Error("client.test is not supported in Lua scripts");
+    },
+    assert: (cond: unknown, msg?: string) => ctx.client.assert(cond, msg),
+    exit: () => ctx.client.exit(),
     global: {
       set: (k: string, v: unknown) => ctx.client.global.set(k, v),
       get: (k: string) => ctx.client.global.get(k),
+      isEmpty: () => ctx.client.global.isEmpty(),
+      clear: (k: string) => ctx.client.global.clear(k),
+      clearAll: () => ctx.client.global.clearAll(),
       delete: (k: string) => ctx.client.global.delete(k),
+      headers: {
+        set: (k: string, v: string) => ctx.client.global.headers.set(k, v),
+        clear: (k: string) => ctx.client.global.headers.clear(k),
+      },
     },
   };
   luaCtx.request = {
@@ -281,6 +348,7 @@ export const runScripts = async (
   filePath?: string,
   response?: RunnerResponseLike,
   vars?: Record<string, string>,
+  flow?: ScriptFlowContext,
 ): Promise<void> => {
   void type;
   void block;
@@ -303,6 +371,30 @@ export const runScripts = async (
       };
 
       const clientObj: ScriptClient = {
+        test: (testName: string, func: () => unknown) => {
+          if (typeof testName !== "string" || testName.trim().length === 0) {
+            throw new Error("client.test: testName must be a non-empty string");
+          }
+          if (typeof func !== "function") {
+            throw new Error("client.test: func must be a function");
+          }
+          try {
+            func();
+            console.log(`✓ ${testName}`);
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            console.error(`✗ ${testName}: ${msg}`);
+            throw e;
+          }
+        },
+        assert: (condition: unknown, message?: string) => {
+          if (!condition) {
+            throw new Error(message ?? "client.assert failed");
+          }
+        },
+        exit: () => {
+          throw new ScriptExitError("client.exit");
+        },
         global: {
           set: (name: string, value: unknown) => {
             setVariable("global", name, value as Record<string, unknown>);
@@ -312,7 +404,27 @@ export const runScripts = async (
             const v = getVariable("global", name);
             return v === undefined ? undefined : toStringValue(v);
           },
+          isEmpty: () => Object.keys(getVariables("global")).length === 0,
+          clear: (name: string) => deleteVariable("global", name),
+          clearAll: () => {
+            const vars = getVariables("global");
+            for (const k of Object.keys(vars)) deleteVariable("global", k);
+          },
           delete: (name: string) => deleteVariable("global", name),
+          headers: {
+            set: (headerName: string, headerValue: string) => {
+              if (!flow) return;
+              setHeaderCaseInsensitive(
+                flow.globalHeaders,
+                headerName,
+                String(headerValue),
+              );
+            },
+            clear: (headerName: string) => {
+              if (!flow) return;
+              setHeaderCaseInsensitive(flow.globalHeaders, headerName, null);
+            },
+          },
         },
         log: (...args: unknown[]) => {
           // Match JetBrains-style "client.log" behavior.
@@ -342,6 +454,9 @@ export const runScripts = async (
         });
       }
     } catch (error) {
+      if (error instanceof ScriptExitError) {
+        break;
+      }
       console.error(
         `Error executing script: ${
           error instanceof Error ? error.message : String(error)

@@ -75,8 +75,10 @@ const getLineType = (
       return { name: "docVariable", lineNumber: lineIdx };
     }
   }
-  if (line.startsWith("# @")) return { name: "operator", lineNumber: lineIdx };
-  if (line.startsWith("#")) return { name: "comment", lineNumber: lineIdx };
+  if (line.startsWith("# @") || line.startsWith("// @"))
+    return { name: "operator", lineNumber: lineIdx };
+  if (line.startsWith("#") || line.trim().startsWith("//"))
+    return { name: "comment", lineNumber: lineIdx };
   if (
     line.match(
       /^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS|TRACE|CONNECT|GRAPHQL) /,

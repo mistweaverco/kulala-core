@@ -281,6 +281,53 @@ GET https://example.com/{{SEGMENT}}/x HTTP/1.1
   );
 });
 
+test("parser: parses kulala-prefixed operators in block preamble", async () => {
+  const content = `### Ops
+# @kulala-file-contents-to-variable FOO ./bar.txt
+# @kulala-expect-status-code 200,201
+# @kulala-curl-insecure
+# @kulala-prompt "What is your name?" NAME
+GET https://example.com/{{FOO}} HTTP/1.1
+`;
+
+  const doc = await getDocument(content.trim());
+  const block = doc.blocks[0]!;
+  expect(block.errors).toEqual([]);
+  const names = block.operators.map((o) => o.name);
+  expect(names).toEqual([
+    "kulala-file-contents-to-variable",
+    "kulala-expect-status-code",
+    "kulala-curl-insecure",
+    "kulala-prompt",
+  ]);
+  expect(block.operators[3]?.args).toBe(`"What is your name?" NAME`);
+});
+
+test("parser: parses JetBrains // @ tags as operators", async () => {
+  const content = `### Tags
+// @no-redirect
+// @timeout 100 ms
+// @connection-timeout 2 s
+// @no-log
+// @no-cookie-jar
+// @no-auto-encoding
+GET https://example.com HTTP/1.1
+`;
+  const doc = await getDocument(content.trim());
+  const block = doc.blocks[0]!;
+  expect(block.errors).toEqual([]);
+  expect(block.operators.map((o) => o.name)).toEqual([
+    "no-redirect",
+    "timeout",
+    "connection-timeout",
+    "no-log",
+    "no-cookie-jar",
+    "no-auto-encoding",
+  ]);
+  expect(block.operators[1]?.args).toBe("100 ms");
+  expect(block.operators[2]?.args).toBe("2 s");
+});
+
 test("stdin-style JSON round-trip must preserve {{var}} (core.sh must not escape curlies)", () => {
   const content =
     "@DOC_ENV_TEST=production\n\n### R\nGET https://ex.test/{{NAME}} HTTP/1.1\n";

@@ -86,7 +86,12 @@ function headersFromDump(dump: string): {
     const k = line.slice(0, idx).trim().toLowerCase();
     const v = line.slice(idx + 1).trim();
     if (!k) continue;
-    headers[k] = headers[k] ? `${headers[k]}, ${v}` : v;
+    if (k === "set-cookie") {
+      // Preserve multiple Set-Cookie headers (cookie jar needs them split).
+      headers[k] = headers[k] ? `${headers[k]}\n${v}` : v;
+    } else {
+      headers[k] = headers[k] ? `${headers[k]}, ${v}` : v;
+    }
   }
   return { statusCode, headers };
 }
@@ -164,6 +169,7 @@ export async function curlHttpRequest(
 ): Promise<NodeHttpClientResponse> {
   const MAX_REDIRECTS = 10;
   const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+  const followRedirects = options.followRedirects !== false;
 
   const wallStart = performance.now();
   let redirectTime = 0;
@@ -178,6 +184,52 @@ export async function curlHttpRequest(
     | undefined;
 
   const chain: NonNullable<NodeHttpClientResponse["redirectChain"]> = [];
+
+  // In-request cookie propagation across redirects (JetBrains-like behavior).
+  // This is separate from the persisted cookie jar; it's needed so cookies set on a
+  // redirect response are available to the next hop within the same request.
+  const propagateCookies = options.propagateCookiesOnRedirect !== false;
+  const cookieMap: Record<string, string> = {};
+  const parseCookieHeader = (raw: string): Record<string, string> => {
+    const out: Record<string, string> = {};
+    for (const part of raw.split(";")) {
+      const p = part.trim();
+      if (!p) continue;
+      const eq = p.indexOf("=");
+      if (eq === -1) continue;
+      const k = p.slice(0, eq).trim();
+      const v = p.slice(eq + 1).trim();
+      if (k) out[k] = v;
+    }
+    return out;
+  };
+  const mergeCookieHeader = (existing: string | undefined): string => {
+    const merged: Record<string, string> = {
+      ...(existing ? parseCookieHeader(existing) : {}),
+      ...cookieMap,
+    };
+    return Object.entries(merged)
+      .map(([k, v]) => `${k}=${v}`)
+      .join("; ");
+  };
+  const absorbSetCookieFromHeaders = (
+    headers: Record<string, string>,
+  ): void => {
+    const raw = headers["set-cookie"];
+    if (!raw) return;
+    const lines = raw
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    for (const line of lines) {
+      const first = line.split(";", 1)[0] ?? "";
+      const eq = first.indexOf("=");
+      if (eq === -1) continue;
+      const name = first.slice(0, eq).trim();
+      const value = first.slice(eq + 1).trim();
+      if (name) cookieMap[name] = value;
+    }
+  };
 
   const requestOnce = async (): Promise<NodeHttpClientResponse> => {
     const tempBase = await fs.mkdtemp(join(tmpdir(), "kulala-curl-"));
@@ -213,8 +265,20 @@ export async function curlHttpRequest(
       writeOut,
     ];
 
-    if (process.env.KULALA_HTTP_INSECURE === "1") {
+    if (options.insecure) {
       args.push("--insecure");
+    }
+    if (options.timeoutMs !== undefined && Number.isFinite(options.timeoutMs)) {
+      const sec = Math.max(0, options.timeoutMs / 1000);
+      // curl expects seconds (can be fractional)
+      args.push("--max-time", String(sec));
+    }
+    if (
+      options.connectionTimeoutMs !== undefined &&
+      Number.isFinite(options.connectionTimeoutMs)
+    ) {
+      const sec = Math.max(0, options.connectionTimeoutMs / 1000);
+      args.push("--connect-timeout", String(sec));
     }
 
     // Protocol selection
@@ -276,6 +340,7 @@ export async function curlHttpRequest(
 
   for (let i = 0; i <= MAX_REDIRECTS; i++) {
     const res = await requestOnce();
+    if (propagateCookies) absorbSetCookieFromHeaders(res.headers);
     chain.push({
       statusCode: res.statusCode,
       headers: res.headers,
@@ -285,7 +350,8 @@ export async function curlHttpRequest(
     });
 
     const location = res.headers["location"];
-    const isRedirect = REDIRECT_STATUSES.has(res.statusCode) && !!location;
+    const isRedirect =
+      followRedirects && REDIRECT_STATUSES.has(res.statusCode) && !!location;
 
     if (!isRedirect) {
       // Aggregate redirect + wall-clock total across hops.
@@ -312,6 +378,25 @@ export async function curlHttpRequest(
     redirectTime += res.timings.phases.total ?? 0;
 
     currentUrl = new URL(location!, currentUrl).href;
+
+    // Apply any cookies accumulated so far to the next hop, unless caller already set Cookie.
+    if (propagateCookies) {
+      if (
+        !Object.keys(currentHeaders).some((k) => k.toLowerCase() === "cookie")
+      ) {
+        const cookie = mergeCookieHeader(undefined);
+        if (cookie) currentHeaders.Cookie = cookie;
+      } else {
+        const existingKey = Object.keys(currentHeaders).find(
+          (k) => k.toLowerCase() === "cookie",
+        );
+        if (existingKey) {
+          currentHeaders[existingKey] = mergeCookieHeader(
+            currentHeaders[existingKey],
+          );
+        }
+      }
+    }
 
     if (
       (res.statusCode === 301 ||

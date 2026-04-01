@@ -133,6 +133,148 @@ request.variables.set("DATE", response.headers.valueOf("Date") || "");`,
     expect(vars.DATE).toBe("Mon, 01 Jan 2024 00:00:00 GMT");
   });
 
+  test("client.assert aborts script execution when condition is false", async () => {
+    const vars: Record<string, string> = {};
+    await runScripts(
+      [
+        {
+          type: "postRequest",
+          lang: "js",
+          content: `
+            client.assert(false, "nope");
+            request.variables.set("AFTER", "should-not-run");
+          `,
+          lineNumber: 1,
+        },
+      ],
+      "postRequest",
+      dummyBlock,
+      "/tmp/example.http",
+      undefined,
+      vars,
+    );
+
+    expect(vars.AFTER).toBeUndefined();
+  });
+
+  test("client.test runs the test function and aborts the script on failure", async () => {
+    const vars: Record<string, string> = {};
+    await runScripts(
+      [
+        {
+          type: "postRequest",
+          lang: "js",
+          content: `
+            client.test("fails", () => {
+              client.assert(false, "boom");
+            });
+            request.variables.set("AFTER", "should-not-run");
+          `,
+          lineNumber: 1,
+        },
+      ],
+      "postRequest",
+      dummyBlock,
+      "/tmp/example.http",
+      undefined,
+      vars,
+    );
+
+    expect(vars.AFTER).toBeUndefined();
+  });
+
+  test("client.exit stops executing remaining scripts in the same phase", async () => {
+    const vars: Record<string, string> = {};
+    await runScripts(
+      [
+        {
+          type: "preRequest",
+          lang: "js",
+          content: `
+            request.variables.set("BEFORE", "ok");
+            client.exit();
+            request.variables.set("AFTER_EXIT", "should-not-run");
+          `,
+          lineNumber: 1,
+        },
+        {
+          type: "preRequest",
+          lang: "js",
+          content: `request.variables.set("SECOND_SCRIPT", "should-not-run");`,
+          lineNumber: 10,
+        },
+      ],
+      "preRequest",
+      dummyBlock,
+      "/tmp/example.http",
+      undefined,
+      vars,
+    );
+
+    expect(vars.BEFORE).toBe("ok");
+    expect(vars.AFTER_EXIT).toBeUndefined();
+    expect(vars.SECOND_SCRIPT).toBeUndefined();
+  });
+
+  test("client.global supports isEmpty/clear/clearAll and headers.set/clear", async () => {
+    const vars: Record<string, string> = {};
+    const flow = { globalHeaders: {} as Record<string, string> };
+    await runScripts(
+      [
+        {
+          type: "preRequest",
+          lang: "js",
+          content: `
+            client.global.clearAll();
+            client.assert(client.global.isEmpty(), "expected empty");
+            client.global.set("A", "1");
+            client.assert(!client.global.isEmpty(), "expected non-empty");
+            client.global.clear("A");
+            client.assert(client.global.isEmpty(), "expected empty again");
+
+            client.global.headers.set("X-From-Flow", "yes");
+            client.global.headers.clear("X-From-Flow");
+          `,
+          lineNumber: 1,
+        },
+      ],
+      "preRequest",
+      dummyBlock,
+      "/tmp/example.http",
+      undefined,
+      vars,
+      flow,
+    );
+
+    expect(getVariable("global", "A")).toBeUndefined();
+    expect(Object.keys(flow.globalHeaders)).toHaveLength(0);
+  });
+
+  test("sleep(ms) is available in JS scripts and can be awaited", async () => {
+    const vars: Record<string, string> = {};
+    await runScripts(
+      [
+        {
+          type: "preRequest",
+          lang: "js",
+          content: `
+            const start = Date.now();
+            await sleep(20);
+            const elapsed = Date.now() - start;
+            request.variables.set("ELAPSED", String(elapsed));
+          `,
+          lineNumber: 1,
+        },
+      ],
+      "preRequest",
+      dummyBlock,
+      "/tmp/example.http",
+      undefined,
+      vars,
+    );
+    expect(Number(vars.ELAPSED)).toBeGreaterThanOrEqual(15);
+  });
+
   test("pre-request Lua can inject request variables and set global vars", async () => {
     const vars: Record<string, string> = {};
     await runScripts(

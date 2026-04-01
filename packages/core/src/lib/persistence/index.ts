@@ -54,3 +54,15 @@ export {
   type PromptContext,
   type PendingPrompt,
 } from "./prompt-store";
+
+export {
+  saveHistoryEntry,
+  listHistoryEntries,
+  type HistoryEntry,
+} from "./history-store";
+
+export {
+  storeCookiesFromResponse,
+  getCookieHeaderForRequest,
+  type CookieRecord,
+} from "./cookie-store";

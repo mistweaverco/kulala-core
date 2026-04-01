@@ -9,6 +9,7 @@ import {
 } from "./lib/helpers";
 import { getDocument } from "./parser";
 import { continueOAuth2Flow } from "../auth/oauth2/continuation";
+import { getPrompt, deletePrompt, setVariable } from "../persistence";
 import type {
   KulalaRequestErrorResponse,
   KulalaRequestSuccessResponse,
@@ -54,8 +55,38 @@ const kulalaParser: KulalaParser = {
         const { promptId, inputs } = stdIn;
 
         try {
-          // Continue OAuth2 flow (this will save the token)
-          await continueOAuth2Flow(promptId, inputs);
+          const prompt = getPrompt(promptId);
+          if (!prompt) {
+            throw new Error(`Prompt not found or expired: ${promptId}`);
+          }
+
+          if (
+            prompt.promptType === "oauth2_authorization_code" ||
+            prompt.promptType === "oauth2_implicit_token"
+          ) {
+            // Continue OAuth2 flow (this will save the token)
+            await continueOAuth2Flow(promptId, inputs);
+          } else if (prompt.promptType === "custom") {
+            const context = prompt.context as Record<string, unknown>;
+            const stableDocId = String(context.stableDocId ?? "");
+            const blockName = String(context.blockName ?? "");
+            const varName = String(context.varName ?? "");
+            const value = inputs.find((i) => i.id === varName)?.value;
+            if (!stableDocId || !blockName || !varName) {
+              throw new Error("Invalid custom prompt context");
+            }
+            if (value === undefined) {
+              throw new Error(`Missing required input: ${varName}`);
+            }
+            // Store as request-scoped so it's only valid for the next run of this request.
+            setVariable("request", varName, value, {
+              document: stableDocId,
+              blockName,
+            });
+            deletePrompt(promptId);
+          } else {
+            throw new Error(`Unsupported prompt type: ${prompt.promptType}`);
+          }
 
           // Return success - the token is now saved and the original request can be retried
           const successResponse: KulalaResponseWrapper = {
@@ -64,7 +95,7 @@ const kulalaParser: KulalaParser = {
               {
                 success: true,
                 message:
-                  "OAuth2 flow completed successfully. You can now retry the original request.",
+                  "Prompt completed successfully. You can now retry the original request.",
                 promptId,
               } as KulalaRequestSuccessResponse & {
                 message: string;

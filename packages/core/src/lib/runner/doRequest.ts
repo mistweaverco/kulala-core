@@ -8,7 +8,15 @@ import {
 } from "../variables";
 import { OAuth2Manager } from "../auth/oauth2/manager";
 import { OAuth2PromptError } from "../auth/oauth2/prompt-error";
-import { incrementReplayCount } from "../persistence";
+import {
+  createPrompt,
+  deleteVariable,
+  getCookieHeaderForRequest,
+  incrementReplayCount,
+  saveHistoryEntry,
+  setVariable,
+  storeCookiesFromResponse,
+} from "../persistence";
 import { runScripts } from "./scripts";
 import {
   buildHeadersFromSection,
@@ -41,11 +49,68 @@ export async function doRequestFromBlock(
   stableDocIdForReplay: string | undefined,
   resolver: VariableResolver | undefined,
   env: string = "default",
+  flow?: import("./scripts").ScriptFlowContext,
 ): Promise<
   | KulalaRequestSuccessResponse
   | KulalaRequestErrorResponse
   | KulalaPromptResponse
 > {
+  const parseDurationToMs = (raw: string): number | undefined => {
+    const s = raw.trim();
+    if (!s) return undefined;
+    const m = s.match(/^(\d+(?:\.\d+)?)\s*(ms|s|m)?$/i);
+    if (!m) return undefined;
+    const n = Number(m[1]);
+    if (!Number.isFinite(n) || n < 0) return undefined;
+    const unit = (m[2] ?? "s").toLowerCase();
+    if (unit === "ms") return Math.round(n);
+    if (unit === "m") return Math.round(n * 60_000);
+    return Math.round(n * 1000);
+  };
+
+  const parsePromptArgs = (
+    raw: string,
+  ): { varName: string; label?: string } | null => {
+    const s = raw.trim();
+    if (!s) return null;
+
+    // Back-compat: "@prompt NAME"
+    if (!s.startsWith(`"`) && !s.startsWith(`'`)) {
+      const parts = s.split(/\s+/).filter(Boolean);
+      if (parts.length === 1) return { varName: parts[0]! };
+      if (parts.length >= 2) {
+        const varName = parts[parts.length - 1]!;
+        const label = parts.slice(0, -1).join(" ");
+        return { varName, label };
+      }
+      return null;
+    }
+
+    // Quoted label: @"What is your name?" NAME
+    const quote = s[0]!;
+    let i = 1;
+    let label = "";
+    while (i < s.length) {
+      const ch = s[i]!;
+      if (ch === "\\") {
+        const next = s[i + 1];
+        if (next !== undefined) {
+          label += next;
+          i += 2;
+          continue;
+        }
+      }
+      if (ch === quote) break;
+      label += ch;
+      i += 1;
+    }
+    if (i >= s.length || s[i] !== quote) return null;
+    const rest = s.slice(i + 1).trim();
+    const varName = rest.split(/\s+/).filter(Boolean)[0];
+    if (!varName) return null;
+    return { varName, label };
+  };
+
   // Initialize OAuth2 manager if needed
   const startDir = filePath
     ? (await import("path")).dirname(filePath)
@@ -66,6 +131,76 @@ export async function doRequestFromBlock(
   // Keep `vars` mutable within this block.
   const mutableVars = vars ?? {};
 
+  const stableDocId = stableDocIdForReplay ?? filePath ?? "";
+  const getOps = (names: string[]) =>
+    block.operators.filter((o) => names.includes(o.name));
+  const getOpArgs = (names: string[]): string | undefined =>
+    getOps(names)
+      .map((o) => String(o.args ?? ""))
+      .find((s) => s.trim() !== "");
+  const hasOp = (names: string[]): boolean => getOps(names).length > 0;
+  const cookieJarEnabled = !hasOp(["no-cookie-jar"]);
+  const logEnabled = !hasOp(["no-log"]);
+
+  // @prompt / @kulala-prompt: request requires user input before executing.
+  const promptVar = getOpArgs(["prompt", "kulala-prompt"]);
+  if (promptVar) {
+    const parsed = parsePromptArgs(promptVar);
+    const varName = parsed?.varName?.trim() ?? "";
+    const label = parsed?.label?.trim();
+
+    // Consume one-time prompt value if it was stored for this request.
+    if (stableDocId && varName && mutableVars[varName] !== undefined) {
+      deleteVariable("request", varName, {
+        document: stableDocId,
+        blockName: block.name,
+      });
+    }
+
+    if (varName && mutableVars[varName] === undefined) {
+      const promptId = createPrompt("custom", {
+        promptType: "custom",
+        stableDocId,
+        blockName: block.name,
+        varName,
+        label,
+      });
+      return {
+        success: false,
+        prompt: true,
+        promptId,
+        promptType: "custom",
+        message: `Input required for variable: ${varName}`,
+        inputs: [
+          {
+            id: varName,
+            label: label && label.length > 0 ? label : varName,
+            type: "text",
+            required: true,
+          },
+        ],
+      };
+    }
+  }
+
+  // @kulala-file-contents-to-variable VAR PATH
+  const fileToVarArgs = getOpArgs(["kulala-file-contents-to-variable"]);
+  if (fileToVarArgs) {
+    const parts = fileToVarArgs.trim().split(/\s+/);
+    const varName = parts.shift();
+    const relPath = parts.join(" ").trim();
+    if (varName && relPath) {
+      const pathMod = await import("path");
+      const fs = await import("fs/promises");
+      const resolved = pathMod.resolve(startDir, relPath);
+      const content = await fs.readFile(resolved, "utf-8");
+      mutableVars[varName] = content;
+      if (stableDocId) {
+        setVariable("document", varName, content, { document: stableDocId });
+      }
+    }
+  }
+
   // Resolve body-from-file (JetBrains-style "< path") so we have effective body for substitution and send
   let effectiveBody: typeof block.request.body = block.request.body;
   if (isBodyFromFileRef(effectiveBody)) {
@@ -83,6 +218,7 @@ export async function doRequestFromBlock(
     filePath,
     undefined,
     mutableVars,
+    flow,
   );
 
   // Check if we need async substitution (for $auth.token() calls)
@@ -125,6 +261,23 @@ export async function doRequestFromBlock(
   let headers = setUserAgentHeaderIfNotPresent(
     buildHeadersFromSection(block.request.headerSection),
   );
+  const accept = getOpArgs(["accept"]);
+  if (
+    accept &&
+    !Object.keys(headers).some((k) => k.toLowerCase() === "accept")
+  ) {
+    headers.Accept = accept;
+  }
+  // JetBrains parity: global headers are applied implicitly to outgoing requests
+  // within the same execution flow, but should not override explicit request headers.
+  if (flow?.globalHeaders) {
+    const existingLc = new Set(
+      Object.keys(headers).map((k) => k.toLowerCase()),
+    );
+    for (const [k, v] of Object.entries(flow.globalHeaders)) {
+      if (!existingLc.has(k.toLowerCase())) headers[k] = v;
+    }
+  }
   if (needsAsyncSubstitution || Object.keys(mutableVars).length > 0) {
     try {
       const substitutedHeaders: Record<string, string> = {};
@@ -171,6 +324,7 @@ export async function doRequestFromBlock(
 
   const requestHeaderType = getRequestHeaderType(headers);
   const isGraphQL = block.request.method === "GRAPHQL";
+  const noAutoEncoding = hasOp(["no-auto-encoding"]);
   const graphqlBody = isGraphQL ? getGraphQLRequestBody(body) : undefined;
   let json =
     !isGraphQL && requestHeaderType === "json"
@@ -218,6 +372,14 @@ export async function doRequestFromBlock(
     ? { ...headers, "Content-Type": "application/json" }
     : headers;
 
+  const insecureOp = getOps(["kulala-curl-insecure"]).length > 0;
+  const timeoutMsJetBrains = parseDurationToMs(getOpArgs(["timeout"]) ?? "");
+  const connectionTimeoutMsJetBrains = parseDurationToMs(
+    getOpArgs(["connection-timeout"]) ?? "",
+  );
+  const effectiveTimeoutMs = timeoutMsJetBrains ?? undefined;
+  const followRedirects = !hasOp(["no-redirect"]);
+
   try {
     let bodyPayload: string | Buffer | FormData | undefined;
     if (multipartBody) {
@@ -233,11 +395,25 @@ export async function doRequestFromBlock(
     } else if (json !== undefined) {
       bodyPayload = JSON.stringify(json);
     } else if (form !== undefined) {
-      bodyPayload = new URLSearchParams(
-        form as Record<string, string>,
-      ).toString();
+      if (noAutoEncoding) {
+        const pairs = Object.entries(form as Record<string, string>);
+        bodyPayload = pairs.map(([k, v]) => `${k}=${v}`).join("&");
+      } else {
+        bodyPayload = new URLSearchParams(
+          form as Record<string, string>,
+        ).toString();
+      }
     } else if (typeof body === "string" && body.length > 0) {
       bodyPayload = body;
+    }
+
+    // Cookie jar: apply stored cookies unless disabled or explicitly set by user.
+    if (
+      cookieJarEnabled &&
+      !Object.keys(requestHeaders).some((k) => k.toLowerCase() === "cookie")
+    ) {
+      const cookie = getCookieHeaderForRequest(url);
+      if (cookie) requestHeaders.Cookie = cookie;
     }
 
     const res = await nodeHttpRequest({
@@ -246,11 +422,44 @@ export async function doRequestFromBlock(
       headers: requestHeaders,
       body: bodyPayload,
       httpVersion: block.request.httpVersion,
+      insecure: insecureOp,
+      timeoutMs: effectiveTimeoutMs,
+      connectionTimeoutMs: connectionTimeoutMsJetBrains,
+      followRedirects,
+      propagateCookiesOnRedirect: cookieJarEnabled,
     });
 
     const rawBody = res.body;
     const rawBodyStr =
       typeof rawBody === "string" ? rawBody : String(rawBody ?? "");
+
+    // Cookie jar: store Set-Cookie response headers unless disabled.
+    if (cookieJarEnabled) {
+      // Persist cookies from redirect chain too (servers often set cookies on 302).
+      if (res.redirectChain && res.redirectChain.length > 0) {
+        for (const hop of res.redirectChain) {
+          const hopSetCookieRaw = hop.headers["set-cookie"];
+          if (
+            typeof hopSetCookieRaw === "string" &&
+            hopSetCookieRaw.trim().length > 0
+          ) {
+            const lines = hopSetCookieRaw
+              .split("\n")
+              .map((s) => s.trim())
+              .filter(Boolean);
+            if (lines.length > 0) storeCookiesFromResponse(hop.url, lines);
+          }
+        }
+      }
+      const setCookieRaw = res.headers["set-cookie"];
+      if (typeof setCookieRaw === "string" && setCookieRaw.trim().length > 0) {
+        const lines = setCookieRaw
+          .split("\n")
+          .map((s) => s.trim())
+          .filter(Boolean);
+        if (lines.length > 0) storeCookiesFromResponse(url, lines);
+      }
+    }
     const contentType = res.headers["content-type"] || "";
     let jsonBody: Record<string, unknown> | null = null;
     if (contentType.toLowerCase().includes("json")) {
@@ -366,9 +575,49 @@ export async function doRequestFromBlock(
       block,
       filePath,
       responseLike,
+      undefined,
+      flow,
     );
 
+    // @kulala-expect-status-code 200 (or 200,201)
+    const expectArgs = getOpArgs(["kulala-expect-status-code"]);
+    if (expectArgs) {
+      const codes = expectArgs
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map((s) => parseInt(s, 10))
+        .filter((n) => Number.isFinite(n));
+      if (codes.length > 0 && !codes.includes(res.statusCode)) {
+        return {
+          success: false,
+          error: `Expected status code ${codes.join(
+            ", ",
+          )} but got ${res.statusCode}`,
+        } as KulalaRequestErrorResponse;
+      }
+    }
+
     incrementReplayCount(stableDocIdForReplay ?? filePath ?? "", block.name);
+
+    if (logEnabled) {
+      saveHistoryEntry({
+        stableDocId: stableDocId || undefined,
+        blockName: block.name,
+        method,
+        url,
+        requestHeaders,
+        requestBodyText:
+          typeof bodyPayload === "string"
+            ? bodyPayload
+            : Buffer.isBuffer(bodyPayload)
+              ? bodyPayload.toString("utf-8")
+              : undefined,
+        statusCode: res.statusCode,
+        responseHeaders: res.headers,
+        responseBodyText: rawBodyStr,
+      });
+    }
 
     return {
       success: true,

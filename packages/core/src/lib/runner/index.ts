@@ -20,6 +20,7 @@ import type {
   KulalaRunOptions,
   KulalaResponseWrapper,
 } from "./types";
+import type { ScriptFlowContext } from "./scripts";
 
 export type { KulalaRunOptions } from "./types";
 export type {
@@ -80,6 +81,7 @@ export async function runDocument(
     | KulalaPromptResponse
   )[] = [];
   const previousResults = new Map<string, PreviousResponse>();
+  const flow: ScriptFlowContext = { globalHeaders: {} };
   for (const block of blocks) {
     const vars = await resolveVariables(
       env,
@@ -115,6 +117,7 @@ export async function runDocument(
       stableDocId,
       resolver,
       env,
+      flow,
     );
     results.push(result);
 

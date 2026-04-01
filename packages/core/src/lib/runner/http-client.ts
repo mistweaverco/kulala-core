@@ -49,6 +49,16 @@ export type NodeHttpClientOptions = {
   body?: string | Buffer | FormData;
   /** When "HTTP/2", use http2 for https URLs. Otherwise use http/https. */
   httpVersion?: "HTTP/1.0" | "HTTP/1.1" | "HTTP/2";
+  /** If true, allow insecure TLS (curl --insecure). */
+  insecure?: boolean;
+  /** Request timeout in milliseconds (best-effort; curl --max-time). */
+  timeoutMs?: number;
+  /** Connection timeout in milliseconds (best-effort; curl --connect-timeout). */
+  connectionTimeoutMs?: number;
+  /** Whether to follow redirects (default true). */
+  followRedirects?: boolean;
+  /** Whether to propagate Set-Cookie -> Cookie across redirect hops (default true). */
+  propagateCookiesOnRedirect?: boolean;
 };
 
 /** Encode FormData to buffer and content-type using form-data-encoder. */

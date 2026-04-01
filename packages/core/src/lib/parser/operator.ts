@@ -2,13 +2,20 @@ import type { KulalaError } from "./types/error";
 import type { KulalaOperator } from "./types/operator";
 import { kulalaOperatorNames } from "./types/operator";
 
-const operatorNameRequiresArgs = new Set(["accept", "curl-timeout", "name"]);
+const operatorNameRequiresArgs = new Set([
+  "accept",
+  "timeout",
+  "connection-timeout",
+  "kulala-prompt",
+  "kulala-file-contents-to-variable",
+  "kulala-expect-status-code",
+]);
 
 export const getOperator = (
   line: string,
   lineIdx: number,
 ): KulalaOperator | KulalaError => {
-  const match = line.match(/^# @([A-z0-9_-]+)(?: (.+))?$/);
+  const match = line.match(/^(?:#|\/\/)\s*@([A-z0-9_-]+)(?:\s+(.*))?$/);
   if (!match) {
     return {
       errorMessage: `Invalid operator syntax at line ${lineIdx + 1}`,
