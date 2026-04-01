@@ -59,4 +59,4 @@ jobs:
         working-directory: packages/core
 
       - name: Create GitHub Release
-        run: gh release create --generate-notes "${{ GITHUB_REF_NAME }}"
+        run: gh release create --generate-notes "${GITHUB_REF_NAME}"
