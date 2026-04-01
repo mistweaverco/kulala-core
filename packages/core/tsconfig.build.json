@@ -1,7 +1,16 @@
 {
   "extends": "../../tsconfig.json",
-  "include": ["src/index.ts", "src/globals.d.ts", "src/lib/**/*.ts"],
-  "exclude": ["**/*.test.ts", "**/*.spec.ts"],
+  "include": [
+    "src/index.ts",
+    "src/globals.d.ts",
+    "src/**/*.d.ts",
+    "src/lib/**/*.ts"
+  ],
+  "exclude": [
+    "**/*.test.ts",
+    "**/*.spec.ts",
+    "src/lib/runner/vendored-curl.embed.generated.ts"
+  ],
   "compilerOptions": {
     "noEmit": false,
     "emitDeclarationOnly": true,

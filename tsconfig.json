@@ -1,9 +1,13 @@
 {
-  "include": ["packages/core/src/**/*.ts", "packages/core/scripts/**/*.ts"],
+  "include": [
+    "packages/core/src/**/*.ts",
+    "packages/core/src/**/*.d.ts",
+    "packages/core/scripts/**/*.ts"
+  ],
   "exclude": [
     "node_modules",
     "**/node_modules",
-    "packages/core/src/lib/runner/vendored-curl.generated.ts"
+    "packages/core/src/lib/runner/vendored-curl.embed.generated.ts"
   ],
   "compilerOptions": {
     // Enable latest features

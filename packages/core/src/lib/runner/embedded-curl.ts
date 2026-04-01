@@ -63,7 +63,19 @@ async function tryResolveBundledCurl(): Promise<{
   // run generate-vendored-curl.ts before compiling their own binary.
   if (__KULALA_EMBED_CURL__ === true && typeof Bun !== "undefined") {
     try {
-      const mod = await import("./vendored-curl.generated.ts");
+      // Optional module: created only by packages/core/scripts/generate-vendored-curl.ts (gitignored).
+      // Listed in tsconfig exclude; use URL + import(href) so tsc does not require the file for declaration emit (CI has no generated .ts).
+      // Bun still resolves the relative path for bundling.
+      const embedHref = new URL(
+        "./vendored-curl.embed.generated.ts",
+        import.meta.url,
+      ).href;
+      const mod = (await import(embedHref)) as {
+        getVendoredCurl?: () => Promise<{
+          bytes: Buffer;
+          filename: string;
+        } | null>;
+      };
       if (typeof mod.getVendoredCurl === "function") {
         const res = await mod.getVendoredCurl();
         if (res) return res;

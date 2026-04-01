@@ -19,7 +19,7 @@ export default ts.config(
     ignores: [
       "build/",
       "dist/",
-      "packages/core/src/lib/runner/vendored-curl.generated.ts",
+      "packages/core/src/lib/runner/vendored-curl.embed.generated.ts",
     ],
   },
 );
