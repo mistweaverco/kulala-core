@@ -11,7 +11,7 @@ export type PreviousResponse = {
 };
 
 /**
- * Get a value from an object by dot path (e.g. "json.token" from { json: { token: "x" } }).
+ * Get a value from an object by dot path (e.g. "token" from { token: "x" }).
  */
 function getByPath(obj: unknown, path: string): unknown {
   if (path === "" || path === "$") return obj;
@@ -26,7 +26,7 @@ function getByPath(obj: unknown, path: string): unknown {
 
 /**
  * Resolve a request variable key against previous run results.
- * Key forms: REQUEST_NAME.response.body.$.json.path, REQUEST_NAME.response.headers.HeaderName, REQUEST_NAME.response.headers['Header Name'].
+ * Key forms: REQUEST_NAME.response.body.$.path (JSON fields on the parsed body), REQUEST_NAME.response.headers.HeaderName, REQUEST_NAME.response.headers['Header Name'].
  * Returns string value or undefined if not found / not a request var.
  */
 export function resolveRequestVariable(

@@ -60,6 +60,7 @@ describe("curl transport", () => {
     server.close();
     expect(res.statusCode).toBe(200);
     expect(seenVersion).toBe("1.0");
+    expect(res.redirectChain).toBeUndefined();
   });
 
   test("follows redirects and returns final url", async () => {

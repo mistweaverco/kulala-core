@@ -31,15 +31,24 @@ export type ScriptFlowContext = {
 type ScriptHeaders = {
   valueOf: (name: string) => string | undefined;
   get: (name: string) => string | undefined;
+  valuesOf: (name: string) => string[];
+};
+
+/** Mirrors JetBrains ContentType (Content-Type header). */
+export type ScriptContentType = {
+  mimeType: string;
+  charset: string;
 };
 
 type ScriptResponse = {
   status: number;
   headers: ScriptHeaders;
-  body: {
-    text?: string;
-    json?: unknown;
-  };
+  /**
+   * JetBrains HTTP Client: string for plain text, or parsed JSON value (object, array, etc.)
+   * when the response is JSON. See https://www.jetbrains.com/help/idea/http-response-reference.html
+   */
+  body: string | unknown;
+  contentType: ScriptContentType;
 };
 
 type ScriptRequest = {
@@ -83,7 +92,60 @@ function makeHeaders(
   const lc: Record<string, string> = {};
   for (const [k, v] of Object.entries(headers ?? {})) lc[k.toLowerCase()] = v;
   const get = (name: string) => lc[name.toLowerCase()];
-  return { get, valueOf: get };
+  const valuesOf = (name: string) => {
+    const v = get(name);
+    if (v === undefined || v === "") return [];
+    return v.includes("\n")
+      ? v
+          .split("\n")
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : [v];
+  };
+  return { get, valueOf: get, valuesOf };
+}
+
+function parseContentTypeHeader(header: string | undefined): ScriptContentType {
+  if (!header || !header.trim()) return { mimeType: "", charset: "" };
+  const main = header.split(";")[0]?.trim() ?? "";
+  const mimeType = main || "";
+  const m = header.match(/charset\s*=\s*([^;]+)/i);
+  const raw = m?.[1]?.trim() ?? "";
+  const charset = raw.replace(/^["']|["']$/g, "");
+  return { mimeType, charset };
+}
+
+function isLikelyJsonContentType(ct: string): boolean {
+  const c = ct.toLowerCase();
+  return c.includes("json") || c.includes("+json");
+}
+
+function resolveScriptBody(
+  text: string,
+  contentTypeHeader: string | undefined,
+): string | unknown {
+  const ct = contentTypeHeader ?? "";
+  const tryParse = (): unknown => {
+    try {
+      return JSON.parse(text);
+    } catch {
+      return undefined;
+    }
+  };
+  if (isLikelyJsonContentType(ct) && text.trim().length > 0) {
+    const parsed = tryParse();
+    if (parsed !== undefined) return parsed;
+    return text;
+  }
+  const t = text.trim();
+  if (
+    (t.startsWith("{") && t.endsWith("}")) ||
+    (t.startsWith("[") && t.endsWith("]"))
+  ) {
+    const parsed = tryParse();
+    if (parsed !== undefined) return parsed;
+  }
+  return text;
 }
 
 function makeResponseForScripts(response?: RunnerResponseLike): ScriptResponse {
@@ -91,24 +153,19 @@ function makeResponseForScripts(response?: RunnerResponseLike): ScriptResponse {
     return {
       status: 0,
       headers: makeHeaders({}),
-      body: {},
+      body: "",
+      contentType: { mimeType: "", charset: "" },
     };
   }
   const bodyRaw = response.body;
   const text = typeof bodyRaw === "string" ? bodyRaw : String(bodyRaw ?? "");
-  let json: unknown = undefined;
-  try {
-    json = JSON.parse(text);
-  } catch {
-    // ignore
-  }
+  const ctHeader = response.headers["content-type"];
+  const body = resolveScriptBody(text, ctHeader);
   return {
     status: response.statusCode,
     headers: makeHeaders(response.headers),
-    body: {
-      text,
-      ...(json !== undefined ? { json } : {}),
-    },
+    body,
+    contentType: parseContentTypeHeader(ctHeader),
   };
 }
 
@@ -315,11 +372,10 @@ async function executeLuaScript(
     headers: {
       get: (name: string) => ctx.response.headers.get(name),
       valueOf: (name: string) => ctx.response.headers.valueOf(name),
+      valuesOf: (name: string) => ctx.response.headers.valuesOf(name),
     },
-    body: {
-      text: ctx.response.body.text,
-      json: ctx.response.body.json,
-    },
+    body: ctx.response.body,
+    contentType: ctx.response.contentType,
   };
 
   // Basic assert/test helpers (useful for parity and future scripting tests).
@@ -363,6 +419,11 @@ export const runScripts = async (
       const requestObj: ScriptRequest = {
         variables: {
           set: (name: string, value: unknown) => {
+            if (type === "postRequest") {
+              throw new Error(
+                "request.variables.set is not available in post-request scripts",
+              );
+            }
             mutableVars[name] = toStringValue(value);
           },
           get: (name: string) => mutableVars[name],

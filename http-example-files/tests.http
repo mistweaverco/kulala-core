@@ -1,0 +1,32 @@
+@DOC_ENV_TEST=production
+
+### TEST_REQUEST1
+
+GET https://httpbin.org/get
+Content-Type: application/json
+
+{
+  "username": "user123",
+  "password": "pass123"
+}
+
+> {%
+  client.test("Request executed successfully", function() {
+    client.assert(response.status === 200, "Response status is not 200");
+  });
+
+  client.test("Headers option exists", function() {
+    client.assert(
+      response.body.hasOwnProperty("headers"),
+      "Cannot find 'headers' in parsed JSON body",
+    );
+  });
+
+  client.test("Response content-type is json", function() {
+    const type = response.contentType.mimeType;
+    client.assert(
+      type === "application/json",
+      "Expected 'application/json' but received '" + type + "'",
+    );
+  });
+%}

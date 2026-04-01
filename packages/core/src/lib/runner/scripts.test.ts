@@ -75,9 +75,10 @@ request.variables.set("NAME", "kulala");`,
           type: "postRequest",
           lang: "js",
           content: `
-            request.variables.set("STATUS", String(response.status));
-            request.variables.set("DATE", response.headers.valueOf("Date") ?? "");
-            request.variables.set("TOKEN", response.body.json.token);
+            client.global.set("STATUS", String(response.status));
+            client.global.set("DATE", response.headers.valueOf("Date") ?? "");
+            client.global.set("TOKEN", response.body.token);
+            client.global.set("MIME", response.contentType.mimeType);
           `,
           lineNumber: 1,
         },
@@ -97,9 +98,12 @@ request.variables.set("NAME", "kulala");`,
       vars,
     );
 
+    // request.variables.set is not available in post-request scripts (JetBrains parity),
+    // but client.global.set is allowed and should update vars for later substitution.
     expect(vars.STATUS).toBe("200");
     expect(vars.DATE).toBe("Mon, 01 Jan 2024 00:00:00 GMT");
     expect(vars.TOKEN).toBe("abc");
+    expect(vars.MIME).toBe("application/json");
   });
 
   test("post-request TS transpiles type annotations (lang=ts)", async () => {
@@ -111,7 +115,7 @@ request.variables.set("NAME", "kulala");`,
           lang: "ts",
           content: `const foo: string = "bar";
 void foo;
-request.variables.set("DATE", response.headers.valueOf("Date") || "");`,
+client.global.set("DATE", response.headers.valueOf("Date") || "");`,
           lineNumber: 1,
         },
       ],
@@ -131,6 +135,26 @@ request.variables.set("DATE", response.headers.valueOf("Date") || "");`,
     );
 
     expect(vars.DATE).toBe("Mon, 01 Jan 2024 00:00:00 GMT");
+  });
+
+  test("post-request JS cannot call request.variables.set (JetBrains parity)", async () => {
+    const vars: Record<string, string> = {};
+    await runScripts(
+      [
+        {
+          type: "postRequest",
+          lang: "js",
+          content: `request.variables.set("NOPE", "x");`,
+          lineNumber: 1,
+        },
+      ],
+      "postRequest",
+      dummyBlock,
+      "/tmp/example.http",
+      undefined,
+      vars,
+    );
+    expect(vars.NOPE).toBeUndefined();
   });
 
   test("client.assert aborts script execution when condition is false", async () => {
@@ -308,9 +332,9 @@ request.variables.set("DATE", response.headers.valueOf("Date") || "");`,
           type: "postRequest",
           lang: "lua",
           content: `
-            request.variables.set("STATUS", tostring(response.status))
-            request.variables.set("DATE", response.headers.valueOf("Date") or "")
-            request.variables.set("TOKEN", response.body.json.token)
+            client.global.set("STATUS", tostring(response.status))
+            client.global.set("DATE", response.headers.valueOf("Date") or "")
+            client.global.set("TOKEN", response.body.token)
           `,
           lineNumber: 1,
         },

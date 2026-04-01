@@ -97,5 +97,5 @@ X-Custom-Header: Kulala-Insecure
 
 > {%
   var fs = require('fs');
-  fs.writeFileSync('TOKEN.txt', response.body.json.token);
+  fs.writeFileSync('TOKEN.txt', response.body.token);
 %}

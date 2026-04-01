@@ -152,13 +152,13 @@ test("resolveRequestVariable resolves response.body.$.path", () => {
       {
         body: {
           type: "json" as const,
-          content: { json: { token: "abc123" } },
+          content: { token: "abc123" },
         },
         headers: {},
       },
     ],
   ]);
-  expect(resolveRequestVariable("LOGIN.response.body.$.json.token", map)).toBe(
+  expect(resolveRequestVariable("LOGIN.response.body.$.token", map)).toBe(
     "abc123",
   );
 });

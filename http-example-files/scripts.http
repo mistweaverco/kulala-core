@@ -14,35 +14,19 @@ X-Global-Foo: {{GLOBAL_FOO}}
 {
   "username": "user123",
   "password": "pass123",
-  "kuba_env_test": "{{ SOME_HARD_CODED_ENV }}",
   "doc_env_test": "{{ DOC_ENV_TEST }}",
   "OS_USER": "{{ $env.USER }}"
 }
 
 > {%
-  request.variables.set("DATE", response.headers.valueOf("Date") || "")
-  console.log("Status", response.status)
-  console.log("Date", request.variables.get("DATE"))
-%}
-
-> {% lang=lua
-  request.variables.set("DATE", response.headers.valueOf("Date") or "")
-  client.log("Status", response.status)
-  client.log("Date", request.variables.get("DATE"))
-%}
-
-> {% lang=ts
-  async function main(): Promise<string> {
+  async function main() {
     return new Promise((resolve) => {
       setTimeout(() => {
-        resolve("Hello from TypeScript!");
+        resolve("Hello from Async!");
       }, 10);
     });
   }
-  const foo: string = "bar";
   client.log(await main());
-  request.variables.set("DATE", response.headers.valueOf("Date") || "")
-  client.log({foo})
   client.log("Status", response.status)
-  client.log("Date", request.variables.get("DATE"))
+  client.log("Date", response.headers.valueOf("Date") || "")
 %}

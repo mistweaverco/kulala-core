@@ -368,7 +368,13 @@ export async function curlHttpRequest(
           : phases.startTransfer;
       res.timings.phases = phases;
 
-      return { ...res, redirectChain: chain, url: res.url };
+      // Only expose a chain when there was at least one redirect (multiple hops).
+      // A single-hop response is not a "redirect chain" for API consumers.
+      return {
+        ...res,
+        ...(chain.length > 1 ? { redirectChain: chain } : {}),
+        url: res.url,
+      };
     }
 
     if (i === MAX_REDIRECTS) {

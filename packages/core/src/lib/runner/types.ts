@@ -4,7 +4,7 @@ export type KulalaRequestSuccessResponse = {
   headers: Record<string, string>;
   /** Final resolved URL (after redirects). */
   url: string;
-  /** Redirect response chain (including the final response). */
+  /** Present only when at least one redirect occurred (ordered hops, including the final response). */
   redirectChain?: Array<{
     status: number;
     headers: Record<string, string>;

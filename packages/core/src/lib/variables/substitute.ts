@@ -1,6 +1,6 @@
 /**
  * Replace {{variableName}} or {{ variableName }} in a string with values from vars.
- * Supports simple names (e.g. API_KEY) and compound request vars (e.g. REQUEST_ONE.response.body.$.json.token).
+ * Supports simple names (e.g. API_KEY) and compound request vars (e.g. REQUEST_ONE.response.body.$.token).
  * Optional whitespace around the variable name is allowed.
  * Unknown variables are replaced with empty string.
  * If resolver is provided, it is used for missing keys (e.g. request variables).

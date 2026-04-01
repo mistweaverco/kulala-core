@@ -6,7 +6,7 @@
  * - Persistence: global, document-scoped, and request-scoped variables from SQLite.
  * - System env as {{$env.VAR}}: JetBrains-style (https://www.jetbrains.com/help/idea/http-client-variables.html).
  * - Dynamic variables: $uuid, $random.uuid, $timestamp, $isoTimestamp, $date, $randomInt (0..1000).
- * - Request variables: {{REQUEST_NAME.response.body.$.path}}, {{REQUEST_NAME.response.headers.Name}}.
+ * - Request variables: {{REQUEST_NAME.response.body.$.field}}, {{REQUEST_NAME.response.headers.Name}}.
  * - JSONPath-style in env/kuba: nested JSON flattened to dotted paths (client.host.url, client.['host.url']).
  * - Substitution: {{variableName}} or compound paths; optional spaces {{ var }} in URL, headers, body.
  * - In-file @ variables: @name=value before the first ### or in a block preamble (JetBrains).
