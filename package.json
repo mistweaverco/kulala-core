@@ -9,11 +9,7 @@
     "test": "bun test",
     "postinstall": "bun run scripts/ensure-vendored-curl.ts",
     "prepack": "bun run scripts/generate-vendored-curl.ts",
-    "build": "bun run scripts/generate-vendored-curl.ts && bun build src/cli.ts --compile --outfile dist/kulala-core --cwd packages/core",
-    "build:linux-x64": "bun run scripts/generate-vendored-curl.ts --target=bun-linux-x64 && bun build src/cli.ts --compile --target=bun-linux-x64 --outfile dist/kulala-core-linux-x64 --cwd packages/core",
-    "build:linux-arm64": "bun run scripts/generate-vendored-curl.ts --target=bun-linux-arm64 && bun build src/cli.ts --compile --target=bun-linux-arm64 --outfile dist/kulala-core-linux-arm64 --cwd packages/core",
-    "build:darwin-arm64": "bun run scripts/generate-vendored-curl.ts --target=bun-darwin-arm64 && bun build src/cli.ts --compile --target=bun-darwin-arm64 --outfile dist/kulala-core-darwin-arm64 --cwd packages/core",
-    "build:windows-x64": "bun run scripts/generate-vendored-curl.ts --target=bun-windows-x64 && bun build src/cli.ts --compile --target=bun-windows-x64 --outfile dist/kulala-core-windows-x64.exe --cwd packages/core"
+    "vendor": "bun run scripts/ensure-vendored-curl.ts && bun run scripts/generate-vendored-curl.ts"
   },
   "pkg": {
     "assets": [

@@ -46,6 +46,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Vendor
+        run: bun run vendor
+
       - name: Set package version (from tag)
         run: npm --prefix packages/core version "${{ env.VERSION }}" --no-git-tag-version
 
