@@ -1,4 +1,4 @@
-import { chmod, mkdir, rm, writeFile, readFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
 import { access } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -6,6 +6,13 @@ import { join } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
+
+if (process.env.KULALA_CORE_BUILD_SKIP_VENDOR_CURL) {
+  process.stdout.write(
+    "kulala-core: skipping vendored curl download due to KULALA_CORE_SKIP_VENDOR_CURL\n",
+  );
+  process.exit(0);
+}
 
 type Platform = "linux" | "darwin" | "win32";
 type Arch = "x64" | "arm64";

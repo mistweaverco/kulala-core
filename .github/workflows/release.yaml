@@ -51,6 +51,8 @@ jobs:
         run: npm --prefix packages/core version "${{ env.VERSION }}" --no-git-tag-version
 
       - name: Build package
+        env:
+          KULALA_CORE_BUILD_SKIP_VENDOR_CURL: 1
         run: bun run build
         working-directory: packages/core
 
