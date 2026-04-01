@@ -59,4 +59,6 @@ jobs:
         working-directory: packages/core
 
       - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release create --generate-notes "${GITHUB_REF_NAME}"
