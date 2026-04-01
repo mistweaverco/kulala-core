@@ -6,7 +6,7 @@
     "@mistweaverco/kulala-core": "workspace:*"
   },
   "scripts": {
-    "build": "bun build src/main.ts --compile --outfile dist/kulala-core-consumer-app",
+    "build": "bun run ../../packages/core/scripts/generate-vendored-curl.ts && bun build src/main.ts --compile --define __KULALA_EMBED_CURL__=true --outfile dist/kulala-core-consumer-app",
     "run": "bun run build && ./dist/kulala-core-consumer-app"
   }
 }

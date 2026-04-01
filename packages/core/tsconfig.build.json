@@ -1,6 +1,6 @@
 {
   "extends": "../../tsconfig.json",
-  "include": ["src/index.ts", "src/lib/**/*.ts"],
+  "include": ["src/index.ts", "src/globals.d.ts", "src/lib/**/*.ts"],
   "exclude": ["**/*.test.ts", "**/*.spec.ts"],
   "compilerOptions": {
     "noEmit": false,
@@ -12,4 +12,3 @@
     "stripInternal": true
   }
 }
-

@@ -57,8 +57,11 @@ async function tryResolveBundledCurl(): Promise<{
   bytes: Buffer;
   filename: string;
 } | null> {
-  // Prefer Bun-embedded asset path when available (bun build --compile).
-  if (typeof Bun !== "undefined") {
+  // Single-file `bun build --compile` only: embed curl for the *build* target.
+  // The npm library build sets __KULALA_EMBED_CURL__=false so we never ship a
+  // publisher-machine curl; consumers get curl via postinstall → cache, or they
+  // run generate-vendored-curl.ts before compiling their own binary.
+  if (__KULALA_EMBED_CURL__ === true && typeof Bun !== "undefined") {
     try {
       const mod = await import("./vendored-curl.generated.ts");
       if (typeof mod.getVendoredCurl === "function") {
@@ -70,10 +73,6 @@ async function tryResolveBundledCurl(): Promise<{
     }
   }
 
-  // TODO:
-  // make sure this gets bundled into the final build.
-  // Some packagers don't like dynamic file URL reads,
-  // so we may need to adjust this approach.
   const exe = process.platform === "win32" ? "curl.exe" : "curl";
   const assetUrl = new URL(
     `../../../vendor/curl/${platformVendorSubdir()}/${exe}`,
@@ -116,6 +115,6 @@ export async function resolveCurlPath(): Promise<string> {
   }
 
   throw new Error(
-    "Embedded curl is required but not bundled. Add vendor/curl/<platform>-<arch>/curl[.exe] to the build (or set KULALA_CURL_PATH explicitly).",
+    "Could not resolve vendored curl. Run the package postinstall (or bun run ./scripts/ensure-vendored-curl.ts from @mistweaverco/kulala-core), place curl under vendor/curl/<platform>-<arch>/, or set KULALA_CURL_PATH.",
   );
 }

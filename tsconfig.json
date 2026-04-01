@@ -1,5 +1,5 @@
 {
-  "include": ["packages/core/src/**/*.ts", "scripts/**/*.ts"],
+  "include": ["packages/core/src/**/*.ts", "packages/core/scripts/**/*.ts"],
   "exclude": [
     "node_modules",
     "**/node_modules",
