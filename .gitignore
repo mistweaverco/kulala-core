@@ -44,3 +44,7 @@ http-example-files/*.tmp*
 
 # Generated vendored curl code
 /packages/core/src/lib/runner/vendored-curl.generated.ts
+
+# Auto-synced
+/packages/core/README.md
+/packages/core/LICENSE

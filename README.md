@@ -72,4 +72,9 @@ is compatible with the IntelliJ HTTP Client:
 
 ## Usage
 
-See the [examples](examples) directory for usage examples.
+See the [examples][examples]
+directory for usage examples.
+
+
+
+[examples]: https://github.com/mistweaverco/kulala-core/tree/main/examples

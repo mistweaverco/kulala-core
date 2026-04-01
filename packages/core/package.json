@@ -1,26 +1,49 @@
 {
   "name": "@mistweaverco/kulala-core",
-  "version": "0.1.0",
-  "module": "src/index.ts",
+  "version": "0.0.0",
   "type": "module",
-  "private": true,
+  "private": false,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mistweaverco/kulala-core.git"
+  },
+  "homepage": "https://github.com/mistweaverco/kulala-core#readme",
+  "bugs": {
+    "url": "https://github.com/mistweaverco/kulala-core/issues"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
   },
   "files": [
-    "src",
-    "vendor/curl",
-    "scripts/ensure-vendored-curl.ts",
-    "scripts/generate-vendored-curl.ts"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "format": "prettier --write .",
     "lint": "prettier --check . && eslint .",
-    "test": "bun test"
+    "test": "bun test",
+    "build": "bun run build:js && bun run build:types",
+    "build:js": "bun build src/index.ts --outdir dist --format esm --target bun --sourcemap",
+    "build:types": "tsc -p tsconfig.build.json",
+    "prepack": "cp ./../../README.md . && cp ./../../LICENSE . && bun run build"
   },
   "pkg": {
     "assets": [
       "../../vendor/curl/**/*"
     ]
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
