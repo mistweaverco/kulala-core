@@ -2,7 +2,7 @@
 
 action=${1:-"run"}
 http_file=${2:-"http-example-files/simple.http"}
-start_line_cursor=${3:-1}
+start_line_cursor=${3:-0}
 
 if [[ ! -f "$http_file" ]]; then
   echo "Error: file not found: $http_file" >&2
@@ -26,7 +26,7 @@ parse_json="$(
     bun -e '
 const action = process.env.KULALA_PAYLOAD_ACTION ?? "run";
 const filepath = process.env.KULALA_PAYLOAD_PATH;
-const line = parseInt(process.env.KULALA_PAYLOAD_LINE ?? "1", 10);
+const line = parseInt(process.env.KULALA_PAYLOAD_LINE ?? "0", 10);
 if (!filepath) throw new Error("KULALA_PAYLOAD_PATH missing");
 const file = Bun.file(filepath);
 const content = await file.text();
@@ -35,7 +35,7 @@ console.log(
     action,
     filepath,
     content,
-    limit: [{ filter: "cursorPosition", line, column: 1 }],
+    limit: line === 0 ? undefined : [{ filter: "cursorPosition", line, column: 1 }],
   }),
 );
 '
