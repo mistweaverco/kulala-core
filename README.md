@@ -11,48 +11,65 @@
 
 <p></p>
 
-A work-in-progess, backend for the Kulala toolchain.
-
 Kulala is swahili for "rest" or "relax."
 
-This project aims to replace the requirement
-for cURL, any custom parsing logic and nodejs for scripting.
+A straightforwarded, powerful, and extendable HTTP client library.
+It powers the [Kulala toolchain](https://getkulala.net),
+and can be used as a standalone library.
 
 <p></p>
 
-## Features
-
-Protocols: HTTP, GraphQL
-
-Variables: Environment, Document, Request, Dynamic, Prompt, `http-client.env` files
-
-JS scripting: Pre-request, Post-request, Conditional, Inline, External
-
-Authentication: Basic, Bearer
-
-Assertions, automated testing and reporting
-
-Compatibility with IntelliJ HTTP Client
-
 </div>
 
-## Install
+## Overview
 
-You can install the Kulala Core via the installer script:
+A RESTful API is a web service architecture that adheres to
+specific constraints:
 
-For Unix-based systems (Linux, macOS, WSL):
+- statelessness,
+- uniform interface,
+- client-server separation
 
-```sh
-# sh
-curl -sSL https://core.getkulala.net/install.sh | sh
-# bash
-curl -sSL https://core.getkulala.net/install.sh | bash
-# zsh
-curl -sSL https://core.getkulala.net/install.sh | zsh
-```
+Typically using HTTP methods like `GET`, `POST`, `PUT`, and `DELETE`.
+It uses standard web protocols to enable interoperability
+between distributed systems.
 
-For Windows (PowerShell):
+## Features
 
-```powershell
-irm https://core.getkulala.net/install.ps1 | iex
-```
+### Request types
+
+- HTTP RESTful (1.0, 1.1, 2, 3)
+- GraphQL (queries, mutations)
+
+### Variables
+
+- Host Environment
+- Document variables
+- Request scoped variables
+- `http-client.env` files
+- Built-in support for [kuba](https://kuba.mwco.app)
+
+### Scripting
+
+Supports JavaScript, Lua, and TypeScript for:
+
+- Pre-request
+- Post-request
+- Conditional
+- Inline
+- External
+
+### Authentication
+
+- Basic
+- Bearer
+- OAuth 2.0
+
+### Automation and testing
+
+Assertions, automated testing and reporting
+is compatible with the IntelliJ HTTP Client:
+
+## Usage
+
+See the [examples](examples) directory for usage examples.
