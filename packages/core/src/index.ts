@@ -1,6 +1,21 @@
 export { KulalaParser, writeErrorToStderr } from "./lib/parser";
 export { KulalaRunner } from "./lib/runner";
 
+export {
+  CURL_TOOL,
+  getKulalaCoreCacheRoot,
+  getKulalaCoreDataDir,
+  getToolInstallRoot,
+  resolveExternalBinary,
+  resolvePlatformVendorSubdir,
+} from "./lib/runner/external-tools";
+export type {
+  ArchiveDownloadSpec,
+  ExternalToolDefinition,
+  ExternalToolId,
+  ResolveExternalBinaryOptions,
+} from "./lib/runner/external-tools";
+
 export type { KulalaDocument } from "./lib/parser/types";
 export type { KulalaStdinParsed } from "./lib/parser/types/stdinparsed";
 

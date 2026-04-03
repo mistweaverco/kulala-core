@@ -75,10 +75,16 @@ is compatible with the IntelliJ HTTP Client:
 See the [examples][examples]
 directory for usage examples.
 
-### Vendored curl
+### curl binary
 
-- **`npm install` / `bun install`**: the `@mistweaverco/kulala-core` package runs `postinstall`, which downloads a pinned static curl for the **installing machine’s** OS and architecture into the user cache (or you can set `KULALA_CURL_PATH` to your own binary).
-- **Published library** (`dist/`): the npm build sets `__KULALA_EMBED_CURL__=false`, so the tarball does **not** embed curl from the machine that ran `npm publish`.
-- **`bun build --compile`** (your app or the examples): run `packages/core/scripts/generate-vendored-curl.ts` (optionally with `--target=bun-…` for cross-compiles), then compile with `--define __KULALA_EMBED_CURL__=true` so the correct curl is embedded for that build. For cross-compilation you must have the matching curl available under the cache path or under `vendor/curl/<platform>-<arch>/` in this repo.
+Resolution order: `KULALA_CURL_PATH` (if set),
+then a pinned copy under the user cache (for example on Linux: `~/.local/share/kulala-core/cache/curl/<platform>-<arch>/curl`),
+then **curl** on your `PATH`,
+then a one-time download of a pinned static build (SHA-256 verified) into that cache.
+You can override the data or cache root with `KULALA_CORE_DATA_DIR` / `KULALA_CORE_CACHE_DIR`.
+
+
+- **Published library** (`dist/`): the npm build sets `__KULALA_EMBED_CURL__=false`, so the package does **not** embed curl from the machine that ran `npm publish`.
+- **`bun build --compile`**: run `packages/core/scripts/generate-vendored-curl.ts` (optionally with `--target=bun-…` for cross-compiles) so the matching curl is present in the cache and embedded for that build, then compile with `--define __KULALA_EMBED_CURL__=true`.
 
 [examples]: https://github.com/mistweaverco/kulala-core/tree/main/examples
