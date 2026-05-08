@@ -427,6 +427,7 @@ export async function doRequestFromBlock(
       connectionTimeoutMs: connectionTimeoutMsJetBrains,
       followRedirects,
       propagateCookiesOnRedirect: cookieJarEnabled,
+      cookieJarEnabled,
     });
 
     const rawBody = res.body;

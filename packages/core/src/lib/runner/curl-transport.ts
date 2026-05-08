@@ -12,6 +12,12 @@ import { resolveCurlPath } from "./embedded-curl";
 import { performance } from "node:perf_hooks";
 import { constants as fsConstants } from "node:fs";
 import { dirname, join } from "node:path";
+import {
+  cookieAppliesToRequest,
+  getCookieHeaderForRequest,
+  normalizeSetCookieFromLine,
+  type NormalizedSetCookie,
+} from "../persistence";
 
 type CurlWriteOut = {
   http_code: number;
@@ -59,6 +65,56 @@ function parseCurlWriteOut(stdout: string): CurlWriteOut {
 function secondsToMs(sec: number): number {
   if (!Number.isFinite(sec) || sec < 0) return 0;
   return sec * 1000;
+}
+
+/** Parse a request `Cookie` header value into name/value pairs (first `=` separates name from value). */
+function parseRequestCookieHeader(raw: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const part of raw.split(";")) {
+    const p = part.trim();
+    if (!p) continue;
+    const eq = p.indexOf("=");
+    if (eq === -1) continue;
+    const k = p.slice(0, eq).trim();
+    const v = p.slice(eq + 1).trim();
+    if (k) out[k] = v;
+  }
+  return out;
+}
+
+function buildCookieHeaderForRedirect(
+  nextUrl: string,
+  opts: {
+    cookieJarEnabled: boolean;
+    initialRequestUrl: string;
+    initialCookieHeader: string | undefined;
+    absorbedCookies: NormalizedSetCookie[];
+  },
+): string | undefined {
+  const pairs: Record<string, string> = {};
+  if (opts.cookieJarEnabled) {
+    const jar = getCookieHeaderForRequest(nextUrl);
+    if (jar) Object.assign(pairs, parseRequestCookieHeader(jar));
+  }
+  const nextHost = new URL(nextUrl).hostname.toLowerCase();
+  const initialHost = new URL(opts.initialRequestUrl).hostname.toLowerCase();
+  if (nextHost === initialHost && opts.initialCookieHeader) {
+    Object.assign(pairs, parseRequestCookieHeader(opts.initialCookieHeader));
+  }
+  for (const c of opts.absorbedCookies) {
+    if (cookieAppliesToRequest(c, nextUrl)) {
+      pairs[c.name] = c.value;
+    }
+  }
+  const names = Object.keys(pairs).sort((a, b) => a.localeCompare(b));
+  if (names.length === 0) return undefined;
+  return names.map((k) => `${k}=${pairs[k]}`).join("; ");
+}
+
+function stripCookieHeader(headers: Record<string, string>): void {
+  for (const k of Object.keys(headers)) {
+    if (k.toLowerCase() === "cookie") delete headers[k];
+  }
 }
 
 function headersFromDump(dump: string): {
@@ -185,35 +241,23 @@ export async function curlHttpRequest(
 
   const chain: NonNullable<NodeHttpClientResponse["redirectChain"]> = [];
 
-  // In-request cookie propagation across redirects (JetBrains-like behavior).
-  // This is separate from the persisted cookie jar; it's needed so cookies set on a
-  // redirect response are available to the next hop within the same request.
+  // Browser-like cookies across redirect hops: Set-Cookie Domain/Path/Secure are respected;
+  // the initial request Cookie header is only replayed when the next hop is the same host;
+  // the persistent jar is consulted per hop when enabled.
   const propagateCookies = options.propagateCookiesOnRedirect !== false;
-  const cookieMap: Record<string, string> = {};
-  const parseCookieHeader = (raw: string): Record<string, string> => {
-    const out: Record<string, string> = {};
-    for (const part of raw.split(";")) {
-      const p = part.trim();
-      if (!p) continue;
-      const eq = p.indexOf("=");
-      if (eq === -1) continue;
-      const k = p.slice(0, eq).trim();
-      const v = p.slice(eq + 1).trim();
-      if (k) out[k] = v;
-    }
-    return out;
-  };
-  const mergeCookieHeader = (existing: string | undefined): string => {
-    const merged: Record<string, string> = {
-      ...(existing ? parseCookieHeader(existing) : {}),
-      ...cookieMap,
-    };
-    return Object.entries(merged)
-      .map(([k, v]) => `${k}=${v}`)
-      .join("; ");
-  };
-  const absorbSetCookieFromHeaders = (
+  const cookieJarEnabled = options.cookieJarEnabled !== false;
+  const initialRequestUrl = options.url;
+  const initialCookieHeader = (() => {
+    const key = Object.keys(currentHeaders).find(
+      (k) => k.toLowerCase() === "cookie",
+    );
+    return key ? currentHeaders[key] : undefined;
+  })();
+  const absorbedCookies: NormalizedSetCookie[] = [];
+
+  const absorbSetCookieFromResponse = (
     headers: Record<string, string>,
+    responseUrl: string,
   ): void => {
     const raw = headers["set-cookie"];
     if (!raw) return;
@@ -222,12 +266,8 @@ export async function curlHttpRequest(
       .map((s) => s.trim())
       .filter(Boolean);
     for (const line of lines) {
-      const first = line.split(";", 1)[0] ?? "";
-      const eq = first.indexOf("=");
-      if (eq === -1) continue;
-      const name = first.slice(0, eq).trim();
-      const value = first.slice(eq + 1).trim();
-      if (name) cookieMap[name] = value;
+      const n = normalizeSetCookieFromLine(line, responseUrl);
+      if (n) absorbedCookies.push(n);
     }
   };
 
@@ -340,7 +380,7 @@ export async function curlHttpRequest(
 
   for (let i = 0; i <= MAX_REDIRECTS; i++) {
     const res = await requestOnce();
-    if (propagateCookies) absorbSetCookieFromHeaders(res.headers);
+    if (propagateCookies) absorbSetCookieFromResponse(res.headers, res.url);
     chain.push({
       statusCode: res.statusCode,
       headers: res.headers,
@@ -385,23 +425,15 @@ export async function curlHttpRequest(
 
     currentUrl = new URL(location!, currentUrl).href;
 
-    // Apply any cookies accumulated so far to the next hop, unless caller already set Cookie.
     if (propagateCookies) {
-      if (
-        !Object.keys(currentHeaders).some((k) => k.toLowerCase() === "cookie")
-      ) {
-        const cookie = mergeCookieHeader(undefined);
-        if (cookie) currentHeaders.Cookie = cookie;
-      } else {
-        const existingKey = Object.keys(currentHeaders).find(
-          (k) => k.toLowerCase() === "cookie",
-        );
-        if (existingKey) {
-          currentHeaders[existingKey] = mergeCookieHeader(
-            currentHeaders[existingKey],
-          );
-        }
-      }
+      const built = buildCookieHeaderForRedirect(currentUrl, {
+        cookieJarEnabled,
+        initialRequestUrl,
+        initialCookieHeader,
+        absorbedCookies,
+      });
+      stripCookieHeader(currentHeaders);
+      if (built) currentHeaders.Cookie = built;
     }
 
     if (

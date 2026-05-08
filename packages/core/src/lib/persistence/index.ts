@@ -64,5 +64,10 @@ export {
 export {
   storeCookiesFromResponse,
   getCookieHeaderForRequest,
+  cookieAppliesToRequest,
+  domainMatches,
+  normalizeSetCookieFromLine,
+  pathMatches,
   type CookieRecord,
+  type NormalizedSetCookie,
 } from "./cookie-store";

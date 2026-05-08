@@ -15,6 +15,15 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
+export type NormalizedSetCookie = {
+  domain: string;
+  path: string;
+  name: string;
+  value: string;
+  secure: boolean;
+  expiresAt?: string;
+};
+
 function parseSetCookieHeader(header: string): {
   name: string;
   value: string;
@@ -77,13 +86,13 @@ function defaultPathForUrl(url: URL): string {
   return idx <= 0 ? "/" : p.slice(0, idx);
 }
 
-function domainMatches(host: string, cookieDomain: string): boolean {
+export function domainMatches(host: string, cookieDomain: string): boolean {
   const h = host.toLowerCase();
   const d = cookieDomain.toLowerCase();
   return h === d || h.endsWith(`.${d}`);
 }
 
-function pathMatches(requestPath: string, cookiePath: string): boolean {
+export function pathMatches(requestPath: string, cookiePath: string): boolean {
   if (!requestPath.startsWith("/")) return false;
   if (!cookiePath.startsWith("/")) return false;
   return (
@@ -92,6 +101,48 @@ function pathMatches(requestPath: string, cookiePath: string): boolean {
       cookiePath.endsWith("/") ? cookiePath : `${cookiePath}/`,
     )
   );
+}
+
+/**
+ * Parse a single Set-Cookie header line and resolve Domain/Path the same way as
+ * storeCookiesFromResponse (host-only default domain when Domain is omitted).
+ */
+export function normalizeSetCookieFromLine(
+  setCookieLine: string,
+  responseUrlStr: string,
+): NormalizedSetCookie | null {
+  const parsed = parseSetCookieHeader(setCookieLine);
+  if (!parsed) return null;
+  const url = new URL(responseUrlStr);
+  const host = url.hostname.toLowerCase();
+  const domain = (parsed.domain ?? host).toLowerCase();
+  const path = parsed.path ?? defaultPathForUrl(url);
+  const now = nowIso();
+  if (parsed.expiresAt && parsed.expiresAt <= now) return null;
+  return {
+    domain,
+    path,
+    name: parsed.name,
+    value: parsed.value,
+    secure: !!parsed.secure,
+    expiresAt: parsed.expiresAt,
+  };
+}
+
+/** Whether a cookie normalized from Set-Cookie should be sent on a request to requestUrlStr. */
+export function cookieAppliesToRequest(
+  c: NormalizedSetCookie,
+  requestUrlStr: string,
+): boolean {
+  const url = new URL(requestUrlStr);
+  const host = url.hostname.toLowerCase();
+  const reqPath = url.pathname || "/";
+  if (!domainMatches(host, c.domain)) return false;
+  if (!pathMatches(reqPath, c.path)) return false;
+  if (c.secure && url.protocol !== "https:") return false;
+  const now = nowIso();
+  if (c.expiresAt && c.expiresAt <= now) return false;
+  return true;
 }
 
 export function storeCookiesFromResponse(

@@ -59,6 +59,11 @@ export type NodeHttpClientOptions = {
   followRedirects?: boolean;
   /** Whether to propagate Set-Cookie -> Cookie across redirect hops (default true). */
   propagateCookiesOnRedirect?: boolean;
+  /**
+   * When true (default), each redirect hop may add cookies from the persistent jar for the
+   * next URL (browser-like, with domain/path filtering via the jar).
+   */
+  cookieJarEnabled?: boolean;
 };
 
 /** Encode FormData to buffer and content-type using form-data-encoder. */

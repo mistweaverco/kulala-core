@@ -157,4 +157,83 @@ describe("curl transport", () => {
     expect(res.statusCode).toBe(200);
     expect(res.timings.phases.total).toBeGreaterThanOrEqual(0);
   });
+
+  test("cross-host redirect does not forward client Cookie or host-only Set-Cookie", async () => {
+    if (!(await hasCurl())) return;
+
+    let cookieSeenOnB = "";
+    const serverB = createServer((req, res) => {
+      cookieSeenOnB = req.headers.cookie ?? "";
+      res.statusCode = 200;
+      res.setHeader("content-type", "text/plain");
+      res.end("b");
+    });
+    const portB = await listenHttp(serverB);
+
+    const serverA = createServer((req, res) => {
+      if (req.url === "/") {
+        res.statusCode = 302;
+        // `localhost` vs `127.0.0.1`: different URL hosts so client cookies are not replayed.
+        res.setHeader(
+          "location",
+          `http://localhost:${portB}/on-b`,
+        );
+        res.setHeader("set-cookie", "from_a=1; Path=/");
+        res.end();
+        return;
+      }
+      res.statusCode = 404;
+      res.end();
+    });
+    const portA = await listenHttp(serverA);
+
+    const res = await nodeHttpRequest({
+      url: `http://127.0.0.1:${portA}/`,
+      method: "GET",
+      headers: { Cookie: "client_only=1" },
+    });
+
+    serverA.close();
+    serverB.close();
+
+    expect(res.statusCode).toBe(200);
+    expect(cookieSeenOnB).toBe("");
+  });
+
+  test("same-host redirect still sends client Cookie and Set-Cookie applies on next hop", async () => {
+    if (!(await hasCurl())) return;
+
+    let cookieOnFinal = "";
+    const server = createServer((req, res) => {
+      if (req.url === "/" || req.url?.startsWith("/?")) {
+        res.statusCode = 302;
+        res.setHeader("location", "/final");
+        res.setHeader("set-cookie", "from_redirect=1; Path=/");
+        res.end();
+        return;
+      }
+      if (req.url === "/final") {
+        cookieOnFinal = req.headers.cookie ?? "";
+        res.statusCode = 200;
+        res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify({ ok: true }));
+        return;
+      }
+      res.statusCode = 404;
+      res.end();
+    });
+    const port = await listenHttp(server);
+
+    const res = await nodeHttpRequest({
+      url: `http://127.0.0.1:${port}/`,
+      method: "GET",
+      headers: { Cookie: "client=xyz" },
+    });
+
+    server.close();
+
+    expect(res.statusCode).toBe(200);
+    expect(cookieOnFinal).toContain("client=xyz");
+    expect(cookieOnFinal).toContain("from_redirect=1");
+  });
 });
