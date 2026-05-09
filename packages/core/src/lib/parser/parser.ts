@@ -346,6 +346,12 @@ function attachSourceFileHeaderVars(
   return blockList.map((b) => ({ ...b, sourceFileHeaderVariables: vars }));
 }
 
+/** Inclusive 1-based end line for a block regex match (handles split("\\n") trailing ""). */
+function blockMatchLineCount(rawMatch: string): number {
+  const n = rawMatch.split("\n").length;
+  return rawMatch.endsWith("\n") ? n - 1 : n;
+}
+
 const getBlocks = async (
   content: string,
   filepath?: string,
@@ -354,7 +360,7 @@ const getBlocks = async (
   const rawBlocks = content.matchAll(blockRegex);
   for (const [idx, rawBlock] of Array.from(rawBlocks).entries()) {
     const start = content.substring(0, rawBlock.index).split("\n").length;
-    const end = start + rawBlock[0].split("\n").length - 2;
+    const end = start + blockMatchLineCount(rawBlock[0]) - 1;
     const position = { start, end };
     blocks.push(await getParsedBlock(rawBlock[0], idx, position, filepath));
   }

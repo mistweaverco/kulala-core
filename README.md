@@ -83,7 +83,6 @@ then **curl** on your `PATH`,
 then a one-time download of a pinned static build (SHA-256 verified) into that cache.
 You can override the data or cache root with `KULALA_CORE_DATA_DIR` / `KULALA_CORE_CACHE_DIR`.
 
-
 - **Published library** (`dist/`): the npm build sets `__KULALA_EMBED_CURL__=false`, so the package does **not** embed curl from the machine that ran `npm publish`.
 - **`bun build --compile`**: run `packages/core/scripts/generate-vendored-curl.ts` (optionally with `--target=bun-…` for cross-compiles) so the matching curl is present in the cache and embedded for that build, then compile with `--define __KULALA_EMBED_CURL__=true`.
 

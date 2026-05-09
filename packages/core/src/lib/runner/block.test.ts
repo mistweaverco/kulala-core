@@ -252,3 +252,26 @@ query Planet($id: ID) {
   const block2 = findBlockAtCursor(doc, { line: 22, column: 1 });
   expect(block2?.name).toBe("GQL_STARWARS_QUERY_PLANET");
 });
+
+test("findBlockAtCursor cursor on last line of block (no trailing newline)", async () => {
+  const content = "### test\nGET http://example.com";
+  const doc = await getDocument(content, "/test.http");
+  const lastLine = content.split("\n").length;
+  expect(findBlockAtCursor(doc, { line: lastLine, column: 1 })?.name).toBe(
+    "test",
+  );
+});
+
+test("findBlockAtCursor on ### line of second block does not match first block", async () => {
+  const content =
+    "### HTTP_1_0\nGET http://example.com HTTP/1.0\n### HTTP_1_1_REQUEST\nGET http://example.com HTTP/1.1\n";
+  const doc = await getDocument(content, "/test.http");
+  expect(findBlockAtCursor(doc, { line: 1, column: 1 })?.name).toBe("HTTP_1_0");
+  expect(findBlockAtCursor(doc, { line: 2, column: 1 })?.name).toBe("HTTP_1_0");
+  expect(findBlockAtCursor(doc, { line: 3, column: 1 })?.name).toBe(
+    "HTTP_1_1_REQUEST",
+  );
+  expect(findBlockAtCursor(doc, { line: 4, column: 1 })?.name).toBe(
+    "HTTP_1_1_REQUEST",
+  );
+});

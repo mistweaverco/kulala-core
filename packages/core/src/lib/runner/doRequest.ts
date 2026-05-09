@@ -36,6 +36,7 @@ import type {
   KulalaPromptResponse,
   KulalaRequestErrorResponse,
   KulalaRequestSuccessResponse,
+  KulalaScriptConsoleLine,
   RunnerResponseLike,
   VariableResolver,
 } from "./types";
@@ -55,6 +56,8 @@ export async function doRequestFromBlock(
   | KulalaRequestErrorResponse
   | KulalaPromptResponse
 > {
+  const scriptConsole: KulalaScriptConsoleLine[] = [];
+
   const parseDurationToMs = (raw: string): number | undefined => {
     const s = raw.trim();
     if (!s) return undefined;
@@ -219,6 +222,7 @@ export async function doRequestFromBlock(
     undefined,
     mutableVars,
     flow,
+    scriptConsole,
   );
 
   // Check if we need async substitution (for $auth.token() calls)
@@ -578,6 +582,7 @@ export async function doRequestFromBlock(
       responseLike,
       undefined,
       flow,
+      scriptConsole,
     );
 
     // @kulala-expect-status-code 200 (or 200,201)
@@ -639,6 +644,7 @@ export async function doRequestFromBlock(
         total,
       },
       body: responseBody,
+      ...(scriptConsole.length > 0 ? { scriptConsole } : {}),
     } as KulalaRequestSuccessResponse;
   } catch (error) {
     return {

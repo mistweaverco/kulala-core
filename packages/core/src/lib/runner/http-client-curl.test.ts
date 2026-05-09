@@ -174,10 +174,7 @@ describe("curl transport", () => {
       if (req.url === "/") {
         res.statusCode = 302;
         // `localhost` vs `127.0.0.1`: different URL hosts so client cookies are not replayed.
-        res.setHeader(
-          "location",
-          `http://localhost:${portB}/on-b`,
-        );
+        res.setHeader("location", `http://localhost:${portB}/on-b`);
         res.setHeader("set-cookie", "from_a=1; Path=/");
         res.end();
         return;

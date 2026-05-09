@@ -1,3 +1,9 @@
+/** Captured `console.log` / `console.error` / etc. from pre- and post-request scripts (stdout stays JSON-only). */
+export type KulalaScriptConsoleLine = {
+  level: "log" | "error" | "warn" | "info" | "debug";
+  message: string;
+};
+
 export type KulalaRequestSuccessResponse = {
   success: true;
   status: number;
@@ -38,6 +44,8 @@ export type KulalaRequestSuccessResponse = {
   body:
     | { type: "text"; content: string }
     | { type: "json"; content: Record<string, unknown> };
+  /** Present when scripts emitted console output (including client.test / client.log). */
+  scriptConsole?: KulalaScriptConsoleLine[];
 };
 
 export type KulalaRequestErrorResponse = {

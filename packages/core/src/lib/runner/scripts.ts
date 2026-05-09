@@ -1,6 +1,6 @@
 import path from "path";
 import type { KulalaBlock } from "./../parser/types/block";
-import type { RunnerResponseLike } from "./types";
+import type { KulalaScriptConsoleLine, RunnerResponseLike } from "./types";
 import {
   type KulalaScript,
   type KulalaScriptType,
@@ -21,6 +21,7 @@ import {
   spawn,
   spawnSync,
 } from "node:child_process";
+import { inspect } from "node:util";
 import type { Lua } from "wasmoon-lua5.1";
 
 export type ScriptFlowContext = {
@@ -77,6 +78,16 @@ type ScriptClient = {
   };
   log: (...args: unknown[]) => void;
 };
+
+function formatScriptConsoleArgs(args: unknown[]): string {
+  return args
+    .map((a) =>
+      typeof a === "string"
+        ? a
+        : inspect(a, { colors: false, depth: 8, breakLength: 120 }),
+    )
+    .join(" ");
+}
 
 function toStringValue(v: unknown): string {
   if (v == null) return "";
@@ -230,6 +241,7 @@ async function executeJsTsScript(
     client: ScriptClient;
     request: ScriptRequest;
     response: ScriptResponse;
+    scriptConsole?: KulalaScriptConsoleLine[];
   },
 ): Promise<void> {
   const prev = {
@@ -247,6 +259,18 @@ async function executeJsTsScript(
     btoa: (globalThis as Record<string, unknown>).btoa,
     sleep: (globalThis as Record<string, unknown>).sleep,
   };
+
+  const buf = ctx.scriptConsole;
+  const prevConsole =
+    buf !== undefined
+      ? {
+          log: console.log.bind(console),
+          error: console.error.bind(console),
+          warn: console.warn.bind(console),
+          info: console.info.bind(console),
+          debug: console.debug.bind(console),
+        }
+      : undefined;
 
   try {
     (globalThis as unknown as Record<string, unknown>).client = ctx.client;
@@ -290,6 +314,30 @@ async function executeJsTsScript(
         new Promise<void>((resolve) => setTimeout(resolve, Math.max(0, ms)));
     }
 
+    if (buf && prevConsole) {
+      const push = (
+        level: KulalaScriptConsoleLine["level"],
+        args: unknown[],
+      ) => {
+        buf.push({ level, message: formatScriptConsoleArgs(args) });
+      };
+      console.log = (...args: unknown[]) => {
+        push("log", args);
+      };
+      console.error = (...args: unknown[]) => {
+        push("error", args);
+      };
+      console.warn = (...args: unknown[]) => {
+        push("warn", args);
+      };
+      console.info = (...args: unknown[]) => {
+        push("info", args);
+      };
+      console.debug = (...args: unknown[]) => {
+        push("debug", args);
+      };
+    }
+
     const mod = (await import(filePath)) as { default?: unknown };
     const run = mod.default;
     if (typeof run === "function") {
@@ -311,6 +359,13 @@ async function executeJsTsScript(
     (globalThis as unknown as Record<string, unknown>).atob = prev.atob;
     (globalThis as unknown as Record<string, unknown>).btoa = prev.btoa;
     (globalThis as unknown as Record<string, unknown>).sleep = prev.sleep;
+    if (prevConsole) {
+      console.log = prevConsole.log;
+      console.error = prevConsole.error;
+      console.warn = prevConsole.warn;
+      console.info = prevConsole.info;
+      console.debug = prevConsole.debug;
+    }
   }
 }
 
@@ -405,6 +460,7 @@ export const runScripts = async (
   response?: RunnerResponseLike,
   vars?: Record<string, string>,
   flow?: ScriptFlowContext,
+  scriptConsole?: KulalaScriptConsoleLine[],
 ): Promise<void> => {
   void type;
   void block;
@@ -413,6 +469,20 @@ export const runScripts = async (
     const tmpName = path.resolve(getTempName());
     const cwd = path.resolve(process.cwd());
     const tempCwd = path.resolve(path.dirname(filePath || tmpName));
+
+    const appendConsole = (
+      level: KulalaScriptConsoleLine["level"],
+      message: string,
+    ) => {
+      if (scriptConsole) {
+        scriptConsole.push({ level, message });
+      } else if (level === "error") {
+        console.error(message);
+      } else {
+        console.log(message);
+      }
+    };
+
     try {
       process.chdir(tempCwd);
 
@@ -441,10 +511,10 @@ export const runScripts = async (
           }
           try {
             func();
-            console.log(`✓ ${testName}`);
+            appendConsole("log", `✓ ${testName}`);
           } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
-            console.error(`✗ ${testName}: ${msg}`);
+            appendConsole("error", `✗ ${testName}: ${msg}`);
             throw e;
           }
         },
@@ -489,7 +559,7 @@ export const runScripts = async (
         },
         log: (...args: unknown[]) => {
           // Match JetBrains-style "client.log" behavior.
-          console.log(...args);
+          appendConsole("log", formatScriptConsoleArgs(args));
         },
       };
 
@@ -512,13 +582,15 @@ export const runScripts = async (
           client: clientObj,
           request: requestObj,
           response: responseObj,
+          scriptConsole,
         });
       }
     } catch (error) {
       if (error instanceof ScriptExitError) {
         break;
       }
-      console.error(
+      appendConsole(
+        "error",
         `Error executing script: ${
           error instanceof Error ? error.message : String(error)
         }`,
