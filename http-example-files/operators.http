@@ -1,3 +1,9 @@
+### EXPECT_STATUS_400
+
+// @kulala-expect-status-code 204
+
+GET https://httpbin.org/status/200 HTTP/1.1
+
 ### PROMPT_REQUEST
 
 // @kulala-prompt "What is your name?" NAME
