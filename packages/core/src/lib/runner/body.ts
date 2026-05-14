@@ -1,5 +1,225 @@
 import type { RequestHeaderType } from "./types";
 
+/**
+ * Normalize CRLF and CR-only line endings to `\n`.
+ * Without this, `split("\n")` sees one giant line and whole-line `//` comments are not stripped.
+ */
+export function normalizeHttpBodyNewlines(body: string): string {
+  return body.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+}
+
+/**
+ * Remove HTTP client whole-line `//` comments from raw body text.
+ * (The block parser treats every line after the blank line as body, so `//` is not a parser comment.)
+ */
+export function stripHttpClientDoubleSlashLineComments(body: string): string {
+  const normalized = normalizeHttpBodyNewlines(body);
+  const lines = normalized.split("\n");
+  const kept: string[] = [];
+  for (const line of lines) {
+    const t = line.trim();
+    if (t.startsWith("//")) continue;
+    kept.push(line);
+  }
+  return kept.join("\n");
+}
+
+/** Raw multipart body template: after stripping `//` lines, body starts with `--` (MIME delimiter). */
+export function isRawMultipartTemplateBody(body: unknown): boolean {
+  if (typeof body !== "string") return false;
+  return stripHttpClientDoubleSlashLineComments(body)
+    .trimStart()
+    .startsWith("--");
+}
+
+/** Parse `boundary=` from a Content-Type value (RFC 2045 / multipart). */
+export function parseMultipartBoundaryFromContentType(
+  contentType: string,
+): string | undefined {
+  const m = contentType.match(
+    /\bboundary\s*=\s*(?:"([^"]*)"|'([^']*)'|([^;\s]+))/i,
+  );
+  const v = (m?.[1] ?? m?.[2] ?? m?.[3] ?? "").trim();
+  return v.length > 0 ? v : undefined;
+}
+
+/** First line matching `--` + boundary (optional closing `--`); skips preamble lines. */
+export function parseMultipartBoundaryFromBody(
+  body: string,
+): string | undefined {
+  for (const line of normalizeHttpBodyNewlines(body).split("\n")) {
+    const t = line.trim();
+    if (t.length === 0) continue;
+    const m = t.match(/^--(.+)$/);
+    if (!m) continue;
+    let core = m[1]!;
+    if (core.endsWith("--")) core = core.slice(0, -2);
+    if (core.length > 0) return core;
+  }
+  return undefined;
+}
+
+function formatMultipartBoundaryParameter(boundary: string): string {
+  if (/^[A-Za-z0-9._'()+,-:=?]+$/.test(boundary)) return boundary;
+  return JSON.stringify(boundary);
+}
+
+/**
+ * If Content-Type is multipart but has no usable `boundary=`, infer it from the first
+ * `--...` line in the body and append `; boundary=...`.
+ */
+export function ensureMultipartContentTypeHeader(
+  headers: Record<string, string>,
+  body: string,
+): Record<string, string> {
+  const key = Object.keys(headers).find(
+    (k) => k.toLowerCase() === "content-type",
+  );
+  if (!key) return headers;
+  const val = headers[key];
+  if (typeof val !== "string") return headers;
+  if (!val.toLowerCase().includes("multipart/form-data")) return headers;
+  const existing = parseMultipartBoundaryFromContentType(val);
+  if (existing) return headers;
+  const fromBody = parseMultipartBoundaryFromBody(body);
+  if (!fromBody) return headers;
+  const token = formatMultipartBoundaryParameter(fromBody);
+  const trimmed = val.trim();
+  const newVal = trimmed.endsWith(";")
+    ? `${trimmed} boundary=${token}`
+    : `${trimmed}; boundary=${token}`;
+  return { ...headers, [key]: newVal };
+}
+
+function stripQuotesPath(p: string): string {
+  const t = p.trim();
+  if (
+    (t.startsWith('"') && t.endsWith('"')) ||
+    (t.startsWith("'") && t.endsWith("'"))
+  ) {
+    return t.slice(1, -1);
+  }
+  return t;
+}
+
+/** Parse path and optional same-line suffix after `<` (e.g. `./a.txt --boundary--`). */
+function parseInlineBodyFileRefTail(tail: string): {
+  path: string;
+  suffix: string;
+} {
+  let s = tail.trim().replace(/\r$/, "");
+  if (s.startsWith('"')) {
+    const end = s.indexOf('"', 1);
+    if (end === -1) return { path: stripQuotesPath(s), suffix: "" };
+    return { path: s.slice(1, end), suffix: s.slice(end + 1).trimStart() };
+  }
+  if (s.startsWith("'")) {
+    const end = s.indexOf("'", 1);
+    if (end === -1) return { path: stripQuotesPath(s), suffix: "" };
+    return { path: s.slice(1, end), suffix: s.slice(end + 1).trimStart() };
+  }
+  // First non-whitespace run is the path; rest is suffix (no artificial leading space — MIME
+  // closing delimiters like `--boundary--` must not be prefixed with a space).
+  const m = s.match(/^(\S+)\s*(.*)$/);
+  if (!m) return { path: "", suffix: "" };
+  const path = m[1] ?? "";
+  const suffix = (m[2] ?? "").trimStart();
+  return { path, suffix };
+}
+
+function dataEndsWithLineTerminator(data: Buffer): boolean {
+  if (data.length === 0) return false;
+  const b = data[data.length - 1]!;
+  return b === 0x0a || b === 0x0d;
+}
+
+/**
+ * Omit the newline that ends the `< path` line after injecting file bytes when:
+ * - the next template line is blank (that blank supplies the NL before the boundary), or
+ * - the next non-blank line starts a multipart boundary and the file already ends with a
+ *   line terminator (avoid `…\\n` from file + `\\n` from `<` line before `--…`).
+ */
+function shouldOmitLineTerminatorAfterInlineFileRef(
+  text: string,
+  newlineIdx: number,
+  fileData: Buffer,
+): boolean {
+  if (newlineIdx < 0) return false;
+  const rest = text.slice(newlineIdx + 1);
+  if (rest.length === 0) return false;
+
+  const nb = rest.indexOf("\n");
+  const firstLine = nb === -1 ? rest : rest.slice(0, nb);
+  if (firstLine.trim() === "") {
+    return true;
+  }
+  return (
+    dataEndsWithLineTerminator(fileData) &&
+    firstLine.trimStart().startsWith("--")
+  );
+}
+
+/**
+ * Replace inline `< path` body lines with file bytes (rest of line after the path is kept).
+ * Used for raw `multipart/form-data` templates; paths resolve relative to `baseDir`.
+ */
+export async function resolveInlineBodyFileRefs(
+  body: string,
+  baseDir: string,
+): Promise<Buffer> {
+  const pathMod = await import("path");
+  const fs = await import("fs/promises");
+  const chunks: Buffer[] = [];
+  // Always normalize newlines and strip `//` lines here so wire bytes are correct
+  // even if a caller omits the same preprocessing as doRequest.
+  let text = stripHttpClientDoubleSlashLineComments(body);
+  let pos = 0;
+  let skipBlankLineAfterFileTrailingNl = false;
+  while (pos <= text.length) {
+    const nl = text.indexOf("\n", pos);
+    const lineEnd = nl === -1 ? text.length : nl;
+    const rawLine = text.slice(pos, lineEnd);
+    const lineNl = nl === -1 ? "" : "\n";
+    const m = rawLine.match(/^(\s*)<\s+(.+)$/);
+    if (m?.[2]) {
+      const { path: rel, suffix } = parseInlineBodyFileRefTail(m[2]);
+      const cleaned = stripQuotesPath(rel);
+      if (!cleaned) {
+        skipBlankLineAfterFileTrailingNl = false;
+        chunks.push(Buffer.from(rawLine + lineNl, "utf8"));
+      } else {
+        const resolved = pathMod.resolve(baseDir, cleaned);
+        const data = await fs.readFile(resolved);
+        chunks.push(Buffer.from(m[1] ?? "", "utf8"));
+        chunks.push(data);
+        chunks.push(Buffer.from(suffix, "utf8"));
+        const omitNl =
+          lineNl !== "" &&
+          nl !== -1 &&
+          shouldOmitLineTerminatorAfterInlineFileRef(text, nl, data);
+        chunks.push(Buffer.from(omitNl ? "" : lineNl, "utf8"));
+        skipBlankLineAfterFileTrailingNl =
+          omitNl &&
+          dataEndsWithLineTerminator(data) &&
+          nl !== -1 &&
+          text.slice(nl + 1).startsWith("\n");
+      }
+    } else {
+      if (skipBlankLineAfterFileTrailingNl && rawLine.trim() === "") {
+        skipBlankLineAfterFileTrailingNl = false;
+        if (nl === -1) break;
+        pos = nl + 1;
+        continue;
+      }
+      skipBlankLineAfterFileTrailingNl = false;
+      chunks.push(Buffer.from(rawLine + lineNl, "utf8"));
+    }
+    if (nl === -1) break;
+    pos = nl + 1;
+  }
+  return Buffer.concat(chunks);
+}
+
 export function getRequestHeaderType(headers: unknown): RequestHeaderType {
   if (typeof headers !== "object" || headers === null) {
     return "invalid";
@@ -92,6 +312,9 @@ export function getFormRequestBody(
       return body as Record<string, unknown>;
     }
     if (typeof body === "string") {
+      if (isRawMultipartTemplateBody(body)) {
+        return undefined;
+      }
       return parseFormUrlEncoded(body) as Record<string, unknown>;
     }
     return undefined;

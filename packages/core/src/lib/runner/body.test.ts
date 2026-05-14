@@ -8,6 +8,12 @@ import {
   isFileRef,
   isBodyFromFileRef,
   resolveBodyFromFile,
+  isRawMultipartTemplateBody,
+  resolveInlineBodyFileRefs,
+  stripHttpClientDoubleSlashLineComments,
+  parseMultipartBoundaryFromContentType,
+  parseMultipartBoundaryFromBody,
+  ensureMultipartContentTypeHeader,
 } from "./body";
 
 test("getRequestHeaderType returns json for application/json", () => {
@@ -132,4 +138,154 @@ test("resolveBodyFromFile resolves relative path with subdir", async () => {
 
   const content = await resolveBodyFromFile("fixtures/data.json", dir);
   expect(content).toBe('{"x":1}');
+});
+
+test("getFormRequestBody form-data: raw multipart template returns undefined", () => {
+  const raw = `--b\r\nContent-Disposition: form-data; name="x"\r\n\r\n1\r\n--b--\r\n`;
+  expect(getFormRequestBody(raw, "form-data")).toBeUndefined();
+});
+
+test("isRawMultipartTemplateBody", () => {
+  expect(isRawMultipartTemplateBody("--x\n")).toBe(true);
+  expect(isRawMultipartTemplateBody(" \n--x")).toBe(true);
+  expect(isRawMultipartTemplateBody("// note\n--x")).toBe(true);
+  expect(isRawMultipartTemplateBody('{"a":1}')).toBe(false);
+  expect(isRawMultipartTemplateBody("a=1&b=2")).toBe(false);
+});
+
+test("stripHttpClientDoubleSlashLineComments removes // lines only", () => {
+  const raw = `// intro\n\n--b\n// mid\nx\n`;
+  expect(stripHttpClientDoubleSlashLineComments(raw)).toBe(`\n--b\nx\n`);
+});
+
+test("stripHttpClientDoubleSlashLineComments normalizes CR-only newlines", () => {
+  const raw = "--b\r//c\r\r< ./f\r";
+  expect(stripHttpClientDoubleSlashLineComments(raw)).toBe("--b\n\n< ./f\n");
+});
+
+test("parseMultipartBoundaryFromContentType", () => {
+  expect(
+    parseMultipartBoundaryFromContentType("multipart/form-data; boundary=abc"),
+  ).toBe("abc");
+  expect(
+    parseMultipartBoundaryFromContentType(
+      'multipart/form-data; boundary="x y"',
+    ),
+  ).toBe("x y");
+  expect(parseMultipartBoundaryFromContentType("multipart/form-data")).toBe(
+    undefined,
+  );
+});
+
+test("parseMultipartBoundaryFromBody reads first delimiter line", () => {
+  expect(parseMultipartBoundaryFromBody("\n--foo\n")).toBe("foo");
+  expect(parseMultipartBoundaryFromBody("preamble\n--z\n")).toBe("z");
+  expect(parseMultipartBoundaryFromBody("--z--\n")).toBe("z");
+});
+
+test("ensureMultipartContentTypeHeader adds boundary from body", () => {
+  const h = ensureMultipartContentTypeHeader(
+    { "Content-Type": "multipart/form-data" },
+    "--myb\n",
+  );
+  expect(h["Content-Type"]).toContain("boundary=myb");
+});
+
+test("ensureMultipartContentTypeHeader leaves existing boundary", () => {
+  const h = ensureMultipartContentTypeHeader(
+    { "Content-Type": "multipart/form-data; boundary=keep" },
+    "--other\n",
+  );
+  expect(h["Content-Type"]).toContain("boundary=keep");
+  expect(h["Content-Type"]).not.toContain("boundary=other");
+});
+
+test("resolveInlineBodyFileRefs substitutes file lines", async () => {
+  const { mkdtempSync } = await import("fs");
+  const { join } = await import("path");
+  const { tmpdir } = await import("os");
+  const dir = mkdtempSync(join(tmpdir(), "kulala-multipart-"));
+  await Bun.write(join(dir, "part.bin"), Buffer.from([0, 1, 2, 255]));
+
+  const template = ["--boundary", "< ./part.bin", "--boundary--", ""].join(
+    "\n",
+  );
+  const out = await resolveInlineBodyFileRefs(template, dir);
+  expect(out.indexOf(Buffer.from([0, 1, 2, 255]))).not.toBe(-1);
+  expect(out.indexOf(Buffer.from("< ./part.bin"))).toBe(-1);
+});
+
+test("resolveInlineBodyFileRefs keeps same-line suffix after path", async () => {
+  const { mkdtempSync } = await import("fs");
+  const { join } = await import("path");
+  const { tmpdir } = await import("os");
+  const dir = mkdtempSync(join(tmpdir(), "kulala-multipart-"));
+  await Bun.write(join(dir, "f.txt"), "Z");
+
+  const template = `< ./f.txt --end--\n`;
+  const out = await resolveInlineBodyFileRefs(template, dir);
+  expect(out.toString("utf8")).toBe("Z--end--\n");
+});
+
+test("resolveInlineBodyFileRefs: blank line after file ref yields single LF before next boundary", async () => {
+  const { mkdtempSync } = await import("fs");
+  const { join } = await import("path");
+  const { tmpdir } = await import("os");
+  const dir = mkdtempSync(join(tmpdir(), "kulala-multipart-"));
+  await Bun.write(join(dir, "f.txt"), "BODY");
+
+  const template = [
+    "--b",
+    'Content-Disposition: form-data; name="first"',
+    "",
+    "< ./f.txt",
+    "",
+    "--b--",
+  ].join("\n");
+  const out = (await resolveInlineBodyFileRefs(template, dir)).toString("utf8");
+  expect(out).toContain("BODY\n--b--");
+  expect(out).not.toContain("BODY\n\n--b--");
+});
+
+test("resolveInlineBodyFileRefs: file with trailing LF then boundary line — one LF before --", async () => {
+  const { mkdtempSync } = await import("fs");
+  const { join } = await import("path");
+  const { tmpdir } = await import("os");
+  const dir = mkdtempSync(join(tmpdir(), "kulala-multipart-"));
+  await Bun.write(join(dir, "f.txt"), "BODY\n");
+
+  const template = [
+    "--boundary",
+    'Content-Disposition: form-data; name="first"',
+    "",
+    "< ./f.txt",
+    "--boundary",
+    'Content-Disposition: form-data; name="second"',
+    "",
+    "Text",
+    "--boundary--",
+  ].join("\n");
+  const out = (await resolveInlineBodyFileRefs(template, dir)).toString("utf8");
+  expect(out).toContain("BODY\n--boundary");
+  expect(out).not.toContain("BODY\n\n--boundary");
+});
+
+test("resolveInlineBodyFileRefs: trailing LF in file + blank before boundary — one LF before --", async () => {
+  const { mkdtempSync } = await import("fs");
+  const { join } = await import("path");
+  const { tmpdir } = await import("os");
+  const dir = mkdtempSync(join(tmpdir(), "kulala-multipart-"));
+  await Bun.write(join(dir, "f.txt"), "BODY\n");
+
+  const template = [
+    "--b",
+    'Content-Disposition: form-data; name="first"',
+    "",
+    "< ./f.txt",
+    "",
+    "--b--",
+  ].join("\n");
+  const out = (await resolveInlineBodyFileRefs(template, dir)).toString("utf8");
+  expect(out).toContain("BODY\n--b--");
+  expect(out).not.toContain("BODY\n\n--b--");
 });

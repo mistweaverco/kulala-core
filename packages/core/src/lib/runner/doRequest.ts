@@ -25,12 +25,16 @@ import {
 } from "./headers";
 import {
   buildMultipartBody,
+  ensureMultipartContentTypeHeader,
   getFormRequestBody,
   getGraphQLRequestBody,
   getJSONRequestBody,
   getRequestHeaderType,
   isBodyFromFileRef,
+  isRawMultipartTemplateBody,
   resolveBodyFromFile,
+  resolveInlineBodyFileRefs,
+  stripHttpClientDoubleSlashLineComments,
 } from "./body";
 import type {
   KulalaPromptResponse,
@@ -350,19 +354,32 @@ export async function doRequestFromBlock(
     requestHeaderType === "form-urlencoded"
       ? getFormRequestBody(body, "form-urlencoded")
       : undefined;
+  const rawMultipartTemplate =
+    requestHeaderType === "form-data" &&
+    typeof body === "string" &&
+    isRawMultipartTemplateBody(body);
   const formDataBody =
-    requestHeaderType === "form-data"
+    requestHeaderType === "form-data" && !rawMultipartTemplate
       ? getFormRequestBody(body, "form-data")
       : undefined;
 
+  let rawMultipartBody: Buffer | undefined;
+  if (rawMultipartTemplate) {
+    const text = stripHttpClientDoubleSlashLineComments(body as string);
+    headers = ensureMultipartContentTypeHeader(headers, text);
+    rawMultipartBody = await resolveInlineBodyFileRefs(text, startDir);
+  }
+
   let multipartBody: FormData | undefined;
-  if (formDataBody && typeof formDataBody === "object") {
-    const baseDir = filePath
-      ? (await import("path")).dirname(filePath)
-      : process.cwd();
+  if (
+    !rawMultipartTemplate &&
+    formDataBody &&
+    typeof formDataBody === "object" &&
+    Object.keys(formDataBody).length > 0
+  ) {
     multipartBody = await buildMultipartBody(
       formDataBody as Record<string, unknown>,
-      baseDir,
+      startDir,
     );
     headers = Object.fromEntries(
       Object.entries(headers).filter(
@@ -388,6 +405,8 @@ export async function doRequestFromBlock(
     let bodyPayload: string | Buffer | FormData | undefined;
     if (multipartBody) {
       bodyPayload = multipartBody;
+    } else if (rawMultipartBody) {
+      bodyPayload = rawMultipartBody;
     } else if (graphqlBody !== undefined) {
       const payload: { query: string; variables?: Record<string, unknown> } = {
         query: typeof graphqlBody.query === "string" ? graphqlBody.query : "",
