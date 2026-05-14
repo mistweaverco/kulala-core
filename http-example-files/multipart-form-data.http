@@ -28,5 +28,4 @@ Text
 Content-Disposition: form-data; name="third";
 
 // These file contents will be sent as plain text.
-< ./multipart-form-data.txt
---boundary--
+< ./multipart-form-data.txt --boundary--
