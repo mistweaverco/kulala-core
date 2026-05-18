@@ -1,4 +1,4 @@
-import { nodeHttpRequest } from "../../runner/http-client";
+import { httpRequest } from "../../runner/http-client";
 import { setUserAgentHeaderIfNotPresent } from "./../../runner/headers";
 import type { OAuth2Config, OAuth2TokenData } from "./types";
 import {
@@ -105,7 +105,7 @@ export async function acquireClientCredentialsToken(
 
   const formBody = new URLSearchParams(bodyParams).toString();
 
-  const response = await nodeHttpRequest({
+  const response = await httpRequest({
     url: config["Token URL"],
     method: "POST",
     headers,
@@ -158,35 +158,16 @@ async function generateJWT(
   const header = jwtConfig.Header;
   const payload = { ...jwtConfig.Payload };
 
-  // Set iat and exp if not provided
   const now = Math.floor(Date.now() / 1000);
   if (!payload.iat) {
     payload.iat = now;
   }
   if (!payload.exp) {
-    payload.exp = (payload.iat as number) + 50; // Default 50 seconds
+    payload.exp = (payload.iat as number) + 50;
   }
 
-  const headerB64 = Buffer.from(JSON.stringify(header)).toString("base64url");
-  const payloadB64 = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  const unsignedToken = `${headerB64}.${payloadB64}`;
-
-  // Sign with HS256 or RS256
-  if (header.alg === "HS256") {
-    const crypto = await import("crypto");
-    const hmac = crypto.createHmac("sha256", secret);
-    hmac.update(unsignedToken);
-    const signature = hmac.digest("base64url");
-    return `${unsignedToken}.${signature}`;
-  } else if (header.alg === "RS256") {
-    // RS256 requires private key - would need to load from config
-    // For now, throw error - this requires additional implementation
-    throw new Error(
-      "RS256 JWT signing not yet implemented (requires private key)",
-    );
-  } else {
-    throw new Error(`Unsupported JWT algorithm: ${header.alg}`);
-  }
+  const { jwtEncode } = await import("../../crypto");
+  return jwtEncode(header, payload, secret);
 }
 
 /**
@@ -272,7 +253,7 @@ export async function exchangeAuthorizationCode(
 
   const formBody = new URLSearchParams(bodyParams).toString();
 
-  const response = await nodeHttpRequest({
+  const response = await httpRequest({
     url: config["Token URL"],
     method: "POST",
     headers,
@@ -613,7 +594,7 @@ export async function acquirePasswordToken(
 
   const formBody = new URLSearchParams(bodyParams).toString();
 
-  const response = await nodeHttpRequest({
+  const response = await httpRequest({
     url: config["Token URL"],
     method: "POST",
     headers,
@@ -659,7 +640,7 @@ export async function refreshOAuth2Token(
 
   const formBody = new URLSearchParams(bodyParams).toString();
 
-  const response = await nodeHttpRequest({
+  const response = await httpRequest({
     url: config["Token URL"],
     method: "POST",
     headers,

@@ -1,4 +1,5 @@
 export type KulalaOperatorName =
+  | "name"
   | "accept"
   | "no-redirect"
   | "no-log"
@@ -7,11 +8,19 @@ export type KulalaOperatorName =
   | "timeout"
   | "connection-timeout"
   | "kulala-curl-insecure"
+  | "kulala-curl-timeout"
+  | "kulala-curl-connect-timeout"
   | "kulala-file-contents-to-variable"
   | "kulala-expect-status-code"
-  | "kulala-prompt";
+  | "kulala-prompt"
+  | "grpc-import-path"
+  | "grpc-proto"
+  | "grpc-protoset"
+  | "grpc-plaintext"
+  | "grpc-v";
 
 export const kulalaOperatorNames: Set<KulalaOperatorName> = new Set([
+  "name",
   "accept",
   "no-redirect",
   "no-log",
@@ -20,9 +29,16 @@ export const kulalaOperatorNames: Set<KulalaOperatorName> = new Set([
   "timeout",
   "connection-timeout",
   "kulala-curl-insecure",
+  "kulala-curl-timeout",
+  "kulala-curl-connect-timeout",
   "kulala-file-contents-to-variable",
   "kulala-expect-status-code",
   "kulala-prompt",
+  "grpc-import-path",
+  "grpc-proto",
+  "grpc-protoset",
+  "grpc-plaintext",
+  "grpc-v",
 ]);
 
 export type KulalaOperatorArgs = string | number | boolean;

@@ -81,7 +81,7 @@ const getLineType = (
     return { name: "comment", lineNumber: lineIdx };
   if (
     line.match(
-      /^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS|TRACE|CONNECT|GRAPHQL) /,
+      /^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS|TRACE|CONNECT|GRAPHQL|GRPC|WS|WSS|WEBSOCKET) /i,
     )
   ) {
     return { name: "request", lineNumber: lineIdx };

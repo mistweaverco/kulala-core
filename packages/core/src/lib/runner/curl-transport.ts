@@ -4,9 +4,9 @@ import { tmpdir } from "node:os";
 import { spawn } from "node:child_process";
 import { access } from "node:fs/promises";
 import type {
-  NodeHttpClientOptions,
-  NodeHttpClientResponse,
-  NodeHttpClientTimings,
+  HttpRequestOptions,
+  HttpRequestResponse,
+  HttpRequestTimings,
 } from "./http-client";
 import { resolveCurlPath } from "./embedded-curl";
 import { performance } from "node:perf_hooks";
@@ -152,7 +152,7 @@ function headersFromDump(dump: string): {
   return { statusCode, headers };
 }
 
-function buildTimings(w: CurlWriteOut): NodeHttpClientTimings {
+function buildTimings(w: CurlWriteOut): HttpRequestTimings {
   const dns = secondsToMs(w.time_namelookup);
   const connect = secondsToMs(w.time_connect);
   const appconnect = secondsToMs(w.time_appconnect);
@@ -221,8 +221,8 @@ async function runCurl(args: string[]): Promise<{
 }
 
 export async function curlHttpRequest(
-  options: NodeHttpClientOptions,
-): Promise<NodeHttpClientResponse> {
+  options: HttpRequestOptions,
+): Promise<HttpRequestResponse> {
   const MAX_REDIRECTS = 10;
   const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
   const followRedirects = options.followRedirects !== false;
@@ -239,7 +239,7 @@ export async function curlHttpRequest(
     | Buffer
     | undefined;
 
-  const chain: NonNullable<NodeHttpClientResponse["redirectChain"]> = [];
+  const chain: NonNullable<HttpRequestResponse["redirectChain"]> = [];
 
   // Browser-like cookies across redirect hops: Set-Cookie Domain/Path/Secure are respected;
   // the initial request Cookie header is only replayed when the next hop is the same host;
@@ -271,7 +271,7 @@ export async function curlHttpRequest(
     }
   };
 
-  const requestOnce = async (): Promise<NodeHttpClientResponse> => {
+  const requestOnce = async (): Promise<HttpRequestResponse> => {
     const tempBase = await fs.mkdtemp(join(tmpdir(), "kulala-curl-"));
     const bodyPath = join(tempBase, `body-${randomUUID()}`);
     const headerPath = join(tempBase, `headers-${randomUUID()}`);
@@ -308,16 +308,18 @@ export async function curlHttpRequest(
     if (options.insecure) {
       args.push("--insecure");
     }
-    if (options.timeoutMs !== undefined && Number.isFinite(options.timeoutMs)) {
-      const sec = Math.max(0, options.timeoutMs / 1000);
-      // curl expects seconds (can be fractional)
+    if (
+      options.timeoutSec !== undefined &&
+      Number.isFinite(options.timeoutSec)
+    ) {
+      const sec = Math.max(0, options.timeoutSec);
       args.push("--max-time", String(sec));
     }
     if (
-      options.connectionTimeoutMs !== undefined &&
-      Number.isFinite(options.connectionTimeoutMs)
+      options.connectionTimeoutSec !== undefined &&
+      Number.isFinite(options.connectionTimeoutSec)
     ) {
-      const sec = Math.max(0, options.connectionTimeoutMs / 1000);
+      const sec = Math.max(0, options.connectionTimeoutSec);
       args.push("--connect-timeout", String(sec));
     }
 

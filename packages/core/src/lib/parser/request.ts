@@ -1,5 +1,6 @@
 import type {
   KulalaHttpMethod,
+  KulalaHttpMethodAvailable,
   KulalaHttpURL,
   KulalaHttpVersion,
   KulalaRequest,
@@ -7,8 +8,9 @@ import type {
 } from "./types/request";
 import type { KulalaError } from "./types/error";
 import { getComment } from "./comment";
+import { parseGrpcTarget } from "../grpc/parse-target";
 
-const getValidHttpMethods = (): KulalaHttpMethod[] => [
+const getValidHttpMethods = (): KulalaHttpMethodAvailable[] => [
   "GET",
   "POST",
   "PUT",
@@ -17,7 +19,12 @@ const getValidHttpMethods = (): KulalaHttpMethod[] => [
   "HEAD",
   "OPTIONS",
   "GRAPHQL",
+  "GRPC",
+  "WS",
+  "WSS",
 ];
+
+const PROTOCOL_METHODS = new Set(["GRPC", "WS", "WSS"]);
 
 const HTTP_VERSION = /^HTTP\/\d+(\.\d+)?$/;
 
@@ -76,7 +83,10 @@ export const getRequest = (
     ];
   }
 
-  const method = trimmed.slice(0, firstSpace) as KulalaHttpMethod;
+  const methodRaw = trimmed.slice(0, firstSpace).toUpperCase();
+  const method = (
+    methodRaw === "WEBSOCKET" ? "WS" : methodRaw
+  ) as KulalaHttpMethodAvailable;
   if (!getValidHttpMethods().includes(method)) {
     return [
       {
@@ -93,6 +103,35 @@ export const getRequest = (
       {
         errorMessage: `Missing URL at line ${startLineIdx + 1}`,
         lineNumber: startLineIdx,
+      },
+      1,
+    ];
+  }
+
+  if (method === "GRPC") {
+    const grpcCommand = parseGrpcTarget(afterMethod);
+    return [
+      {
+        method: "GRPC",
+        url: afterMethod as KulalaHttpURL,
+        grpcCommand,
+        headerSection: [],
+      },
+      1,
+    ];
+  }
+
+  if (method === "WS" || method === "WSS") {
+    const urlToken = afterMethod.split(/\s+/)[0] ?? afterMethod;
+    let url = urlToken;
+    if (!/^wss?:\/\//i.test(url)) {
+      url = `${method === "WSS" ? "wss" : "ws"}://${url}`;
+    }
+    return [
+      {
+        method,
+        url: url as KulalaHttpURL,
+        headerSection: [],
       },
       1,
     ];

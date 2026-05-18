@@ -1,8 +1,8 @@
-### EXPECT_STATUS_400
+### EXPECT_STATUS_404
 
-// @kulala-expect-status-code 204
+// @kulala-expect-status-code 404
 
-GET https://httpbin.org/status/200 HTTP/1.1
+GET https://httpbin.org/status/404 HTTP/1.1
 
 ### PROMPT_REQUEST
 
@@ -13,7 +13,7 @@ GET https://httpbin.org/get?name={{NAME}} HTTP/1.1
 ### INSECURE_REQUEST_TIMEOUT_REQUEST
 
 // @kulala-curl-insecure
-// @timeout 10ms
+// @timeout 5 ms
 
 POST https://httpbin.org/post
   ?someKey=someValue1
@@ -72,3 +72,18 @@ Content-Type: application/json
 GET https://httpbin.org/get?
             name=@#$somebody&
             qwerty=%40%23%24
+
+
+### CONNECTION_TIMEOUT_PRIVATE_IP_NO_RESOLVE
+
+// @kulala-curl-insecure
+// @timeout 5 s
+// @connection-timeout 5 s
+POST https://10.77.77.77:1337/login HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+
+{
+  "username": "bar",
+  "password": "baz"
+}

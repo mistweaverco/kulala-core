@@ -4,6 +4,14 @@ export type KulalaScriptConsoleLine = {
   message: string;
 };
 
+/** Returned for WS/WSS — nvim starts a native WebSocket session via kulala-core. */
+export type KulalaWebSocketPlanResponse = {
+  success: true;
+  protocol: "websocket";
+  url: string;
+  initialMessage?: string;
+};
+
 export type KulalaRequestSuccessResponse = {
   success: true;
   status: number;
@@ -74,6 +82,7 @@ export type KulalaResponseWrapper =
         | KulalaRequestSuccessResponse
         | KulalaRequestErrorResponse
         | KulalaPromptResponse
+        | KulalaWebSocketPlanResponse
       >;
     }
   | {

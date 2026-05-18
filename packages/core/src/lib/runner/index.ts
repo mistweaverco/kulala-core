@@ -13,14 +13,23 @@ import {
 } from "../variables/request-vars";
 import { findBlockAtCursor } from "./block";
 import { doRequestFromBlock } from "./doRequest";
+import { collectSharedGrpcFlags, grpcFlagsFromOperators } from "../grpc";
 import type {
   KulalaRequestErrorResponse,
   KulalaRequestSuccessResponse,
   KulalaPromptResponse,
+  KulalaWebSocketPlanResponse,
   KulalaRunOptions,
   KulalaResponseWrapper,
 } from "./types";
 import type { ScriptFlowContext } from "./scripts";
+
+/** JetBrains `# @name REQUEST_ID` — key for {{REQUEST_ID.response...}} (falls back to `###` block name). */
+export function getBlockResultKey(block: KulalaBlock): string {
+  const nameOp = block.operators.find((o) => o.name === "name");
+  const alias = nameOp?.args != null ? String(nameOp.args).trim() : "";
+  return alias !== "" ? alias : block.name;
+}
 
 export type { KulalaRunOptions } from "./types";
 export type {
@@ -80,9 +89,13 @@ export async function runDocument(
     | KulalaRequestSuccessResponse
     | KulalaRequestErrorResponse
     | KulalaPromptResponse
+    | KulalaWebSocketPlanResponse
   )[] = [];
   const previousResults = new Map<string, PreviousResponse>();
-  const flow: ScriptFlowContext = { globalHeaders: {} };
+  const flow: ScriptFlowContext = {
+    globalHeaders: {},
+    sharedGrpcFlags: collectSharedGrpcFlags(doc.blocks, startDir),
+  };
   for (const block of blocks) {
     const vars = await resolveVariables(
       env,
@@ -131,8 +144,8 @@ export async function runDocument(
       return responseWrapper;
     }
 
-    if (result.success) {
-      previousResults.set(block.name, {
+    if (result.success && "status" in result && "body" in result) {
+      previousResults.set(getBlockResultKey(block), {
         body: result.body,
         headers: result.headers,
       });

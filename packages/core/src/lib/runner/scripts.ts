@@ -24,9 +24,13 @@ import {
 import { inspect } from "node:util";
 import type { Lua } from "wasmoon-lua5.1";
 
+import type { KulalaGrpcFlag } from "../grpc/types";
+
 export type ScriptFlowContext = {
   /** "Execution flow" local headers (not persisted). */
   globalHeaders: Record<string, string>;
+  /** `# @grpc-*` from Shared blocks in the document. */
+  sharedGrpcFlags?: KulalaGrpcFlag[];
 };
 
 type ScriptHeaders = {

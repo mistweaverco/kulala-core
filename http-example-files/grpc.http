@@ -1,0 +1,10 @@
+### GRPC_ECHO
+
+# @grpc-import-path grpc/echopb
+# @grpc-proto grpc/echopb/echo.proto
+GRPC localhost:8080 grpc_echo.v1.EchoService/Echo
+Content-Type: application/json
+
+{
+  "ping": "Hello, world!"
+}

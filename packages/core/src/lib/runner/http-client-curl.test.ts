@@ -5,7 +5,7 @@ import {
   type Http2Server,
   type ServerHttp2Stream,
 } from "node:http2";
-import { nodeHttpRequest } from "./http-client";
+import { httpRequest } from "./http-client";
 import { resolveCurlPath } from "./embedded-curl";
 
 async function hasCurl(): Promise<boolean> {
@@ -50,7 +50,7 @@ describe("curl transport", () => {
     });
     const port = await listenHttp(server);
 
-    const res = await nodeHttpRequest({
+    const res = await httpRequest({
       url: `http://127.0.0.1:${port}/`,
       method: "GET",
       headers: {},
@@ -79,7 +79,7 @@ describe("curl transport", () => {
     });
     const port = await listenHttp(server);
 
-    const res = await nodeHttpRequest({
+    const res = await httpRequest({
       url: `http://127.0.0.1:${port}/`,
       method: "GET",
       headers: {},
@@ -125,7 +125,7 @@ describe("curl transport", () => {
     });
 
     const port = await listenHttp(server);
-    const res = await nodeHttpRequest({
+    const res = await httpRequest({
       url: `http://127.0.0.1:${port}/start`,
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -146,7 +146,7 @@ describe("curl transport", () => {
     });
     const port = await listenHttp2(server);
 
-    const res = await nodeHttpRequest({
+    const res = await httpRequest({
       url: `http://127.0.0.1:${port}/`,
       method: "GET",
       headers: {},
@@ -184,7 +184,7 @@ describe("curl transport", () => {
     });
     const portA = await listenHttp(serverA);
 
-    const res = await nodeHttpRequest({
+    const res = await httpRequest({
       url: `http://127.0.0.1:${portA}/`,
       method: "GET",
       headers: { Cookie: "client_only=1" },
@@ -221,7 +221,7 @@ describe("curl transport", () => {
     });
     const port = await listenHttp(server);
 
-    const res = await nodeHttpRequest({
+    const res = await httpRequest({
       url: `http://127.0.0.1:${port}/`,
       method: "GET",
       headers: { Cookie: "client=xyz" },

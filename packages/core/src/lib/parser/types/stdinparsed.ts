@@ -42,7 +42,37 @@ export type KulalaStdinActionContinue = {
   }>;
 };
 
+export type KulalaStdinActionCrypto = {
+  action: "crypto";
+  op:
+    | "pkce_verifier"
+    | "pkce_challenge"
+    | "jwt_encode"
+    | "base64_encode_standard";
+  verifier?: string;
+  method?: "S256" | "Plain";
+  header?: { alg: string; typ?: string };
+  payload?: Record<string, unknown>;
+  key?: string;
+  input?: string;
+};
+
+export type KulalaStdinActionHttpRequest = {
+  action: "http_request";
+  url: string;
+  method?: string;
+  headers?: Record<string, string>;
+  body?: string;
+  insecure?: boolean;
+  timeoutSec?: number;
+  connectionTimeoutSec?: number;
+  /** Working directory for kulala-core persistence (cookies, env files). */
+  cwd?: string;
+};
+
 export type KulalaStdinParsed =
   | KulalaStdinActionParse
   | KulalaStdinActionRun
-  | KulalaStdinActionContinue;
+  | KulalaStdinActionContinue
+  | KulalaStdinActionCrypto
+  | KulalaStdinActionHttpRequest;
