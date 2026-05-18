@@ -11,7 +11,13 @@ import { getDocument } from "./parser";
 import { continueOAuth2Flow } from "../auth/oauth2/continuation";
 import { handleCryptoOp } from "../crypto";
 import { httpRequest } from "../runner/http-client";
-import { getPrompt, deletePrompt, setVariable } from "../persistence";
+import {
+  deleteVariable,
+  getPrompt,
+  deletePrompt,
+  getVariables,
+  setVariable,
+} from "../persistence";
 import type {
   KulalaRequestErrorResponse,
   KulalaRequestSuccessResponse,
@@ -161,6 +167,17 @@ const kulalaParser: KulalaParser = {
             error: error instanceof Error ? error.message : String(error),
           });
         }
+        break;
+      }
+      case "clear_globals": {
+        const names = stdIn.names;
+        if (!names || names.length === 0) {
+          const vars = getVariables("global");
+          for (const k of Object.keys(vars)) deleteVariable("global", k);
+        } else {
+          for (const name of names) deleteVariable("global", name);
+        }
+        writeRequestResponseToStdout({ type: "clear_globals", success: true });
         break;
       }
       default:

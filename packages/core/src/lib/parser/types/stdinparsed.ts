@@ -70,9 +70,16 @@ export type KulalaStdinActionHttpRequest = {
   cwd?: string;
 };
 
+export type KulalaStdinActionClearGlobals = {
+  action: "clear_globals";
+  /** When omitted or empty, clears all global-scope variables. */
+  names?: string[];
+};
+
 export type KulalaStdinParsed =
   | KulalaStdinActionParse
   | KulalaStdinActionRun
   | KulalaStdinActionContinue
   | KulalaStdinActionCrypto
-  | KulalaStdinActionHttpRequest;
+  | KulalaStdinActionHttpRequest
+  | KulalaStdinActionClearGlobals;
