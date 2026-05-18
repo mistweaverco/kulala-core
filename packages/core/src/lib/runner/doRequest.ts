@@ -1,4 +1,8 @@
-import { nodeHttpRequest } from "./http-client";
+import { httpRequest } from "./http-client";
+import { grpcNativeRequest } from "../grpc";
+import { grpcFlagsFromOperators } from "../grpc/collect-flags";
+import { mergeGrpcFlags } from "../grpc/parse-target";
+import type { KulalaWebSocketPlanResponse } from "./types";
 import type { KulalaBlock } from "../parser/types/block";
 import {
   substituteInObject,
@@ -59,10 +63,11 @@ export async function doRequestFromBlock(
   | KulalaRequestSuccessResponse
   | KulalaRequestErrorResponse
   | KulalaPromptResponse
+  | KulalaWebSocketPlanResponse
 > {
   const scriptConsole: KulalaScriptConsoleLine[] = [];
 
-  const parseDurationToMs = (raw: string): number | undefined => {
+  const parseDurationToSec = (raw: string): number | undefined => {
     const s = raw.trim();
     if (!s) return undefined;
     const m = s.match(/^(\d+(?:\.\d+)?)\s*(ms|s|m)?$/i);
@@ -70,9 +75,17 @@ export async function doRequestFromBlock(
     const n = Number(m[1]);
     if (!Number.isFinite(n) || n < 0) return undefined;
     const unit = (m[2] ?? "s").toLowerCase();
-    if (unit === "ms") return Math.round(n);
-    if (unit === "m") return Math.round(n * 60_000);
-    return Math.round(n * 1000);
+    if (unit === "ms") return n / 1000;
+    if (unit === "m") return n * 60;
+    return n;
+  };
+
+  const parseCurlPassthroughSeconds = (raw: string): number | undefined => {
+    const s = raw.trim();
+    if (!s) return undefined;
+    const n = Number(s);
+    if (!Number.isFinite(n) || n < 0) return undefined;
+    return n;
   };
 
   const parsePromptArgs = (
@@ -388,17 +401,105 @@ export async function doRequestFromBlock(
     );
   }
 
+  const methodUpper = (block.request.method || "GET").toUpperCase();
+
+  if (methodUpper === "WS" || methodUpper === "WSS") {
+    const bodyStr =
+      typeof body === "string"
+        ? body
+        : body != null
+          ? JSON.stringify(body)
+          : "";
+    return {
+      success: true,
+      protocol: "websocket",
+      url,
+      initialMessage: bodyStr || undefined,
+    };
+  }
+
+  if (methodUpper === "GRPC") {
+    const grpcFlags = mergeGrpcFlags(
+      flow?.sharedGrpcFlags ?? [],
+      grpcFlagsFromOperators(block.operators, startDir),
+    );
+    const grpcRes = await grpcNativeRequest({
+      target: url,
+      grpcCommand: block.request.grpcCommand,
+      metadataFlags: grpcFlags,
+      headers,
+      body:
+        typeof body === "string"
+          ? body
+          : body != null
+            ? JSON.stringify(body)
+            : undefined,
+      cwd: startDir,
+      insecure: getOps(["kulala-curl-insecure"]).length > 0,
+    });
+    const ok = grpcRes.statusCode >= 200 && grpcRes.statusCode < 400;
+    if (!ok) {
+      return {
+        success: false,
+        error: grpcRes.body || grpcRes.stderr || "gRPC request failed",
+      };
+    }
+    const grpcBodyRaw = grpcRes.body ?? "";
+    let grpcBodyParsed: unknown = null;
+    try {
+      grpcBodyParsed = JSON.parse(grpcBodyRaw);
+    } catch {
+      // text response
+    }
+    const grpcResponseBody =
+      grpcBodyParsed !== null && typeof grpcBodyParsed === "object"
+        ? {
+            type: "json" as const,
+            content: grpcBodyParsed as Record<string, unknown>,
+          }
+        : { type: "text" as const, content: grpcBodyRaw };
+    return {
+      success: true,
+      status: grpcRes.statusCode,
+      headers: {
+        "content-type": ok ? "application/json" : "kulala/grpc_error",
+      },
+      url,
+      timings: {
+        dns: 0,
+        tcp: 0,
+        tls: 0,
+        request: 0,
+        redirect: 0,
+        firstByte: grpcRes.timings.total,
+        startTransfer: grpcRes.timings.total,
+        total: grpcRes.timings.total,
+      },
+      body: grpcResponseBody,
+      scriptConsole: scriptConsole.length > 0 ? scriptConsole : undefined,
+    };
+  }
+
   const method = (isGraphQL ? "POST" : block.request.method) || "GET";
   const requestHeaders: Record<string, string> = isGraphQL
     ? { ...headers, "Content-Type": "application/json" }
     : headers;
 
   const insecureOp = getOps(["kulala-curl-insecure"]).length > 0;
-  const timeoutMsJetBrains = parseDurationToMs(getOpArgs(["timeout"]) ?? "");
-  const connectionTimeoutMsJetBrains = parseDurationToMs(
+  const timeoutSecJetBrains = parseDurationToSec(getOpArgs(["timeout"]) ?? "");
+  const connectionTimeoutSecJetBrains = parseDurationToSec(
     getOpArgs(["connection-timeout"]) ?? "",
   );
-  const effectiveTimeoutMs = timeoutMsJetBrains ?? undefined;
+  const timeoutSecCurl = parseCurlPassthroughSeconds(
+    getOpArgs(["kulala-curl-timeout"]) ?? "",
+  );
+  const connectionTimeoutSecCurl = parseCurlPassthroughSeconds(
+    getOpArgs(["kulala-curl-connect-timeout"]) ?? "",
+  );
+  const effectiveTimeoutSec =
+    timeoutSecCurl ?? timeoutSecJetBrains ?? undefined;
+  const effectiveConnectionTimeoutSec =
+    connectionTimeoutSecCurl ?? connectionTimeoutSecJetBrains ?? undefined;
   const followRedirects = !hasOp(["no-redirect"]);
 
   try {
@@ -439,15 +540,15 @@ export async function doRequestFromBlock(
       if (cookie) requestHeaders.Cookie = cookie;
     }
 
-    const res = await nodeHttpRequest({
+    const res = await httpRequest({
       url,
       method,
       headers: requestHeaders,
       body: bodyPayload,
       httpVersion: block.request.httpVersion,
       insecure: insecureOp,
-      timeoutMs: effectiveTimeoutMs,
-      connectionTimeoutMs: connectionTimeoutMsJetBrains,
+      timeoutSec: effectiveTimeoutSec,
+      connectionTimeoutSec: effectiveConnectionTimeoutSec,
       followRedirects,
       propagateCookiesOnRedirect: cookieJarEnabled,
       cookieJarEnabled,

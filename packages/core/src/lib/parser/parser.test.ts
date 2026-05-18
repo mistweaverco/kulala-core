@@ -281,11 +281,25 @@ GET https://example.com/{{SEGMENT}}/x HTTP/1.1
   );
 });
 
+test("parser: parses JetBrains # @name operator", async () => {
+  const content = `### AUTH_REQUEST
+# @name LOGIN_REQUEST
+POST https://example.com/login HTTP/1.1
+`;
+  const doc = await getDocument(content.trim());
+  const block = doc.blocks[0]!;
+  expect(block.errors).toEqual([]);
+  expect(block.operators.map((o) => o.name)).toEqual(["name"]);
+  expect(block.operators[0]?.args).toBe("LOGIN_REQUEST");
+});
+
 test("parser: parses kulala-prefixed operators in block preamble", async () => {
   const content = `### Ops
 # @kulala-file-contents-to-variable FOO ./bar.txt
 # @kulala-expect-status-code 200,201
 # @kulala-curl-insecure
+# @kulala-curl-connect-timeout 5
+# @kulala-curl-timeout 10
 # @kulala-prompt "What is your name?" NAME
 GET https://example.com/{{FOO}} HTTP/1.1
 `;
@@ -298,9 +312,11 @@ GET https://example.com/{{FOO}} HTTP/1.1
     "kulala-file-contents-to-variable",
     "kulala-expect-status-code",
     "kulala-curl-insecure",
+    "kulala-curl-connect-timeout",
+    "kulala-curl-timeout",
     "kulala-prompt",
   ]);
-  expect(block.operators[3]?.args).toBe(`"What is your name?" NAME`);
+  expect(block.operators[5]?.args).toBe(`"What is your name?" NAME`);
 });
 
 test("parser: parses JetBrains // @ tags as operators", async () => {
@@ -376,4 +392,45 @@ X-Global-Foo: {{GLOBAL_FOO}}
   expect(block!.errors).toEqual([]);
   expect(block!.request.url).toContain("{{NAME}}");
   expect(block!.request.url).not.toMatch(/\\\{\{/);
+});
+
+test("parses GRPC request line and grpc operators", async () => {
+  const content = `
+### Greet
+
+# @grpc-import-path ../protos
+# @grpc-proto helloworld.proto
+
+GRPC localhost:50051 helloworld.Greeter/SayHello
+Content-Type: application/json
+
+{"name": "world"}
+`;
+  const doc = await getDocument(content, "/tmp/grpc.http");
+  const block = doc.blocks.find((b) => b.name === "Greet");
+  expect(block).toBeDefined();
+  expect(block!.errors).toEqual([]);
+  expect(block!.request.method).toBe("GRPC");
+  expect(block!.request.grpcCommand?.address).toBe("localhost:50051");
+  expect(block!.request.grpcCommand?.symbol).toBe(
+    "helloworld.Greeter/SayHello",
+  );
+  const opNames = block!.operators.map((o) => o.name);
+  expect(opNames).toContain("grpc-import-path");
+  expect(opNames).toContain("grpc-proto");
+});
+
+test("parses WS request line", async () => {
+  const content = `
+### Echo
+
+WS wss://echo.websocket.org
+
+{"hello": true}
+`;
+  const doc = await getDocument(content, "/tmp/ws.http");
+  const block = doc.blocks.find((b) => b.name === "Echo");
+  expect(block).toBeDefined();
+  expect(block!.request.method).toBe("WS");
+  expect(block!.request.url).toBe("wss://echo.websocket.org");
 });

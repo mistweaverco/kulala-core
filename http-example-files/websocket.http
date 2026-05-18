@@ -1,0 +1,5 @@
+### WEBSOCKET_ECHO
+
+WS wss://echo.websocket.org
+
+{ "name": "world" }

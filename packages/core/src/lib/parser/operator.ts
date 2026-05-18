@@ -3,12 +3,18 @@ import type { KulalaOperator } from "./types/operator";
 import { kulalaOperatorNames } from "./types/operator";
 
 const operatorNameRequiresArgs = new Set([
+  "name",
   "accept",
   "timeout",
   "connection-timeout",
   "kulala-prompt",
+  "kulala-curl-timeout",
+  "kulala-curl-connect-timeout",
   "kulala-file-contents-to-variable",
   "kulala-expect-status-code",
+  "grpc-import-path",
+  "grpc-proto",
+  "grpc-protoset",
 ]);
 
 export const getOperator = (

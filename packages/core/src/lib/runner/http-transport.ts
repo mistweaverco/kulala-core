@@ -1,8 +1,5 @@
-import type {
-  NodeHttpClientOptions,
-  NodeHttpClientResponse,
-} from "./http-client";
+import type { HttpRequestOptions, HttpRequestResponse } from "./http-client";
 
 export type KulalaHttpTransport = {
-  request(options: NodeHttpClientOptions): Promise<NodeHttpClientResponse>;
+  request(options: HttpRequestOptions): Promise<HttpRequestResponse>;
 };

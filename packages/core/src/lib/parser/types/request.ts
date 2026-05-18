@@ -1,4 +1,5 @@
 import type { KulalaComment } from "./comment";
+import type { KulalaGrpcCommand } from "../../grpc/types";
 
 export type KulalaHttpMethodAvailable =
   | "DELETE"
@@ -85,6 +86,8 @@ export type KulalaRequest = {
   method: KulalaHttpMethod;
   // Resolved URL used for execution (single line, no comments).
   url: KulalaHttpURL;
+  /** Parsed GRPC target when method is GRPC. */
+  grpcCommand?: KulalaGrpcCommand;
   /** HTTP version from the request line (e.g. HTTP/1.1, HTTP/2). Omitted if not present. */
   httpVersion?: KulalaHttpVersion;
   // Ordered list of headers and comments so comments are preserved in place.

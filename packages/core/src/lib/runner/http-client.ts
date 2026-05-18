@@ -1,12 +1,12 @@
 /**
- * HTTP client using node:http, node:https, and node:http2 with timing instrumentation
- * to match the timings shape previously provided by got (dns, tcp, tls, request, firstByte, total).
+ * HTTP client via embedded/system cURL with timing instrumentation
+ * (dns, tcp, tls, request, firstByte, total).
  */
 
 import type { FormDataLike } from "form-data-encoder";
 import { curlHttpRequest } from "./curl-transport";
 
-export type NodeHttpClientTimings = {
+export type HttpRequestTimings = {
   phases: {
     dns: number;
     tcp: number;
@@ -22,11 +22,11 @@ export type NodeHttpClientTimings = {
   };
 };
 
-export type NodeHttpClientResponse = {
+export type HttpRequestResponse = {
   statusCode: number;
   headers: Record<string, string>;
   body: string | Buffer;
-  timings: NodeHttpClientTimings;
+  timings: HttpRequestTimings;
   /** Final resolved URL (after redirects). */
   url: string;
   /** performance.now() when first byte of this response was received (for startTransfer from wall start). */
@@ -36,12 +36,12 @@ export type NodeHttpClientResponse = {
     statusCode: number;
     headers: Record<string, string>;
     body: string | Buffer;
-    timings: NodeHttpClientTimings;
+    timings: HttpRequestTimings;
     url: string;
   }>;
 };
 
-export type NodeHttpClientOptions = {
+export type HttpRequestOptions = {
   url: string;
   method: string;
   headers: Record<string, string>;
@@ -51,10 +51,10 @@ export type NodeHttpClientOptions = {
   httpVersion?: "HTTP/1.0" | "HTTP/1.1" | "HTTP/2";
   /** If true, allow insecure TLS (curl --insecure). */
   insecure?: boolean;
-  /** Request timeout in milliseconds (best-effort; curl --max-time). */
-  timeoutMs?: number;
-  /** Connection timeout in milliseconds (best-effort; curl --connect-timeout). */
-  connectionTimeoutMs?: number;
+  /** Request timeout in seconds (curl --max-time). */
+  timeoutSec?: number;
+  /** Connection timeout in seconds (curl --connect-timeout). */
+  connectionTimeoutSec?: number;
   /** Whether to follow redirects (default true). */
   followRedirects?: boolean;
   /** Whether to propagate Set-Cookie -> Cookie across redirect hops (default true). */
@@ -84,9 +84,9 @@ async function encodeFormData(
 /**
  * Perform an HTTP request via cURL (spawned), with timing instrumentation.
  */
-export async function nodeHttpRequest(
-  options: NodeHttpClientOptions,
-): Promise<NodeHttpClientResponse> {
+export async function httpRequest(
+  options: HttpRequestOptions,
+): Promise<HttpRequestResponse> {
   const headers = { ...options.headers };
   let body: string | Buffer | undefined = undefined;
 

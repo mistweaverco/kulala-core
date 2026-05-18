@@ -9,6 +9,8 @@ import {
 } from "./lib/helpers";
 import { getDocument } from "./parser";
 import { continueOAuth2Flow } from "../auth/oauth2/continuation";
+import { handleCryptoOp } from "../crypto";
+import { httpRequest } from "../runner/http-client";
 import { getPrompt, deletePrompt, setVariable } from "../persistence";
 import type {
   KulalaRequestErrorResponse,
@@ -32,18 +34,10 @@ const kulalaParser: KulalaParser = {
     switch (stdIn.action) {
       case "parse":
         doc = await getDocument(stdIn.content, stdIn.filepath);
-        if (doc.hasErrors) {
-          writeToStderr(doc);
-          break;
-        }
         writeToStdout(doc);
         break;
       case "run": {
         doc = await getDocument(stdIn.content, stdIn.filepath);
-        if (doc.hasErrors) {
-          writeToStderr(doc);
-          break;
-        }
         await kulalaRunner.run(doc, stdIn.limit, {
           content: stdIn.content,
           env: stdIn.env ?? "default",
@@ -116,6 +110,56 @@ const kulalaParser: KulalaParser = {
             ],
           };
           writeRequestResponseToStdout(errorResponse);
+        }
+        break;
+      }
+      case "crypto": {
+        try {
+          const value = await handleCryptoOp(
+            stdIn.op,
+            stdIn as Record<string, unknown>,
+          );
+          writeRequestResponseToStdout({
+            type: "crypto",
+            success: true,
+            value,
+          });
+        } catch (error) {
+          writeRequestResponseToStdout({
+            type: "crypto",
+            success: false,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+        break;
+      }
+      case "http_request": {
+        try {
+          const res = await httpRequest({
+            url: stdIn.url,
+            method: stdIn.method ?? "GET",
+            headers: stdIn.headers ?? {},
+            body: stdIn.body,
+            insecure: stdIn.insecure,
+            timeoutSec: stdIn.timeoutSec,
+            connectionTimeoutSec: stdIn.connectionTimeoutSec,
+          });
+          const rawBody =
+            typeof res.body === "string" ? res.body : res.body.toString("utf8");
+          writeRequestResponseToStdout({
+            type: "http_request",
+            success: true,
+            status: res.statusCode,
+            headers: res.headers,
+            body: rawBody,
+            url: res.url,
+          });
+        } catch (error) {
+          writeRequestResponseToStdout({
+            type: "http_request",
+            success: false,
+            error: error instanceof Error ? error.message : String(error),
+          });
         }
         break;
       }

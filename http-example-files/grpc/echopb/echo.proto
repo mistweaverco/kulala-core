@@ -1,0 +1,25 @@
+syntax = "proto3";
+package grpc_echo.v1;
+
+option go_package = "github.com/Semior001/grpc-echo/echopb;echopb";
+
+import "google/protobuf/timestamp.proto";
+
+service EchoService {
+  rpc Echo(EchoRequest) returns (EchoResponse);
+}
+
+message EchoRequest {
+  string ping = 1;
+}
+
+message EchoResponse {
+  map<string, string> headers = 1;
+  string body = 2;
+  string remote_addr = 3;
+
+  google.protobuf.Timestamp received_at = 4;
+  google.protobuf.Timestamp handler_reached_at = 5;
+  google.protobuf.Timestamp handler_responded_at = 6;
+  google.protobuf.Timestamp sent_at = 7;
+}

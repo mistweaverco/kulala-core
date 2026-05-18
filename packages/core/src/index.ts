@@ -54,20 +54,6 @@ export const kulalaCore = {
     limit?: KulalaStdinActionRunLimit[];
   }): Promise<{ doc: KulalaDocument; response: KulalaResponseWrapper }> => {
     const doc = await getDocument(input.content, input.filepath);
-    if (doc.hasErrors) {
-      return {
-        doc,
-        response: {
-          type: "error",
-          data: [
-            {
-              success: false,
-              error: "Document has parse errors.",
-            },
-          ],
-        },
-      };
-    }
 
     const options: KulalaRunOptions = {
       content: input.content,

@@ -470,6 +470,49 @@ test("doRequestFromBlock: # @timeout triggers a timeout against a slow endpoint"
   expect(result.success).toBe(false);
 });
 
+test("doRequestFromBlock: # @timeout 5 s uses seconds for curl (not milliseconds)", async () => {
+  const slowServer = Bun.serve({
+    port: 0,
+    async fetch() {
+      await new Promise((r) => setTimeout(r, 200));
+      return new Response("ok", { headers: { "Content-Type": "text/plain" } });
+    },
+  });
+  if (slowServer.port === undefined) {
+    throw new Error("Slow server did not expose a listening port");
+  }
+  const slowUrl = `http://localhost:${slowServer.port}/slow`;
+
+  const block = makeBlock({
+    operators: [
+      {
+        name: "timeout",
+        args: "5 s",
+        lineNumber: 1,
+      } as KulalaOperator,
+    ],
+    request: {
+      method: "GET",
+      url: slowUrl as KulalaHttpURL,
+      headerSection: [],
+    },
+  });
+
+  const result = await doRequestFromBlock(
+    block,
+    "/tmp/example.http",
+    undefined,
+    "stable-doc",
+    undefined,
+    "default",
+    { globalHeaders: {} },
+  );
+  slowServer.stop();
+
+  // 5 s budget should allow a 200 ms response (would fail if 5000 s were passed to curl).
+  expect(result.success).toBe(true);
+});
+
 test("doRequestFromBlock: // @no-redirect does not follow redirects (keeps 302)", async () => {
   const redirectServer = Bun.serve({
     port: 0,
