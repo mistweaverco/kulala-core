@@ -7,6 +7,9 @@ import type { KulalaRunDirective } from "./types/directive";
 
 type BlockWithRunDirective = KulalaBlock & {
   __runDirective?: KulalaRunDirective;
+  __fileRunExpander?: boolean;
+  __runParentBlock?: string;
+  __runDirectiveLine?: number;
 };
 
 const testDir = join(process.cwd(), ".test-import-run");
@@ -237,6 +240,31 @@ run #IMPORTED_BLOCK
     ),
   ).toBe(true);
   expect((wrapperBlock as BlockWithRunDirective).__runDirective).toBeDefined();
+});
+
+test("parser: run directive inside block runs all blocks from file", async () => {
+  const importedContent = `### BLOCK_1
+GET https://example.com/1 HTTP/1.1
+
+### BLOCK_2
+GET https://example.com/2 HTTP/1.1
+`;
+  writeFileSync(importedFile, importedContent);
+
+  const mainContent = `### RUN_ALL
+
+run ${importedFile}
+`;
+  const doc = await getDocument(mainContent, join(testDir, "main.http"));
+
+  const expander = doc.blocks.find((b) => b.name === "RUN_ALL");
+  expect(expander).toBeDefined();
+  expect((expander as BlockWithRunDirective).__fileRunExpander).toBe(true);
+
+  const children = doc.blocks.filter(
+    (b) => (b as BlockWithRunDirective).__runParentBlock === "RUN_ALL",
+  );
+  expect(children.map((b) => b.name).sort()).toEqual(["BLOCK_1", "BLOCK_2"]);
 });
 
 test("parser: run directive inside block with variable overrides", async () => {

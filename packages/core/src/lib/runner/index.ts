@@ -11,7 +11,11 @@ import {
   type PreviousResponse,
   resolveRequestVariable,
 } from "../variables/request-vars";
-import { findBlockAtCursor } from "./block";
+import {
+  filterExecutableBlocks,
+  findBlocksAtCursor,
+  resolveBlocksToRun,
+} from "./block";
 import { doRequestFromBlock } from "./doRequest";
 import { collectSharedGrpcFlags, grpcFlagsFromOperators } from "../grpc";
 import type {
@@ -48,11 +52,11 @@ export async function runDocument(
   if (limit) {
     for (const l of limit) {
       if (l.filter === "cursorPosition") {
-        const block = findBlockAtCursor(doc, {
+        const matched = findBlocksAtCursor(doc, {
           line: l.line,
           column: l.column,
         });
-        if (!block) {
+        if (matched.length === 0) {
           const errorResponse: KulalaResponseWrapper = {
             type: "error",
             data: [
@@ -64,20 +68,25 @@ export async function runDocument(
           };
           return errorResponse;
         }
-        // Avoid adding duplicate blocks
-        if (!blocks.find((b) => b.name === block.name)) {
-          blocks.push(block);
+        for (const block of matched) {
+          if (!blocks.find((b) => b.name === block.name)) {
+            blocks.push(block);
+          }
         }
       }
       if (l.filter === "name") {
         const block = doc.blocks.find((b) => b.name === l.name);
-        if (block && !blocks.find((b) => b.name === block.name)) {
-          blocks.push(block);
+        if (block) {
+          for (const expanded of resolveBlocksToRun(doc, block)) {
+            if (!blocks.find((b) => b.name === expanded.name)) {
+              blocks.push(expanded);
+            }
+          }
         }
       }
     }
   } else {
-    blocks.push(...doc.blocks);
+    blocks.push(...filterExecutableBlocks(doc.blocks));
   }
 
   const env = options?.env ?? "default";
@@ -133,7 +142,7 @@ export async function runDocument(
       env,
       flow,
     );
-    results.push(result);
+    results.push({ ...result, blockName: block.name });
 
     // If we got a prompt response, stop processing and return it
     if (!result.success && "prompt" in result && result.prompt) {

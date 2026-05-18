@@ -1,1 +1,3 @@
+### RUN_ALL_GRAPHQL_REQUESTS
+
 run ./graphql.http

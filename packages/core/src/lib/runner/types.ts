@@ -14,6 +14,8 @@ export type KulalaWebSocketPlanResponse = {
 
 export type KulalaRequestSuccessResponse = {
   success: true;
+  /** `###` block name for this request (for multi-run / `run ./file.http` consumers). */
+  blockName?: string;
   status: number;
   headers: Record<string, string>;
   /** Final resolved URL (after redirects). */
@@ -58,6 +60,7 @@ export type KulalaRequestSuccessResponse = {
 
 export type KulalaRequestErrorResponse = {
   success: false;
+  blockName?: string;
   error: string;
 };
 

@@ -24,6 +24,10 @@ export type KulalaBlock = {
   preambleVariables?: Record<string, string>;
   /** @ variables from the start of the .http file this block was parsed from (imports / run file). */
   sourceFileHeaderVariables?: Record<string, string>;
+  /** Block only contains `run ./file.http`; expanded targets are separate blocks. */
+  runExpander?: boolean;
+  /** This block was expanded from a parent block's `run ./file.http`. */
+  runParentBlock?: string;
 };
 
 export type KulalaBlockLineNumber = number;

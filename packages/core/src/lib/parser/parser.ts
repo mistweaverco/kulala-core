@@ -34,6 +34,12 @@ const nameRegex = /### (.+?)\n/;
 type BlockWithRunDirective = KulalaBlock & {
   __runDirective?: KulalaRunDirective;
   __blockRunDirective?: KulalaRunDirective;
+  /** Block only expands to `run ./file.http` targets; do not execute its own request. */
+  __fileRunExpander?: boolean;
+  /** Expanded from a parent block's `run ./file.http`. */
+  __runParentBlock?: string;
+  /** Expanded from a top-level `run ./file.http` (matches directive lineNumber). */
+  __runDirectiveLine?: number;
 };
 
 const getBlockName = (rawBlock: string, idx: number): string => {
@@ -542,6 +548,8 @@ export const getDocument = async (
               ...block,
             };
             (runBlock as BlockWithRunDirective).__runDirective = directive;
+            (runBlock as BlockWithRunDirective).__runDirectiveLine =
+              directive.lineNumber;
             runBlocks.push(runBlock);
           }
         }
@@ -602,6 +610,30 @@ export const getDocument = async (
             errorMessage: `Block not found: ${blockName}`,
             lineNumber: blockRunDirective.lineNumber,
           });
+        }
+      } else {
+        // Run all blocks from a file inside a block: run ./file.http
+        const result = await loadImportedFile(target, filepath, visitedFiles);
+        if ("errorMessage" in result) {
+          allErrors.push({
+            errorMessage: result.errorMessage,
+            lineNumber: blockRunDirective.lineNumber,
+          });
+        } else {
+          for (const importedBlock of attachSourceFileHeaderVars(
+            result.blocks,
+            result.fileHeaderVariables ?? {},
+          )) {
+            const runBlock: KulalaBlock = { ...importedBlock };
+            (runBlock as BlockWithRunDirective).__runDirective =
+              blockRunDirective;
+            runBlock.runParentBlock = block.name;
+            (runBlock as BlockWithRunDirective).__runParentBlock = block.name;
+            runBlocks.push(runBlock);
+          }
+          block.runExpander = true;
+          (block as BlockWithRunDirective).__fileRunExpander = true;
+          delete (block as BlockWithRunDirective).__blockRunDirective;
         }
       }
     }

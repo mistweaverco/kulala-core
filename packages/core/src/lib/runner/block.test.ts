@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { findBlockAtCursor } from "./block";
+import { join } from "path";
+import { findBlockAtCursor, findBlocksAtCursor } from "./block";
 import type { KulalaDocument } from "../parser/types";
 import type { KulalaBlock } from "../parser/types/block";
 import { getDocument } from "../parser/parser";
@@ -260,6 +261,37 @@ test("findBlockAtCursor cursor on last line of block (no trailing newline)", asy
   expect(findBlockAtCursor(doc, { line: lastLine, column: 1 })?.name).toBe(
     "test",
   );
+});
+
+test("findBlocksAtCursor expands block-level run ./file.http", async () => {
+  const graphqlPath = join(process.cwd(), "http-example-files/graphql.http");
+  const content = `### RUN_ALL_GRAPHQL_REQUESTS
+
+run ${graphqlPath}
+`;
+  const doc = await getDocument(
+    content,
+    join(process.cwd(), "http-example-files/import-all.http"),
+  );
+  const matched = findBlocksAtCursor(doc, { line: 3, column: 1 });
+  expect(matched.map((b) => b.name).sort()).toEqual([
+    "GQL_STARWARS_QUERY_PERSON",
+    "GQL_STARWARS_QUERY_PLANET",
+  ]);
+});
+
+test("findBlocksAtCursor expands top-level run ./file.http", async () => {
+  const graphqlPath = join(process.cwd(), "http-example-files/graphql.http");
+  const content = `run ${graphqlPath}\n`;
+  const doc = await getDocument(
+    content,
+    join(process.cwd(), "http-example-files/import-all.http"),
+  );
+  const matched = findBlocksAtCursor(doc, { line: 1, column: 1 });
+  expect(matched.map((b) => b.name).sort()).toEqual([
+    "GQL_STARWARS_QUERY_PERSON",
+    "GQL_STARWARS_QUERY_PLANET",
+  ]);
 });
 
 test("findBlockAtCursor on ### line of second block does not match first block", async () => {
