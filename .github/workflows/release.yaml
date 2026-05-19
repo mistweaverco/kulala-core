@@ -50,6 +50,9 @@ jobs:
           restore-keys: |
             bun-${{ hashFiles('**/bun.lock') }}-${{ matrix.runner }}
 
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
       - name: Set version (Unix)
         if: runner.os != 'Windows'
         run: |
