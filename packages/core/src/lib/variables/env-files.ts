@@ -2,8 +2,8 @@ import { existsSync, readFileSync } from "fs";
 import { dirname, join } from "path";
 import { flattenToDotPaths } from "./flatten-json";
 
-const HTTP_CLIENT_ENV_JSON = "http-client.env.json";
-const HTTP_CLIENT_PRIVATE_ENV_JSON = "http-client.private.env.json";
+export const HTTP_CLIENT_ENV_JSON = "http-client.env.json";
+export const HTTP_CLIENT_PRIVATE_ENV_JSON = "http-client.private.env.json";
 const DOTENV = ".env";
 
 /**

@@ -13,8 +13,18 @@
  */
 
 export { getStableDocumentId } from "./stable-id";
-export { findKubaYamlDir, getKubaEnv, isKubaInPath } from "./kuba";
+export {
+  findKubaYamlDir,
+  getKubaEnv,
+  isKubaInPath,
+  listKubaEnvNames,
+} from "./kuba";
 export { loadEnvVars } from "./env-files";
+export {
+  loadEnvironmentCatalog,
+  mergeHttpClientEnvCatalog,
+  type KulalaEnvironmentCatalog,
+} from "./environments";
 export { getMagicVariables } from "./magic";
 export { resolveVariables, type HttpFileVariableSources } from "./resolve";
 export {

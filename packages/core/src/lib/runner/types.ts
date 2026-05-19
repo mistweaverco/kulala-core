@@ -4,12 +4,22 @@ export type KulalaScriptConsoleLine = {
   message: string;
 };
 
+/** Request as sent (after scripts and variable substitution). */
+export type KulalaRequestSent = {
+  method: string;
+  /** URL used for the initial request (before redirects). */
+  url: string;
+  headers?: Record<string, string>;
+  body?: string;
+};
+
 /** Returned for WS/WSS — nvim starts a native WebSocket session via kulala-core. */
 export type KulalaWebSocketPlanResponse = {
   success: true;
   protocol: "websocket";
   url: string;
   initialMessage?: string;
+  request?: KulalaRequestSent;
 };
 
 export type KulalaRequestSuccessResponse = {
@@ -20,6 +30,8 @@ export type KulalaRequestSuccessResponse = {
   headers: Record<string, string>;
   /** Final resolved URL (after redirects). */
   url: string;
+  /** Resolved request as sent (matches scripts, env, and magic variables). */
+  request?: KulalaRequestSent;
   /** Present only when at least one redirect occurred (ordered hops, including the final response). */
   redirectChain?: Array<{
     status: number;

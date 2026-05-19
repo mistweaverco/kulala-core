@@ -230,6 +230,10 @@ test("doRequestFromBlock: substitutes URL and headers when vars provided", async
   );
 
   expect(result).toHaveProperty("success", true);
+  if (result.success && "request" in result && result.request) {
+    expect(result.request.url).toBe(`http://localhost:${server.port}/path`);
+    expect(result.request.headers?.["X-Custom"]).toBe("secret123");
+  }
 });
 
 test("doRequestFromBlock: # @kulala-prompt returns a prompt response when variable missing", async () => {

@@ -8,6 +8,8 @@ import {
   writeToStdout,
 } from "./lib/helpers";
 import { getDocument } from "./parser";
+import { loadEnvironmentCatalog } from "../variables/environments";
+import { dirname } from "path";
 import { continueOAuth2Flow } from "../auth/oauth2/continuation";
 import { handleCryptoOp } from "../crypto";
 import { httpRequest } from "../runner/http-client";
@@ -178,6 +180,19 @@ const kulalaParser: KulalaParser = {
           for (const name of names) deleteVariable("global", name);
         }
         writeRequestResponseToStdout({ type: "clear_globals", success: true });
+        break;
+      }
+      case "environments": {
+        let startDir = stdIn.cwd ?? process.cwd();
+        if (stdIn.filepath) {
+          try {
+            startDir = dirname(stdIn.filepath);
+          } catch {
+            // keep cwd
+          }
+        }
+        const catalog = await loadEnvironmentCatalog(startDir);
+        writeToStdout(catalog);
         break;
       }
       default:

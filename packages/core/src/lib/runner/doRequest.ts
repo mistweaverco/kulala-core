@@ -43,6 +43,7 @@ import {
 import type {
   KulalaPromptResponse,
   KulalaRequestErrorResponse,
+  KulalaRequestSent,
   KulalaRequestSuccessResponse,
   KulalaScriptConsoleLine,
   RunnerResponseLike,
@@ -50,6 +51,23 @@ import type {
 } from "./types";
 
 export type { RunnerResponseLike } from "./types";
+
+function buildSentRequestSnapshot(
+  method: string,
+  url: string,
+  headers: Record<string, string>,
+  bodyPayload: string | Buffer | FormData | undefined,
+): KulalaRequestSent {
+  let body: string | undefined;
+  if (typeof bodyPayload === "string") body = bodyPayload;
+  else if (Buffer.isBuffer(bodyPayload)) body = bodyPayload.toString("utf-8");
+  return {
+    method,
+    url,
+    headers,
+    ...(body !== undefined ? { body } : {}),
+  };
+}
 
 export async function doRequestFromBlock(
   block: KulalaBlock,
@@ -415,6 +433,12 @@ export async function doRequestFromBlock(
       protocol: "websocket",
       url,
       initialMessage: bodyStr || undefined,
+      request: buildSentRequestSnapshot(
+        methodUpper,
+        url,
+        headers,
+        bodyStr || undefined,
+      ),
     };
   }
 
@@ -458,6 +482,12 @@ export async function doRequestFromBlock(
             content: grpcBodyParsed as Record<string, unknown>,
           }
         : { type: "text" as const, content: grpcBodyRaw };
+    const grpcBodyText =
+      typeof body === "string"
+        ? body
+        : body != null
+          ? JSON.stringify(body)
+          : undefined;
     return {
       success: true,
       status: grpcRes.statusCode,
@@ -465,6 +495,7 @@ export async function doRequestFromBlock(
         "content-type": ok ? "application/json" : "kulala/grpc_error",
       },
       url,
+      request: buildSentRequestSnapshot("GRPC", url, headers, grpcBodyText),
       timings: {
         dns: 0,
         tcp: 0,
@@ -750,6 +781,12 @@ export async function doRequestFromBlock(
       status: res.statusCode,
       headers: res.headers,
       url: res.url,
+      request: buildSentRequestSnapshot(
+        method,
+        url,
+        requestHeaders,
+        bodyPayload,
+      ),
       ...(res.redirectChain
         ? { redirectChain: res.redirectChain.map(mapChainEntry) }
         : {}),
