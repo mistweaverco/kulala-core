@@ -1,0 +1,10 @@
+### TEST
+
+POST https://httpbin.org/post HTTP/1.1
+Content-Type: application/json
+Authorization: Bearer {{ $env.API_BEARER_TOKEN }}
+
+{
+  "name": "John Doe",
+  "email": "SOME_HARD_CODED_ENV"
+}

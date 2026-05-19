@@ -1,3 +1,4 @@
+---
 name: Release
 
 on:
@@ -5,62 +6,172 @@ on:
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+"
 
-permissions:
-  contents: write
-  id-token: write
-
 jobs:
-  publish-npm:
-    environment:
-      name: release
-      deployment: false
-    name: Publish to npm
+  check-backend-changes:
+    name: Check if backend needs rebuild
     runs-on: ubuntu-latest
+    outputs:
+      needs-build: ${{ steps.check.outputs.needs-build }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Set version env
+      - name: Check for backend changes
+        id: check
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          CURRENT_TAG="${{ github.ref_name }}"
+
+          # Get all tags sorted by version (descending), find current tag position, get previous one
+          ALL_TAGS=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$')
+          PREVIOUS_TAG=$(echo "$ALL_TAGS" | grep -A1 "^$CURRENT_TAG$" | tail -n1 | grep -v "^$CURRENT_TAG$" || echo "")
+
+          if [ -z "$PREVIOUS_TAG" ]; then
+            # First tag or couldn't find previous tag, always build
+            echo "No previous tag found (first tag?), building binaries"
+            echo "needs-build=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "Comparing $PREVIOUS_TAG..$CURRENT_TAG for backend changes"
+
+          # Check if backend version file changed
+          if git diff --name-only "$PREVIOUS_TAG" "$CURRENT_TAG" -- "lua/snap/globals/versions/backend.lua" | grep -q "."; then
+            echo "Backend version file changed, building binaries"
+            echo "needs-build=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "No backend version bump detected, skipping binary build"
+          echo "needs-build=false" >> $GITHUB_OUTPUT
+
+  build:
+    name: Build backend for ${{ matrix.platform }}
+    runs-on: ${{ matrix.runner }}
+    needs: check-backend-changes
+    if: needs.check-backend-changes.outputs.needs-build == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux builds (cross-compile ARM from x86)
+          - platform: linux-x86_64
+            runner: ubuntu-latest
+          - platform: linux-aarch64
+            runner: ubuntu-latest
+
+          # macOS builds (native)
+          - platform: macos-x86_64
+            runner: macos-latest
+          - platform: macos-arm64
+            runner: macos-latest
+
+          # Windows builds (native)
+          - platform: windows-x86_64
+            runner: windows-latest
+          # windows-aarch64 not available (no ARM64 Windows runners)
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Bun
-        uses: oven-sh/setup-bun@v2.2.0
-
-      - name: Set up Node
-        uses: actions/setup-node@v6.3.0
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: 24
-          registry-url: "https://registry.npmjs.org"
+          bun-version: "1.3.3"
 
       - name: Cache Bun
-        uses: actions/cache@v5.0.4
+        uses: actions/cache@v4
         with:
           path: ~/.bun/install/cache
-          key: linux-bun-${{ hashFiles('**/bun.lock') }}
+          key: bun-${{ hashFiles('**/bun.lock') }}-${{ matrix.runner }}
           restore-keys: |
-            linux-bun-${{ hashFiles('**/bun.lock') }}
+            bun-${{ hashFiles('**/bun.lock') }}-${{ matrix.runner }}
 
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
+      - name: Cache Playwright
+        uses: actions/cache@v4
+        with:
+          path: ./dist/.local-browsers
+          key: playwright-${{ hashFiles('**/bun.lock') }}-${{ matrix.runner }}
+          restore-keys: |
+            playwright-${{ hashFiles('**/bun.lock') }}-${{ matrix.runner }}
 
-      - name: Set package version (from tag)
-        run: npm --prefix packages/core version "${{ env.VERSION }}" --no-git-tag-version
+      - name: Set version (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
 
-      - name: Build package
-        env:
-          KULALA_CORE_BUILD_SKIP_VENDOR_CURL: 1
-        run: bun run build
-        working-directory: packages/core
+      - name: Set version (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $VERSION = "${{ github.ref_name }}" -replace '^v', ''
+          echo "VERSION=$VERSION" >> $env:GITHUB_ENV
 
-      - name: Publish package
-        run: npm publish --access public
-        working-directory: packages/core
+      - name: Build (Unix)
+        if: runner.os != 'Windows'
+        run: ./scripts/build.sh "bun" ${{ matrix.platform }}
 
-      - name: Create GitHub Release
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: ./scripts/build.sh "bun" ${{ matrix.platform }}
+
+      - name: Upload artifact
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: snap-nvim-${{ matrix.platform }}
+          path: dist/snap-nvim-${{ matrix.platform }}.zip
+          if-no-files-found: error
+      - name: Upload artifact
+        if: runner.os != 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: snap-nvim-${{ matrix.platform }}
+          path: dist/snap-nvim-${{ matrix.platform }}.tar.gz
+          if-no-files-found: error
+
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [check-backend-changes, build]
+    if: always() && (needs.build.result == 'success' || needs.build.result == 'skipped')
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Set version
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Create Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create --generate-notes "${GITHUB_REF_NAME}"
+        run: |
+          # check if dist directory has any files, non-hidden files
+          if [ -d "dist" ] && [ "$(ls dist)" ]; then
+            echo "Creating release with binaries"
+            gh release create "$GITHUB_REF_NAME" \
+              --generate-notes \
+              dist/snap-nvim-*
+          else
+            echo "No binaries to upload, creating release without binaries"
+            gh release create "$GITHUB_REF_NAME" --generate-notes
+          fi

@@ -23,7 +23,10 @@ export type HttpFileVariableSources = {
 
 /**
  * Resolve all variables for a request.
- * Order (later overrides earlier): kuba → @-lines from .http (file header + block preamble) →
+ * kuba is put into $env.VAR, since kuba when run on its own
+ * injects env vars into the process environment.
+ *
+ * Order (later overrides earlier): @-lines from .http (file header + block preamble) →
  * system/env files (http-client.env.json, .env) → persistence (global → document → request) →
  * magic variables ($uuid, $timestamp, etc.).
  * See https://neovim.getkulala.net/docs/usage/magic-variables and
@@ -43,7 +46,7 @@ export async function resolveVariables(
     const kubaVars = await getKubaEnv(env, kubaDir);
     if (kubaVars) {
       for (const [k, v] of Object.entries(kubaVars)) {
-        out[k] = v;
+        out["$env." + k] = v;
       }
     }
   }

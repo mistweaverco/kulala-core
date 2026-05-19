@@ -3,5 +3,5 @@
 default:
   provider: local
   env:
-    SOME_HARD_CODED_ENV:
-      value: "hard-coded-value"
+    API_BEARER_TOKEN:
+      value: "SOME_SECRET_TOKEN"
