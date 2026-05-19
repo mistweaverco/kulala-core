@@ -64,28 +64,28 @@ jobs:
           echo "VERSION=$VERSION" >> $env:GITHUB_ENV
 
       - name: Build Linux (x86_64)
-        if: runner.platform == 'linux-x86_64'
+        if: matrix.platform == 'linux-x86_64'
         run: bun run build:linux-x64
 
       - name: Build Linux (aarch64)
-        if: runner.platform == 'linux-aarch64'
+        if: matrix.platform == 'linux-aarch64'
         run: bun run build:linux-arm64
 
       - name: Build Darwin (x86_64)
-        if: runner.platform == 'macos-x86_64'
+        if: matrix.platform == 'macos-x86_64'
         run: bun run build:darwin-x64
 
       - name: Build Darwin (arm64)
-        if: runner.platform == 'macos-arm64'
+        if: matrix.platform == 'macos-arm64'
         run: bun run build:darwin-arm64
 
       - name: Build (Windows)
-        if: runner.platform == 'windows-x86_64'
+        if: matrix.platform == 'windows-x86_64'
         shell: bash
         run: bun run build:windows-x64
 
       - name: Upload artifact for windows-x86_64
-        if: runner.platform == 'windows-x86_64'
+        if: matrix.platform == 'windows-x86_64'
         uses: actions/upload-artifact@v7.0.0
         with:
           name: packages/core/dist/kulala-core-windows-x86_64.exe
@@ -93,7 +93,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload artifact for linux-x86_64
-        if: runner.platform == 'linux-x86_64'
+        if: matrix.platform == 'linux-x86_64'
         uses: actions/upload-artifact@v7.0.0
         with:
           name: packages/core/dist/kulala-core-linux-x86_64
@@ -101,7 +101,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload artifact for linux-aarch64
-        if: runner.platform == 'linux-aarch64'
+        if: matrix.platform == 'linux-aarch64'
         uses: actions/upload-artifact@v7.0.0
         with:
           name: packages/core/dist/kulala-core-linux-aarch64
@@ -109,7 +109,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload artifact for darwin-x86_64
-        if: runner.platform == 'macos-arm64'
+        if: matrix.platform == 'macos-arm64'
         uses: actions/upload-artifact@v7.0.0
         with:
           name: packages/core/dist/kulala-core-darwin-x86_64
@@ -117,7 +117,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload artifact for darwin-arm64
-        if: runner.platform == 'macos-arm64'
+        if: matrix.platform == 'macos-arm64'
         uses: actions/upload-artifact@v7.0.0
         with:
           name: packages/core/dist/kulala-core-darwin-arm64
