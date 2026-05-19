@@ -38,7 +38,11 @@ export type HttpRequestResponse = {
     body: string | Buffer;
     timings: HttpRequestTimings;
     url: string;
+    /** curl `-v` stderr for this hop (connection, TLS, cert details). */
+    verboseTrace?: string;
   }>;
+  /** curl `-v` stderr for the final hop (when no redirect chain is exposed). */
+  verboseTrace?: string;
 };
 
 export type HttpRequestOptions = {

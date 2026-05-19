@@ -50,7 +50,11 @@ export type KulalaRequestSuccessResponse = {
       startTransfer: number;
       total: number;
     };
+    /** curl `-v` stderr for this hop. */
+    verboseTrace?: string;
   }>;
+  /** curl `-v` stderr for the final hop. */
+  verboseTrace?: string;
   timings: {
     dns: number;
     tcp: number;
