@@ -670,6 +670,7 @@ export async function doRequestFromBlock(
           startTransfer: p.startTransfer ?? 0,
           total: p.total ?? 0,
         },
+        ...(entry.verboseTrace ? { verboseTrace: entry.verboseTrace } : {}),
       };
     };
 
@@ -801,6 +802,7 @@ export async function doRequestFromBlock(
         total,
       },
       body: responseBody,
+      ...(res.verboseTrace ? { verboseTrace: res.verboseTrace } : {}),
       ...(scriptConsole.length > 0 ? { scriptConsole } : {}),
     } as KulalaRequestSuccessResponse;
   } catch (error) {

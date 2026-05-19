@@ -6,6 +6,7 @@ import {
   type ServerHttp2Stream,
 } from "node:http2";
 import { httpRequest } from "./http-client";
+import { curlNeedsRequestFlag } from "./curl-transport";
 import { resolveCurlPath } from "./embedded-curl";
 
 async function hasCurl(): Promise<boolean> {
@@ -232,5 +233,19 @@ describe("curl transport", () => {
     expect(res.statusCode).toBe(200);
     expect(cookieOnFinal).toContain("client=xyz");
     expect(cookieOnFinal).toContain("from_redirect=1");
+  });
+});
+
+describe("curlNeedsRequestFlag", () => {
+  test("omits -X for default GET and POST with body", () => {
+    expect(curlNeedsRequestFlag("GET", false)).toBe(false);
+    expect(curlNeedsRequestFlag("POST", true)).toBe(false);
+  });
+
+  test("requires -X for non-inferred combinations", () => {
+    expect(curlNeedsRequestFlag("GET", true)).toBe(true);
+    expect(curlNeedsRequestFlag("POST", false)).toBe(true);
+    expect(curlNeedsRequestFlag("PUT", true)).toBe(true);
+    expect(curlNeedsRequestFlag("DELETE", false)).toBe(true);
   });
 });

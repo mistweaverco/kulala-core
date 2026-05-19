@@ -152,6 +152,16 @@ function headersFromDump(dump: string): {
   return { statusCode, headers };
 }
 
+/** Whether curl needs an explicit `--request` / `-X` (avoids verbose "already inferred" notes). */
+export function curlNeedsRequestFlag(
+  method: string,
+  hasBody: boolean,
+): boolean {
+  if (method === "GET" && !hasBody) return false;
+  if (method === "POST" && hasBody) return false;
+  return true;
+}
+
 function buildTimings(w: CurlWriteOut): HttpRequestTimings {
   const dns = secondsToMs(w.time_namelookup);
   const connect = secondsToMs(w.time_connect);
@@ -292,11 +302,11 @@ export async function curlHttpRequest(
       "",
     ].join("\n");
 
+    const hasBody = currentBody !== undefined;
     const args: string[] = [
       "--silent",
+      "--verbose",
       "--show-error",
-      "--request",
-      currentMethod,
       "--dump-header",
       headerPath,
       "--output",
@@ -304,6 +314,12 @@ export async function curlHttpRequest(
       "--write-out",
       writeOut,
     ];
+
+    if (currentMethod === "HEAD") {
+      args.push("--head");
+    } else if (curlNeedsRequestFlag(currentMethod, hasBody)) {
+      args.push("--request", currentMethod);
+    }
 
     if (options.insecure) {
       args.push("--insecure");
@@ -342,8 +358,7 @@ export async function curlHttpRequest(
       args.push("--header", `${k}: ${v}`);
     }
 
-    // Body
-    if (currentBody !== undefined) {
+    if (hasBody) {
       const body =
         typeof currentBody === "string" || Buffer.isBuffer(currentBody)
           ? currentBody
@@ -374,6 +389,7 @@ export async function curlHttpRequest(
         timings,
         url: w.url_effective || currentUrl,
         firstByteTime: 0,
+        verboseTrace: stderr,
       };
     } finally {
       await cleanup();
@@ -389,6 +405,7 @@ export async function curlHttpRequest(
       body: res.body,
       timings: res.timings,
       url: res.url,
+      verboseTrace: res.verboseTrace,
     });
 
     const location = res.headers["location"];
@@ -415,6 +432,7 @@ export async function curlHttpRequest(
       return {
         ...res,
         ...(chain.length > 1 ? { redirectChain: chain } : {}),
+        verboseTrace: res.verboseTrace,
         url: res.url,
       };
     }
