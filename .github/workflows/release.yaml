@@ -85,6 +85,8 @@ jobs:
       - name: Build (Windows)
         if: matrix.platform == 'windows-x86_64'
         shell: bash
+        env:
+          KULALA_CURL_PATH: C:\Windows\System32\curl.exe
         run: bun run build:windows-x64
 
       - name: Upload artifact for windows-x86_64
@@ -116,7 +118,7 @@ jobs:
         uses: actions/upload-artifact@v7.0.0
         with:
           name: kulala-core-darwin-x86_64
-          path: packages/core/dist/kulala-core-darwin-x86_64
+          path: packages/core/dist/kulala-core-darwin-arm64
           if-no-files-found: error
 
       - name: Upload artifact for darwin-arm64
