@@ -1,5 +1,5 @@
 import type { KulalaRequest } from "../parser/types/request";
-import { version } from "./../../../package.json";
+import { version } from "./../../../version.json";
 
 export function buildHeadersFromSection(
   headerSection: KulalaRequest["headerSection"],

@@ -7,50 +7,9 @@ on:
       - "v[0-9]+.[0-9]+.[0-9]+"
 
 jobs:
-  check-backend-changes:
-    name: Check if backend needs rebuild
-    runs-on: ubuntu-latest
-    outputs:
-      needs-build: ${{ steps.check.outputs.needs-build }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Check for backend changes
-        id: check
-        run: |
-          CURRENT_TAG="${{ github.ref_name }}"
-
-          # Get all tags sorted by version (descending), find current tag position, get previous one
-          ALL_TAGS=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$')
-          PREVIOUS_TAG=$(echo "$ALL_TAGS" | grep -A1 "^$CURRENT_TAG$" | tail -n1 | grep -v "^$CURRENT_TAG$" || echo "")
-
-          if [ -z "$PREVIOUS_TAG" ]; then
-            # First tag or couldn't find previous tag, always build
-            echo "No previous tag found (first tag?), building binaries"
-            echo "needs-build=true" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          echo "Comparing $PREVIOUS_TAG..$CURRENT_TAG for backend changes"
-
-          # Check if backend version file changed
-          if git diff --name-only "$PREVIOUS_TAG" "$CURRENT_TAG" -- "lua/snap/globals/versions/backend.lua" | grep -q "."; then
-            echo "Backend version file changed, building binaries"
-            echo "needs-build=true" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          echo "No backend version bump detected, skipping binary build"
-          echo "needs-build=false" >> $GITHUB_OUTPUT
-
   build:
-    name: Build backend for ${{ matrix.platform }}
+    name: Build core for ${{ matrix.platform }}
     runs-on: ${{ matrix.runner }}
-    needs: check-backend-changes
-    if: needs.check-backend-changes.outputs.needs-build == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -91,14 +50,6 @@ jobs:
           restore-keys: |
             bun-${{ hashFiles('**/bun.lock') }}-${{ matrix.runner }}
 
-      - name: Cache Playwright
-        uses: actions/cache@v4
-        with:
-          path: ./dist/.local-browsers
-          key: playwright-${{ hashFiles('**/bun.lock') }}-${{ matrix.runner }}
-          restore-keys: |
-            playwright-${{ hashFiles('**/bun.lock') }}-${{ matrix.runner }}
-
       - name: Set version (Unix)
         if: runner.os != 'Windows'
         run: |
@@ -112,34 +63,68 @@ jobs:
           $VERSION = "${{ github.ref_name }}" -replace '^v', ''
           echo "VERSION=$VERSION" >> $env:GITHUB_ENV
 
-      - name: Build (Unix)
-        if: runner.os != 'Windows'
-        run: ./scripts/build.sh "bun" ${{ matrix.platform }}
+      - name: Build Linux (x86_64)
+        if: runner.platform == 'linux-x86_64'
+        run: bun run build:linux-x64
+
+      - name: Build Linux (aarch64)
+        if: runner.platform == 'linux-aarch64'
+        run: bun run build:linux-arm64
+
+      - name: Build Darwin (x86_64)
+        if: runner.platform == 'macos-x86_64'
+        run: bun run build:darwin-x64
+
+      - name: Build Darwin (arm64)
+        if: runner.platform == 'macos-arm64'
+        run: bun run build:darwin-arm64
 
       - name: Build (Windows)
-        if: runner.os == 'Windows'
+        if: runner.platform == 'windows-x86_64'
         shell: bash
-        run: ./scripts/build.sh "bun" ${{ matrix.platform }}
+        run: bun run build:windows-x64
 
-      - name: Upload artifact
-        if: runner.os == 'Windows'
+      - name: Upload artifact for windows-x86_64
+        if: runner.platform == 'windows-x86_64'
         uses: actions/upload-artifact@v4
         with:
-          name: snap-nvim-${{ matrix.platform }}
-          path: dist/snap-nvim-${{ matrix.platform }}.zip
+          name: kulala-core-windows-x86_64.exe
+          path: packages/core/dist/kulala-core-windows-x86_64.exe
           if-no-files-found: error
-      - name: Upload artifact
-        if: runner.os != 'Windows'
+      - name: Upload artifact for linux-x86_64
+        if: runner.platform == 'linux-x86_64'
         uses: actions/upload-artifact@v4
         with:
-          name: snap-nvim-${{ matrix.platform }}
-          path: dist/snap-nvim-${{ matrix.platform }}.tar.gz
+          name: kulala-core-linux-x86_64
+          path: packages/core/dist/kulala-core-linux-x86_64
+          if-no-files-found: error
+      - name: Upload artifact for linux-aarch64
+        if: runner.platform == 'linux-aarch64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: kulala-core-linux-arm64
+          path: packages/core/dist/kulala-core-linux-aarch64
+          if-no-files-found: error
+      - name: Upload artifact for darwin-x86_64
+        if: runner.platform == 'macos-arm64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: kulala-core-darwin-x86_64
+          path: packages/core/dist/kulala-core-darwin-x86_64
+          if-no-files-found: error
+
+      - name: Upload artifact for darwin-arm64
+        if: runner.platform == 'macos-arm64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: kulala-core-darwin-arm64
+          path: packages/core/dist/kulala-core-darwin-arm64
           if-no-files-found: error
 
   release:
     name: Create Release
     runs-on: ubuntu-latest
-    needs: [check-backend-changes, build]
+    needs: [build]
     if: always() && (needs.build.result == 'success' || needs.build.result == 'skipped')
     permissions:
       contents: write
@@ -165,13 +150,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # check if dist directory has any files, non-hidden files
           if [ -d "dist" ] && [ "$(ls dist)" ]; then
             echo "Creating release with binaries"
             gh release create "$GITHUB_REF_NAME" \
               --generate-notes \
-              dist/snap-nvim-*
+              dist/kulala-core-*
           else
-            echo "No binaries to upload, creating release without binaries"
-            gh release create "$GITHUB_REF_NAME" --generate-notes
+            echo "No build artifacts found, exiting without creating release"
+            exit 1
           fi
