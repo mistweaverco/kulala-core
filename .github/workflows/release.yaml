@@ -114,11 +114,11 @@ jobs:
           if-no-files-found: error
 
       - name: Upload artifact for darwin-x86_64
-        if: matrix.platform == 'macos-arm64'
+        if: matrix.platform == 'macos-x86_64'
         uses: actions/upload-artifact@v7.0.0
         with:
           name: kulala-core-darwin-x86_64
-          path: packages/core/dist/kulala-core-darwin-arm64
+          path: packages/core/dist/kulala-core-darwin-x86_64
           if-no-files-found: error
 
       - name: Upload artifact for darwin-arm64
@@ -146,7 +146,8 @@ jobs:
         uses: actions/download-artifact@v8.0.1
         continue-on-error: true
         with:
-          path: packages/core/dist
+          path: packages/core/dist/
+          pattern: kulala-core-*
           merge-multiple: true
 
       - name: Set version
@@ -158,12 +159,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [[ $(find packages/core/dist -type f | wc -l) -eq 5 ]] then
             echo "Creating release with binaries"
             gh release create "$GITHUB_REF_NAME" \
               --generate-notes \
               packages/core/dist/kulala-core-*
-          else
-            echo "No build artifacts found, exiting without creating release"
-            exit 1
-          fi
