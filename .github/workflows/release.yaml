@@ -138,7 +138,7 @@ jobs:
         uses: actions/download-artifact@v4
         continue-on-error: true
         with:
-          path: dist
+          path: packages/core/dist
           merge-multiple: true
 
       - name: Set version
@@ -150,11 +150,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ -d "dist" ] && [ "$(ls dist)" ]; then
+          if [[ $(find packages/core/dist -type f | wc -l) -eq 5 ]] then
             echo "Creating release with binaries"
             gh release create "$GITHUB_REF_NAME" \
               --generate-notes \
-              dist/kulala-core-*
+              packages/core/dist/kulala-core-*
           else
             echo "No build artifacts found, exiting without creating release"
             exit 1
