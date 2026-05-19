@@ -29,6 +29,33 @@ export function isKubaInPath(): boolean {
 }
 
 /**
+ * List environment names from kuba.yaml via `kuba show --env` (no value).
+ */
+export async function listKubaEnvNames(dir: string): Promise<string[]> {
+  if (!existsSync(join(dir, KUBA_YAML))) {
+    return [];
+  }
+  if (!isKubaInPath()) {
+    return [];
+  }
+  const proc = Bun.spawn(["kuba", "show", "--env"], {
+    cwd: dir,
+    stdout: "pipe",
+    stderr: "pipe",
+    stdin: "ignore",
+  });
+  const exitCode = await proc.exited;
+  if (exitCode !== 0) {
+    return [];
+  }
+  const text = await new Response(proc.stdout).text();
+  return text
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/**
  * Run `kuba show --env <env> --output json` in dir and return parsed env vars.
  * Returns null if kuba.yaml not in dir, kuba not in PATH, or command fails.
  * If kuba.yaml exists but kuba is not in PATH, silently skips.

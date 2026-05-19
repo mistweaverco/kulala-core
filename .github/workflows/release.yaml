@@ -159,7 +159,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-            echo "Creating release with binaries"
-            gh release create "$GITHUB_REF_NAME" \
-              --generate-notes \
-              packages/core/dist/kulala-core-*
+          echo "Creating release with binaries"
+          gh release create "$GITHUB_REF_NAME" \
+            --generate-notes \
+            packages/core/dist/kulala-core-*

@@ -76,10 +76,19 @@ export type KulalaStdinActionClearGlobals = {
   names?: string[];
 };
 
+/** Discover http-client.env.json / kuba.yaml environments for UI pickers. */
+export type KulalaStdinActionEnvironments = {
+  action: "environments";
+  /** Working directory to search upward from (http-client.env.json, kuba.yaml). */
+  cwd?: string;
+  filepath?: string;
+};
+
 export type KulalaStdinParsed =
   | KulalaStdinActionParse
   | KulalaStdinActionRun
   | KulalaStdinActionContinue
   | KulalaStdinActionCrypto
   | KulalaStdinActionHttpRequest
-  | KulalaStdinActionClearGlobals;
+  | KulalaStdinActionClearGlobals
+  | KulalaStdinActionEnvironments;
