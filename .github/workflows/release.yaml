@@ -91,7 +91,7 @@ jobs:
         if: matrix.platform == 'windows-x86_64'
         uses: actions/upload-artifact@v7.0.0
         with:
-          name: packages/core/dist/kulala-core-windows-x86_64.exe
+          name: kulala-core-windows-x86_64.exe
           path: packages/core/dist/kulala-core-windows-x86_64.exe
           if-no-files-found: error
 
@@ -99,7 +99,7 @@ jobs:
         if: matrix.platform == 'linux-x86_64'
         uses: actions/upload-artifact@v7.0.0
         with:
-          name: packages/core/dist/kulala-core-linux-x86_64
+          name: kulala-core-linux-x86_64
           path: packages/core/dist/kulala-core-linux-x86_64
           if-no-files-found: error
 
@@ -107,7 +107,7 @@ jobs:
         if: matrix.platform == 'linux-aarch64'
         uses: actions/upload-artifact@v7.0.0
         with:
-          name: packages/core/dist/kulala-core-linux-aarch64
+          name: kulala-core-linux-aarch64
           path: packages/core/dist/kulala-core-linux-aarch64
           if-no-files-found: error
 
@@ -115,7 +115,7 @@ jobs:
         if: matrix.platform == 'macos-arm64'
         uses: actions/upload-artifact@v7.0.0
         with:
-          name: packages/core/dist/kulala-core-darwin-x86_64
+          name: kulala-core-darwin-x86_64
           path: packages/core/dist/kulala-core-darwin-x86_64
           if-no-files-found: error
 
@@ -123,7 +123,7 @@ jobs:
         if: matrix.platform == 'macos-arm64'
         uses: actions/upload-artifact@v7.0.0
         with:
-          name: packages/core/dist/kulala-core-darwin-arm64
+          name: kulala-core-darwin-arm64
           path: packages/core/dist/kulala-core-darwin-arm64
           if-no-files-found: error
 
