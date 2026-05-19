@@ -31,7 +31,7 @@ export function isKubaInPath(): boolean {
 /**
  * Run `kuba show --env <env> --output json` in dir and return parsed env vars.
  * Returns null if kuba.yaml not in dir, kuba not in PATH, or command fails.
- * If kuba.yaml exists but kuba is not in PATH, writes a message to stderr.
+ * If kuba.yaml exists but kuba is not in PATH, silently skips.
  */
 export async function getKubaEnv(
   env: string,
@@ -41,9 +41,6 @@ export async function getKubaEnv(
     return null;
   }
   if (!isKubaInPath()) {
-    writeErrorToStderr(
-      "kuba.yaml found but 'kuba' is not in PATH. Install kuba or add it to PATH.",
-    );
     return null;
   }
   const proc = Bun.spawn(["kuba", "show", "--env", env, "--output", "json"], {
