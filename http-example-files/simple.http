@@ -6,7 +6,7 @@ Content-Type: application/json
 {
   "username": "user123",
   "password": "pass123",
-  "kuba_env_test": "{{ SOME_HARD_CODED_ENV }}",
+  "kuba_env_test": "{{ $env.API_BEARER_TOKEN }}",
   "OS_USER": "{{ $env.USER }}"
 }
 
