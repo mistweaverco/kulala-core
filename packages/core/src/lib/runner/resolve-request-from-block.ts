@@ -295,10 +295,13 @@ export async function resolveRequestFromBlock(
   }
 
   const method = isGraphQL ? "POST" : methodUpper;
+  const requestHeaders: Record<string, string> = isGraphQL
+    ? { ...headers, "Content-Type": "application/json" }
+    : headers;
   const sent: KulalaRequestSent = {
     method,
     url,
-    headers,
+    headers: requestHeaders,
     ...(bodyPayloadToScriptString(bodyPayload)
       ? { body: bodyPayloadToScriptString(bodyPayload) }
       : {}),
