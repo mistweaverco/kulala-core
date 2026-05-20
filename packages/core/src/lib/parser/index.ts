@@ -14,6 +14,11 @@ import { continueOAuth2Flow } from "../auth/oauth2/continuation";
 import { handleCryptoOp } from "../crypto";
 import { httpRequest } from "../runner/http-client";
 import {
+  fromCurlCommand,
+  inspectRequestAtCursor,
+  toCurlAtCursor,
+} from "../runner/request-cursor";
+import {
   deleteVariable,
   getPrompt,
   deletePrompt,
@@ -193,6 +198,34 @@ const kulalaParser: KulalaParser = {
         }
         const catalog = await loadEnvironmentCatalog(startDir);
         writeToStdout(catalog);
+        break;
+      }
+      case "inspect_request": {
+        const result = await inspectRequestAtCursor({
+          content: stdIn.content,
+          filepath: stdIn.filepath,
+          line: stdIn.line,
+          column: stdIn.column,
+          env: stdIn.env,
+        });
+        writeToStdout(result);
+        break;
+      }
+      case "to_curl": {
+        const result = await toCurlAtCursor({
+          content: stdIn.content,
+          filepath: stdIn.filepath,
+          line: stdIn.line,
+          column: stdIn.column,
+          env: stdIn.env,
+          userAgent: stdIn.userAgent,
+        });
+        writeToStdout(result);
+        break;
+      }
+      case "from_curl": {
+        const result = fromCurlCommand(stdIn.curl);
+        writeToStdout(result);
         break;
       }
       default:

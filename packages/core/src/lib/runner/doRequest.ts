@@ -21,7 +21,8 @@ import {
   setVariable,
   storeCookiesFromResponse,
 } from "../persistence";
-import { runScripts } from "./scripts";
+import { runScripts, type ScriptFlowContext } from "./scripts";
+import type { KulalaScriptType } from "../parser/types/script";
 import {
   bodyPayloadToScriptString,
   buildScriptRequestContextFromBlock,
@@ -74,6 +75,65 @@ export type DoRequestFromBlockOptions = {
   /** Internal: child call when expanding a collection variable. */
   skipPreScripts?: boolean;
 };
+
+/** JetBrains: `### Shared` pre/post scripts wrap each request in the file. */
+async function runSharedScriptsForPhase(
+  phase: KulalaScriptType,
+  opts: {
+    flow?: ScriptFlowContext;
+    requestBlock: KulalaBlock;
+    filePath: string | undefined;
+    effectiveBody: KulalaBlock["request"]["body"];
+    env: string;
+    startDir: string;
+    mutableVars: Record<string, string>;
+    resolver: VariableResolver | undefined;
+    iteration: number;
+    collectionPlan?: CollectionIterationPlan;
+    scriptConsole: KulalaScriptConsoleLine[];
+    response?: RunnerResponseLike;
+    urlSent?: string;
+    headersSent?: Record<string, string>;
+    bodySent?: string;
+    responseUrl?: string;
+    responseHeaders?: Record<string, string>;
+  },
+): Promise<void> {
+  for (const shared of opts.flow?.sharedBlocks ?? []) {
+    const scripts =
+      phase === "preRequest"
+        ? shared.scripts.preRequest
+        : shared.scripts.postRequest;
+    if (scripts.length === 0) continue;
+    const ctx = buildScriptRequestContextFromBlock({
+      block: opts.requestBlock,
+      phase,
+      effectiveBody: opts.effectiveBody,
+      env: opts.env,
+      startDir: opts.startDir,
+      mutableVars: opts.mutableVars,
+      resolver: opts.resolver,
+      iteration: opts.iteration,
+      collectionPlan: opts.collectionPlan,
+      urlSent: opts.urlSent,
+      headersSent: opts.headersSent,
+      bodySent: opts.bodySent,
+      responseUrl: opts.responseUrl,
+      responseHeaders: opts.responseHeaders,
+    });
+    await runScripts(
+      scripts,
+      phase,
+      shared,
+      opts.filePath,
+      opts.response,
+      opts.mutableVars,
+      opts.flow,
+      opts.scriptConsole,
+      ctx,
+    );
+  }
+}
 
 function buildSentRequestSnapshot(
   method: string,
@@ -268,6 +328,19 @@ export async function doRequestFromBlock(
   }
 
   if (!iterationOptions?.skipPreScripts) {
+    await runSharedScriptsForPhase("preRequest", {
+      flow,
+      requestBlock: block,
+      filePath,
+      effectiveBody,
+      env,
+      startDir,
+      mutableVars,
+      resolver,
+      iteration: 0,
+      scriptConsole,
+    });
+
     const preScriptRequestCtx = buildScriptRequestContextFromBlock({
       block,
       phase: "preRequest",
@@ -827,6 +900,26 @@ export async function doRequestFromBlock(
       scriptConsole,
       postScriptRequestCtx,
     );
+
+    await runSharedScriptsForPhase("postRequest", {
+      flow,
+      requestBlock: block,
+      filePath,
+      effectiveBody,
+      env,
+      startDir,
+      mutableVars,
+      resolver,
+      iteration: collectionIndex,
+      collectionPlan: scriptCollectionPlan,
+      scriptConsole,
+      response: responseLike,
+      urlSent: url,
+      headersSent: requestHeaders,
+      bodySent: bodyPayloadToScriptString(bodyPayload),
+      responseUrl: url,
+      responseHeaders: res.headers,
+    });
 
     // @kulala-expect-status-code 200 (or 200,201)
     const expectArgs = getOpArgs(["kulala-expect-status-code"]);

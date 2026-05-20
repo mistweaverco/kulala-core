@@ -41,6 +41,8 @@ export type ScriptFlowContext = {
   globalHeaders: Record<string, string>;
   /** `# @grpc-*` from Shared blocks in the document. */
   sharedGrpcFlags?: KulalaGrpcFlag[];
+  /** `### Shared` / `### Shared each` blocks (scripts run around each request). */
+  sharedBlocks?: KulalaBlock[];
 };
 
 type ScriptHeaders = {

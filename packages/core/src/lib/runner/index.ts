@@ -105,6 +105,9 @@ export async function runDocument(
   const flow: ScriptFlowContext = {
     globalHeaders: {},
     sharedGrpcFlags: collectSharedGrpcFlags(doc.blocks, startDir),
+    sharedBlocks: doc.blocks.filter(
+      (b) => b.name === "Shared" || b.name === "Shared each",
+    ),
   };
   for (const block of blocks) {
     const vars = await resolveVariables(

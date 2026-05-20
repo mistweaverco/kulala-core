@@ -84,6 +84,33 @@ export type KulalaStdinActionEnvironments = {
   filepath?: string;
 };
 
+/** Resolved request preview at cursor (inspect). */
+export type KulalaStdinActionInspectRequest = {
+  action: "inspect_request";
+  content: string;
+  filepath?: string;
+  line: number;
+  column: number;
+  env?: string;
+};
+
+/** Copy-as-curl for request at cursor. */
+export type KulalaStdinActionToCurl = {
+  action: "to_curl";
+  content: string;
+  filepath?: string;
+  line: number;
+  column: number;
+  env?: string;
+  userAgent?: string;
+};
+
+/** Paste-from-curl: parse clipboard curl into .http lines. */
+export type KulalaStdinActionFromCurl = {
+  action: "from_curl";
+  curl: string;
+};
+
 export type KulalaStdinParsed =
   | KulalaStdinActionParse
   | KulalaStdinActionRun
@@ -91,4 +118,7 @@ export type KulalaStdinParsed =
   | KulalaStdinActionCrypto
   | KulalaStdinActionHttpRequest
   | KulalaStdinActionClearGlobals
-  | KulalaStdinActionEnvironments;
+  | KulalaStdinActionEnvironments
+  | KulalaStdinActionInspectRequest
+  | KulalaStdinActionToCurl
+  | KulalaStdinActionFromCurl;

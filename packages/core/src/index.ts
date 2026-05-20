@@ -20,6 +20,13 @@ export type { KulalaDocument } from "./lib/parser/types";
 export type { KulalaStdinParsed } from "./lib/parser/types/stdinparsed";
 
 export type { KulalaRunOptions } from "./lib/runner";
+export {
+  parseCurlCommand,
+  formatCurlCommand,
+  parseCurlToHttpSpec,
+  curlToHttpFileLines,
+} from "./lib/curl";
+export type { CurlFormatInput, CurlParsedRequest } from "./lib/curl";
 export type {
   KulalaRequestErrorResponse,
   KulalaRequestSuccessResponse,
