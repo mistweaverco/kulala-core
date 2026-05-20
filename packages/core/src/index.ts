@@ -25,6 +25,7 @@ export type {
   KulalaRequestSuccessResponse,
   KulalaResponseWrapper,
   KulalaScriptConsoleLine,
+  KulalaScriptConsoleOrigin,
 } from "./lib/runner";
 
 import { KulalaParser } from "./lib/parser";

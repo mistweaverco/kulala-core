@@ -41,6 +41,7 @@ export type {
   KulalaRequestSuccessResponse,
   KulalaResponseWrapper,
   KulalaScriptConsoleLine,
+  KulalaScriptConsoleOrigin,
 } from "./types";
 
 export async function runDocument(

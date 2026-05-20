@@ -4,6 +4,7 @@ import {
   setUserAgentHeaderIfNotPresent,
 } from "./headers";
 import type { KulalaHeaderSectionEntry } from "../parser/types/request";
+import { version } from "../../../version.json";
 
 test("buildHeadersFromSection builds record from header entries", () => {
   const section = [
@@ -37,7 +38,7 @@ test("buildHeadersFromSection merges duplicate header names with ; ", () => {
 test("setUserAgentHeaderIfNotPresent adds User-Agent when missing", () => {
   const headers = { "Content-Type": "application/json" };
   const out = setUserAgentHeaderIfNotPresent(headers);
-  expect(out["User-Agent"]).toMatch(/^kulala-core\/\d+\.\d+\.\d+$/);
+  expect(out["User-Agent"]).toBe(`kulala-core/${version}`);
   expect(out["Content-Type"]).toBe("application/json");
 });
 

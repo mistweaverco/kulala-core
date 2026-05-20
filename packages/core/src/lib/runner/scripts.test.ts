@@ -30,6 +30,7 @@ describe("scripts", () => {
       [
         {
           type: "preRequest",
+          source: "inline",
           lang: "js",
           content: `request.variables.set("FOO", "bar");`,
           lineNumber: 1,
@@ -51,6 +52,7 @@ describe("scripts", () => {
       [
         {
           type: "preRequest",
+          source: "inline",
           lang: "js",
           content: `await new Promise((r) => setTimeout(r, 30));
 request.variables.set("NAME", "kulala");`,
@@ -73,6 +75,7 @@ request.variables.set("NAME", "kulala");`,
       [
         {
           type: "postRequest",
+          source: "inline",
           lang: "js",
           content: `
             client.global.set("STATUS", String(response.status));
@@ -112,6 +115,7 @@ request.variables.set("NAME", "kulala");`,
       [
         {
           type: "postRequest",
+          source: "inline",
           lang: "ts",
           content: `const foo: string = "bar";
 void foo;
@@ -143,6 +147,7 @@ client.global.set("DATE", response.headers.valueOf("Date") || "");`,
       [
         {
           type: "postRequest",
+          source: "inline",
           lang: "js",
           content: `request.variables.set("NOPE", "x");`,
           lineNumber: 1,
@@ -163,6 +168,7 @@ client.global.set("DATE", response.headers.valueOf("Date") || "");`,
       [
         {
           type: "postRequest",
+          source: "inline",
           lang: "js",
           content: `
             client.assert(false, "nope");
@@ -187,6 +193,7 @@ client.global.set("DATE", response.headers.valueOf("Date") || "");`,
       [
         {
           type: "postRequest",
+          source: "inline",
           lang: "js",
           content: `
             client.test("fails", () => {
@@ -213,6 +220,7 @@ client.global.set("DATE", response.headers.valueOf("Date") || "");`,
       [
         {
           type: "preRequest",
+          source: "inline",
           lang: "js",
           content: `
             request.variables.set("BEFORE", "ok");
@@ -223,6 +231,7 @@ client.global.set("DATE", response.headers.valueOf("Date") || "");`,
         },
         {
           type: "preRequest",
+          source: "inline",
           lang: "js",
           content: `request.variables.set("SECOND_SCRIPT", "should-not-run");`,
           lineNumber: 10,
@@ -247,6 +256,7 @@ client.global.set("DATE", response.headers.valueOf("Date") || "");`,
       [
         {
           type: "preRequest",
+          source: "inline",
           lang: "js",
           content: `
             client.global.clearAll();
@@ -280,6 +290,7 @@ client.global.set("DATE", response.headers.valueOf("Date") || "");`,
       [
         {
           type: "preRequest",
+          source: "inline",
           lang: "js",
           content: `
             const start = Date.now();
@@ -305,6 +316,7 @@ client.global.set("DATE", response.headers.valueOf("Date") || "");`,
       [
         {
           type: "preRequest",
+          source: "inline",
           lang: "lua",
           content: `
             request.variables.set("FOO", "bar")
@@ -330,6 +342,7 @@ client.global.set("DATE", response.headers.valueOf("Date") || "");`,
       [
         {
           type: "postRequest",
+          source: "inline",
           lang: "lua",
           content: `
             client.global.set("STATUS", tostring(response.status))
@@ -357,5 +370,37 @@ client.global.set("DATE", response.headers.valueOf("Date") || "");`,
     expect(vars.STATUS).toBe("201");
     expect(vars.DATE).toBe("Tue, 02 Jan 2024 00:00:00 GMT");
     expect(vars.TOKEN).toBe("xyz");
+  });
+
+  test("scriptConsole lines include origin (phase, source, file, directive line)", async () => {
+    const scriptConsole: import("./types").KulalaScriptConsoleLine[] = [];
+    await runScripts(
+      [
+        {
+          type: "preRequest",
+          source: "inline",
+          lang: "js",
+          content: `client.log("from-pre");`,
+          lineNumber: 0,
+          filepath: "example.http",
+        },
+      ],
+      "preRequest",
+      dummyBlock,
+      "/tmp/example.http",
+      undefined,
+      {},
+      undefined,
+      scriptConsole,
+    );
+
+    expect(scriptConsole).toHaveLength(1);
+    expect(scriptConsole[0]?.message).toBe("from-pre");
+    expect(scriptConsole[0]?.origin.phase).toBe("preRequest");
+    expect(scriptConsole[0]?.origin.source).toBe("inline");
+    expect(scriptConsole[0]?.origin.httpDirectiveLine).toBe(
+      dummyBlock.position.start,
+    );
+    expect(scriptConsole[0]?.origin.file).toContain("example.http");
   });
 });

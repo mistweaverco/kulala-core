@@ -81,11 +81,14 @@ X-Custom-Header: Kulala-Named-Request
 < {%
 var fs = require('fs');
 if (!fs.existsSync('TOKEN.txt')) {
-  console.log('TOKEN.txt not found, using default token');
+  console.log('TOKEN.txt not found, requiring new token');
+} else {
+  console.log('TOKEN.txt found, using token from file');
 }
 %}
-# @kulala-curl-insecure
-POST https://httpbin.org/post HTTP/1.1
+
+// @kulala-curl-insecure
+POST https://echo.getkulala.net/post HTTP/1.1
 Content-Type: application/json
 X-Custom-Header: Kulala-Insecure
 
@@ -96,6 +99,6 @@ X-Custom-Header: Kulala-Insecure
 > ./simple.js
 
 > {%
-  var fs = require('fs');
-  fs.writeFileSync('TOKEN.txt', response.body.token);
+  const fs = require('fs');
+  fs.writeFileSync('TOKEN.txt', response.body.body.token);
 %}

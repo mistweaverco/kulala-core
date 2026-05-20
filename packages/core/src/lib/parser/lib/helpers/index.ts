@@ -19,9 +19,9 @@ export const writeToStderr = (doc: KulalaDocument): void => {
   Bun.stderr.write(JSON.stringify(doc, null, 2) + "\n");
 };
 
-export const writeToStdout = (doc: KulalaDocument): void => {
+export const writeToStdout = (payload: unknown): void => {
   const encoder = new TextEncoder();
-  const data = encoder.encode(JSON.stringify(doc, null, 2) + "\n");
+  const data = encoder.encode(JSON.stringify(payload, null, 2) + "\n");
   Bun.stdout.write(data);
 };
 

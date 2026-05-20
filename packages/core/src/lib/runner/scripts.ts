@@ -1,6 +1,10 @@
 import path from "path";
 import type { KulalaBlock } from "./../parser/types/block";
-import type { KulalaScriptConsoleLine, RunnerResponseLike } from "./types";
+import type {
+  KulalaScriptConsoleLine,
+  KulalaScriptConsoleOrigin,
+  RunnerResponseLike,
+} from "./types";
 import {
   type KulalaScript,
   type KulalaScriptType,
@@ -163,6 +167,101 @@ function resolveScriptBody(
   return text;
 }
 
+type ParsedTempCallsite = { tempLine: number; column: number };
+
+/** Parse Bun-style stack `(path/to/file.tsx:LINE:COL)` targeting the Kulala script temp module. */
+function parseCallsiteFromStack(
+  stack: string | undefined,
+  tempAbsPath: string,
+): ParsedTempCallsite | undefined {
+  if (!stack) return undefined;
+  const resolvedTarget = path.resolve(tempAbsPath);
+  const basename = path.basename(resolvedTarget);
+  for (const frame of stack.split("\n")) {
+    const open = frame.lastIndexOf("(");
+    const close = frame.lastIndexOf(")");
+    if (open === -1 || close <= open) continue;
+    const spec = frame.slice(open + 1, close);
+    const lastColon = spec.lastIndexOf(":");
+    const prevColon = spec.lastIndexOf(":", lastColon - 1);
+    if (
+      lastColon === -1 ||
+      prevColon === -1 ||
+      prevColon <= 0 ||
+      lastColon <= prevColon
+    )
+      continue;
+    const file = spec.slice(0, prevColon);
+    const ln = Number(spec.slice(prevColon + 1, lastColon));
+    const col = Number(spec.slice(lastColon + 1));
+    if (
+      file.length === 0 ||
+      !Number.isFinite(ln) ||
+      !Number.isFinite(col) ||
+      ln < 1 ||
+      col < 1
+    )
+      continue;
+    try {
+      const resolved = path.resolve(file);
+      if (resolved !== resolvedTarget && path.basename(file) !== basename)
+        continue;
+    } catch {
+      continue;
+    }
+    return { tempLine: ln, column: col };
+  }
+  return undefined;
+}
+
+function buildConsoleOrigin(args: {
+  script: KulalaScript;
+  block: KulalaBlock;
+  phase: KulalaScriptType;
+  httpDocumentPath?: string;
+  tempCallsite?: ParsedTempCallsite | undefined;
+}): KulalaScriptConsoleOrigin {
+  const { script, block, phase, httpDocumentPath, tempCallsite } = args;
+  const httpDirectiveLine = block.position.start + script.lineNumber;
+  let originFile: string;
+  if (script.source === "inline") {
+    const fp = script.filepath?.trim() ?? "";
+    originFile =
+      fp.length > 0
+        ? path.isAbsolute(fp)
+          ? path.resolve(fp)
+          : path.resolve(
+              path.dirname(
+                httpDocumentPath && httpDocumentPath.length > 0
+                  ? httpDocumentPath
+                  : process.cwd(),
+              ),
+              fp,
+            )
+        : path.resolve(httpDocumentPath ?? process.cwd());
+  } else {
+    originFile = path.resolve(process.cwd(), script.filepath ?? "");
+  }
+
+  const origin: KulalaScriptConsoleOrigin = {
+    phase,
+    source: script.source,
+    file: originFile,
+    httpDirectiveLine,
+  };
+
+  if (!tempCallsite || tempCallsite.tempLine < 2) return origin;
+
+  const userBodyLine = tempCallsite.tempLine - 1;
+  if (script.source === "inline") {
+    origin.line = httpDirectiveLine + userBodyLine;
+  } else {
+    origin.line = userBodyLine;
+  }
+  origin.column = tempCallsite.column;
+  return origin;
+}
+
 function makeResponseForScripts(response?: RunnerResponseLike): ScriptResponse {
   if (!response) {
     return {
@@ -240,12 +339,16 @@ const wrapScriptContent = (
 };
 
 async function executeJsTsScript(
-  filePath: string,
+  modulePath: string,
   ctx: {
     client: ScriptClient;
     request: ScriptRequest;
     response: ScriptResponse;
-    scriptConsole?: KulalaScriptConsoleLine[];
+    /** When set, `console.*` is captured via this hook (caller supplies origin). */
+    pushCapturedConsole?: (
+      level: KulalaScriptConsoleLine["level"],
+      args: unknown[],
+    ) => void;
   },
 ): Promise<void> {
   const prev = {
@@ -264,9 +367,9 @@ async function executeJsTsScript(
     sleep: (globalThis as Record<string, unknown>).sleep,
   };
 
-  const buf = ctx.scriptConsole;
+  const pushCap = ctx.pushCapturedConsole;
   const prevConsole =
-    buf !== undefined
+    pushCap !== undefined
       ? {
           log: console.log.bind(console),
           error: console.error.bind(console),
@@ -282,7 +385,7 @@ async function executeJsTsScript(
     (globalThis as unknown as Record<string, unknown>).response = ctx.response;
 
     // Allow CommonJS requires in scripts.
-    const req = createRequire(filePath);
+    const req = createRequire(modulePath);
     (globalThis as unknown as Record<string, unknown>).require = req;
 
     // JetBrains parity: expose common child_process helpers as globals.
@@ -318,31 +421,25 @@ async function executeJsTsScript(
         new Promise<void>((resolve) => setTimeout(resolve, Math.max(0, ms)));
     }
 
-    if (buf && prevConsole) {
-      const push = (
-        level: KulalaScriptConsoleLine["level"],
-        args: unknown[],
-      ) => {
-        buf.push({ level, message: formatScriptConsoleArgs(args) });
-      };
+    if (pushCap && prevConsole) {
       console.log = (...args: unknown[]) => {
-        push("log", args);
+        pushCap("log", args);
       };
       console.error = (...args: unknown[]) => {
-        push("error", args);
+        pushCap("error", args);
       };
       console.warn = (...args: unknown[]) => {
-        push("warn", args);
+        pushCap("warn", args);
       };
       console.info = (...args: unknown[]) => {
-        push("info", args);
+        pushCap("info", args);
       };
       console.debug = (...args: unknown[]) => {
-        push("debug", args);
+        pushCap("debug", args);
       };
     }
 
-    const mod = (await import(filePath)) as { default?: unknown };
+    const mod = (await import(modulePath)) as { default?: unknown };
     const run = mod.default;
     if (typeof run === "function") {
       await (run as () => unknown)();
@@ -466,26 +563,40 @@ export const runScripts = async (
   flow?: ScriptFlowContext,
   scriptConsole?: KulalaScriptConsoleLine[],
 ): Promise<void> => {
-  void type;
-  void block;
   const mutableVars = vars ?? {};
   for (const script of scripts) {
     const tmpName = path.resolve(getTempName());
     const cwd = path.resolve(process.cwd());
     const tempCwd = path.resolve(path.dirname(filePath || tmpName));
 
-    const appendConsole = (
+    const emitConsoleLine = (
       level: KulalaScriptConsoleLine["level"],
       message: string,
+      tempCallsite?: ParsedTempCallsite,
     ) => {
       if (scriptConsole) {
-        scriptConsole.push({ level, message });
+        scriptConsole.push({
+          level,
+          message,
+          origin: buildConsoleOrigin({
+            script,
+            block,
+            phase: type,
+            httpDocumentPath: filePath,
+            tempCallsite,
+          }),
+        });
       } else if (level === "error") {
         console.error(message);
       } else {
         console.log(message);
       }
     };
+
+    const captureJsCallsite = (): ParsedTempCallsite | undefined =>
+      script.lang !== "lua"
+        ? parseCallsiteFromStack(new Error().stack, tmpName)
+        : undefined;
 
     try {
       process.chdir(tempCwd);
@@ -515,10 +626,14 @@ export const runScripts = async (
           }
           try {
             func();
-            appendConsole("log", `✓ ${testName}`);
+            emitConsoleLine("log", `✓ ${testName}`, captureJsCallsite());
           } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
-            appendConsole("error", `✗ ${testName}: ${msg}`);
+            emitConsoleLine(
+              "error",
+              `✗ ${testName}: ${msg}`,
+              captureJsCallsite(),
+            );
             throw e;
           }
         },
@@ -562,8 +677,11 @@ export const runScripts = async (
           },
         },
         log: (...args: unknown[]) => {
-          // Match JetBrains-style "client.log" behavior.
-          appendConsole("log", formatScriptConsoleArgs(args));
+          emitConsoleLine(
+            "log",
+            formatScriptConsoleArgs(args),
+            captureJsCallsite(),
+          );
         },
       };
 
@@ -586,18 +704,28 @@ export const runScripts = async (
           client: clientObj,
           request: requestObj,
           response: responseObj,
-          scriptConsole,
+          pushCapturedConsole:
+            scriptConsole !== undefined
+              ? (level, args) => {
+                  emitConsoleLine(
+                    level,
+                    formatScriptConsoleArgs(args),
+                    parseCallsiteFromStack(new Error().stack, tmpName),
+                  );
+                }
+              : undefined,
         });
       }
     } catch (error) {
       if (error instanceof ScriptExitError) {
         break;
       }
-      appendConsole(
+      emitConsoleLine(
         "error",
         `Error executing script: ${
           error instanceof Error ? error.message : String(error)
         }`,
+        captureJsCallsite(),
       );
     } finally {
       try {

@@ -16,6 +16,25 @@ function writeOutbound(msg: OutboundMessage): void {
   process.stdout.write(JSON.stringify(msg) + "\n");
 }
 
+/** DOM lib types only allow protocols as the 2nd arg; Bun accepts `{ headers }`. */
+type BunClientWebSocket = {
+  new (
+    url: string | URL,
+    options?: { headers?: Record<string, string> },
+  ): WebSocket;
+};
+
+function openClientWebSocket(
+  url: string,
+  headers?: Record<string, string>,
+): WebSocket {
+  if (headers && Object.keys(headers).length > 0) {
+    const Ws = WebSocket as unknown as BunClientWebSocket;
+    return new Ws(url, { headers });
+  }
+  return new WebSocket(url);
+}
+
 function normalizeWsUrl(method: string, target: string): string {
   const t = target.trim();
   if (/^wss?:\/\//i.test(t)) return t;
@@ -36,11 +55,7 @@ export async function runWebSocketSession(
   await new Promise<void>((resolve, reject) => {
     let ws: WebSocket;
     try {
-      const headers = connect.headers;
-      ws =
-        headers && Object.keys(headers).length > 0
-          ? new WebSocket(url, { headers })
-          : new WebSocket(url);
+      ws = openClientWebSocket(url, connect.headers);
     } catch (e) {
       reject(e);
       return;

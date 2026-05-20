@@ -752,6 +752,7 @@ export async function doRequestFromBlock(
           error: `Expected status code ${codes.join(
             ", ",
           )} but got ${res.statusCode}`,
+          ...(scriptConsole.length > 0 ? { scriptConsole } : {}),
         } as KulalaRequestErrorResponse;
       }
     }
@@ -809,6 +810,7 @@ export async function doRequestFromBlock(
     return {
       success: false,
       error: error instanceof Error ? error.message : String(error),
+      ...(scriptConsole.length > 0 ? { scriptConsole } : {}),
     } as KulalaRequestErrorResponse;
   }
 }

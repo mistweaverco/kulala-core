@@ -852,6 +852,7 @@ test("doRequestFromBlock: applies client.global.headers.set from pre-request scr
       preRequest: [
         {
           type: "preRequest",
+          source: "inline",
           lang: "js",
           content: `client.global.headers.set("X-Custom", "from-flow");`,
           lineNumber: 1,
@@ -891,6 +892,7 @@ test("doRequestFromBlock: applies client.global.headers.set from post-request sc
       postRequest: [
         {
           type: "postRequest",
+          source: "inline",
           lang: "js",
           content: `client.global.headers.set("X-Custom", "from-post");`,
           lineNumber: 1,
@@ -944,6 +946,7 @@ test("doRequestFromBlock: pre-request Lua variables are available for substituti
       preRequest: [
         {
           type: "preRequest",
+          source: "inline",
           lang: "lua",
           content: `request.variables.set("NAME", "kulala")`,
           lineNumber: 1,
@@ -985,6 +988,7 @@ test("doRequestFromBlock: pre-request JS with await still substitutes {{NAME}} i
       preRequest: [
         {
           type: "preRequest",
+          source: "inline",
           lang: "js",
           content: `await Promise.resolve();
 request.variables.set("NAME", "kulala");`,

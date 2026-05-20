@@ -1,7 +1,26 @@
+import type { KulalaScriptType } from "../parser/types/script";
+
+/** Where captured script output came from (pre/post phase, directive site, optional callsite). */
+export type KulalaScriptConsoleOrigin = {
+  phase: KulalaScriptType;
+  source: "inline" | "file";
+  /** Target file absolute path (.http when inline; .js/.ts/.lua script when external). */
+  file: string;
+  /** 1-based line in HTTP where `<` / `>` script directive begins. */
+  httpDirectiveLine: number;
+  /**
+   * Optional 1-based line in `file` at callsite (`console.*` / etc.).
+   * For inline, this equals the computed line in the same HTTP document.
+   */
+  line?: number;
+  column?: number;
+};
+
 /** Captured `console.log` / `console.error` / etc. from pre- and post-request scripts (stdout stays JSON-only). */
 export type KulalaScriptConsoleLine = {
   level: "log" | "error" | "warn" | "info" | "debug";
   message: string;
+  origin: KulalaScriptConsoleOrigin;
 };
 
 /** Request as sent (after scripts and variable substitution). */
@@ -78,6 +97,8 @@ export type KulalaRequestErrorResponse = {
   success: false;
   blockName?: string;
   error: string;
+  /** Present when scripts ran before the failure (e.g. pre-request or failed expect-status). */
+  scriptConsole?: KulalaScriptConsoleLine[];
 };
 
 export type KulalaPromptResponse = {

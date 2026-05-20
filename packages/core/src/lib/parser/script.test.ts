@@ -15,6 +15,7 @@ describe("getScript", () => {
       throw new Error(r.errorMessage);
     }
     expect(r.type).toBe("preRequest");
+    expect(r.source).toBe("inline");
     expect(r.lang).toBe("lua");
     expect(r.content.trim()).toBe('request.variables.set("NAME", "kulala")');
   });
@@ -31,6 +32,7 @@ describe("getScript", () => {
       throw new Error(r.errorMessage);
     }
     expect(r.type).toBe("postRequest");
+    expect(r.source).toBe("inline");
     expect(r.lang).toBe("ts");
     expect(r.content).toContain("const foo: string");
     expect(r.content).toContain("request.variables.set");
@@ -48,6 +50,7 @@ describe("getScript", () => {
       throw new Error(r.errorMessage);
     }
     expect(r.type).toBe("postRequest");
+    expect(r.source).toBe("inline");
     expect(r.lang).toBe("lua");
     expect(r.content.trim()).toBe('request.variables.set("X", "1")');
   });

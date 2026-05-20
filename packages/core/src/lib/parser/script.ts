@@ -85,9 +85,11 @@ export const getScript = async (
       filepath,
     };
   }
+  const source = isInlineScript ? ("inline" as const) : ("file" as const);
   return {
     type,
     lang,
+    source,
     content,
     filepath,
     lineNumber: lineIdx,
