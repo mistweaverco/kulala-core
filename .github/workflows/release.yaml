@@ -50,9 +50,6 @@ jobs:
           restore-keys: |
             bun-${{ hashFiles('**/bun.lock') }}-${{ matrix.runner }}
 
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
       - name: Set version (Unix)
         if: runner.os != 'Windows'
         run: |
@@ -65,6 +62,9 @@ jobs:
         run: |
           $VERSION = "${{ github.ref_name }}" -replace '^v', ''
           echo "VERSION=$VERSION" >> $env:GITHUB_ENV
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
 
       - name: Build Linux (x86_64)
         if: matrix.platform == 'linux-x86_64'

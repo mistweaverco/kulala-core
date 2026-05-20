@@ -1,3 +1,6 @@
+# Ignore auto-generated version file
+/packages/core/version.json
+
 # dependencies (bun install)
 node_modules
 
