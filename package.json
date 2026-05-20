@@ -7,7 +7,7 @@
     "lint": "tsc --noEmit && prettier --check . && eslint .",
     "test": "bun test",
     "vendor": "bun run packages/core/scripts/generate-vendored-curl.ts",
-    "postinstall": "./scripts/postinstall.sh",
+    "postinstall": "bun run ./scripts/postinstall.ts",
     "build": "bun run packages/core/scripts/generate-vendored-curl.ts && bun build src/cli.ts --compile --define __KULALA_EMBED_CURL__=true --outfile dist/kulala-core --cwd packages/core",
     "build:linux-x64": "bun run packages/core/scripts/generate-vendored-curl.ts --target=bun-linux-x64 && bun build src/cli.ts --compile --define __KULALA_EMBED_CURL__=true --target=bun-linux-x64 --outfile dist/kulala-core-linux-x86_64 --cwd packages/core",
     "build:linux-arm64": "bun run packages/core/scripts/generate-vendored-curl.ts --target=bun-linux-arm64 && bun build src/cli.ts --compile --define __KULALA_EMBED_CURL__=true --target=bun-linux-arm64 --outfile dist/kulala-core-linux-aarch64 --cwd packages/core",
