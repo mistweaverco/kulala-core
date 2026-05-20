@@ -64,6 +64,7 @@ jobs:
           echo "VERSION=$VERSION" >> $env:GITHUB_ENV
 
       - name: Install dependencies
+        shell: bash
         run: bun install --frozen-lockfile
 
       - name: Build Linux (x86_64)
