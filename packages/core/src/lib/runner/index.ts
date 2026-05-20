@@ -143,22 +143,25 @@ export async function runDocument(
       env,
       flow,
     );
-    results.push({ ...result, blockName: block.name });
+    const resultItems = Array.isArray(result) ? result : [result];
+    for (const item of resultItems) {
+      results.push({ ...item, blockName: block.name });
 
-    // If we got a prompt response, stop processing and return it
-    if (!result.success && "prompt" in result && result.prompt) {
-      const responseWrapper: KulalaResponseWrapper = {
-        type: "responses",
-        data: [result],
-      };
-      return responseWrapper;
-    }
+      // If we got a prompt response, stop processing and return it
+      if (!item.success && "prompt" in item && item.prompt) {
+        const responseWrapper: KulalaResponseWrapper = {
+          type: "responses",
+          data: results,
+        };
+        return responseWrapper;
+      }
 
-    if (result.success && "status" in result && "body" in result) {
-      previousResults.set(getBlockResultKey(block), {
-        body: result.body,
-        headers: result.headers,
-      });
+      if (item.success && "status" in item && "body" in item) {
+        previousResults.set(getBlockResultKey(block), {
+          body: item.body,
+          headers: item.headers,
+        });
+      }
     }
   }
   const responseWrapper: KulalaResponseWrapper = {

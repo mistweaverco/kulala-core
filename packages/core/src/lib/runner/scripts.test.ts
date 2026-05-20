@@ -372,6 +372,92 @@ client.global.set("DATE", response.headers.valueOf("Date") || "");`,
     expect(vars.TOKEN).toBe("xyz");
   });
 
+  test("post-request JS can read response.cookies (JetBrains parity)", async () => {
+    const vars: Record<string, string> = {};
+    await runScripts(
+      [
+        {
+          type: "postRequest",
+          source: "inline",
+          lang: "js",
+          content: `
+            const all = response.cookies();
+            client.global.set("COOKIE_COUNT", String(all.length));
+            client.global.set("SESSION", response.cookiesByName("session")[0]?.value ?? "");
+          `,
+          lineNumber: 1,
+        },
+      ],
+      "postRequest",
+      dummyBlock,
+      "/tmp/example.http",
+      {
+        statusCode: 200,
+        headers: {
+          "set-cookie": "session=xyz; Path=/",
+          "content-type": "application/json",
+        },
+        body: "{}",
+        timings: { phases: { total: 1 } },
+      },
+      vars,
+      undefined,
+      undefined,
+      {
+        phase: "postRequest",
+        method: "GET",
+        urlRaw: "https://example.com",
+        headersRaw: {},
+        bodyRaw: undefined,
+        env: "default",
+        startDir: "/tmp",
+        mutableVars: vars,
+        iteration: 1,
+        responseUrl: "https://example.com",
+        responseHeaders: {
+          "set-cookie": "session=xyz; Path=/",
+        },
+      },
+    );
+    expect(vars.COOKIE_COUNT).toBe("1");
+    expect(vars.SESSION).toBe("xyz");
+  });
+
+  test("pre-request JS can read request.method and request.body.getRaw", async () => {
+    const blockWithBody: KulalaBlock = {
+      ...dummyBlock,
+      request: {
+        ...dummyBlock.request,
+        method: "PUT",
+        body: "hello {{NAME}}",
+      },
+    };
+    const vars: Record<string, string> = { NAME: "world" };
+    await runScripts(
+      [
+        {
+          type: "preRequest",
+          source: "inline",
+          lang: "js",
+          content: `
+            request.variables.set("METHOD", request.method);
+            request.variables.set("RAW", request.body.getRaw() ?? "");
+            request.variables.set("SUB", request.body.tryGetSubstituted() ?? "");
+          `,
+          lineNumber: 1,
+        },
+      ],
+      "preRequest",
+      blockWithBody,
+      "/tmp/example.http",
+      undefined,
+      vars,
+    );
+    expect(vars.METHOD).toBe("PUT");
+    expect(vars.RAW).toBe("hello {{NAME}}");
+    expect(vars.SUB).toBe("hello world");
+  });
+
   test("scriptConsole lines include origin (phase, source, file, directive line)", async () => {
     const scriptConsole: import("./types").KulalaScriptConsoleLine[] = [];
     await runScripts(

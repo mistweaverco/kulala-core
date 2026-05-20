@@ -23,6 +23,15 @@ import {
 } from "../persistence";
 import { runScripts } from "./scripts";
 import {
+  bodyPayloadToScriptString,
+  buildScriptRequestContextFromBlock,
+} from "./script-request-context";
+import {
+  detectCollectionIterationPlan,
+  varsForCollectionIndex,
+} from "./collection-iteration";
+import type { CollectionIterationPlan } from "./collection-iteration";
+import {
   buildHeadersFromSection,
   normalizeAuthorizationHeader,
   setUserAgentHeaderIfNotPresent,
@@ -52,6 +61,20 @@ import type {
 
 export type { RunnerResponseLike } from "./types";
 
+export type DoRequestFromBlockResult =
+  | KulalaRequestSuccessResponse
+  | KulalaRequestErrorResponse
+  | KulalaPromptResponse
+  | KulalaWebSocketPlanResponse;
+
+export type DoRequestFromBlockOptions = {
+  /** 0-based collection loop index (JetBrains request.iteration()). */
+  collectionIndex?: number;
+  collectionPlan?: CollectionIterationPlan;
+  /** Internal: child call when expanding a collection variable. */
+  skipPreScripts?: boolean;
+};
+
 function buildSentRequestSnapshot(
   method: string,
   url: string,
@@ -77,12 +100,8 @@ export async function doRequestFromBlock(
   resolver: VariableResolver | undefined,
   env: string = "default",
   flow?: import("./scripts").ScriptFlowContext,
-): Promise<
-  | KulalaRequestSuccessResponse
-  | KulalaRequestErrorResponse
-  | KulalaPromptResponse
-  | KulalaWebSocketPlanResponse
-> {
+  iterationOptions?: DoRequestFromBlockOptions,
+): Promise<DoRequestFromBlockResult | DoRequestFromBlockResult[]> {
   const scriptConsole: KulalaScriptConsoleLine[] = [];
 
   const parseDurationToSec = (raw: string): number | undefined => {
@@ -248,17 +267,71 @@ export async function doRequestFromBlock(
     );
   }
 
-  // Pre-request scripts run before substitution so they can set request/global vars.
-  await runScripts(
-    block.scripts.preRequest,
-    "preRequest",
-    block,
-    filePath,
-    undefined,
-    mutableVars,
-    flow,
-    scriptConsole,
-  );
+  if (!iterationOptions?.skipPreScripts) {
+    const preScriptRequestCtx = buildScriptRequestContextFromBlock({
+      block,
+      phase: "preRequest",
+      effectiveBody,
+      env,
+      startDir,
+      mutableVars,
+      resolver,
+      iteration: 0,
+    });
+
+    // Pre-request scripts run before substitution so they can set request/global vars.
+    await runScripts(
+      block.scripts.preRequest,
+      "preRequest",
+      block,
+      filePath,
+      undefined,
+      mutableVars,
+      flow,
+      scriptConsole,
+      preScriptRequestCtx,
+    );
+
+    const collectionPlan = detectCollectionIterationPlan(
+      block,
+      effectiveBody,
+      mutableVars,
+    );
+    if (collectionPlan.count > 1) {
+      const batch: DoRequestFromBlockResult[] = [];
+      for (let i = 0; i < collectionPlan.count; i++) {
+        const iterVars = varsForCollectionIndex(
+          mutableVars,
+          collectionPlan.collections,
+          i,
+        );
+        const child = await doRequestFromBlock(
+          block,
+          filePath,
+          iterVars,
+          stableDocIdForReplay,
+          resolver,
+          env,
+          flow,
+          { collectionIndex: i, collectionPlan, skipPreScripts: true },
+        );
+        const one = Array.isArray(child) ? child[0]! : child;
+        batch.push(one);
+        if (!one.success || ("prompt" in one && one.prompt)) {
+          return batch;
+        }
+      }
+      incrementReplayCount(stableDocIdForReplay ?? filePath ?? "", block.name);
+      return batch;
+    }
+  }
+
+  const collectionIndex = iterationOptions?.collectionIndex ?? 0;
+  const collectionPlan =
+    iterationOptions?.collectionPlan ??
+    detectCollectionIterationPlan(block, effectiveBody, mutableVars);
+  const scriptCollectionPlan =
+    collectionPlan.count > 1 ? collectionPlan : undefined;
 
   // Check if we need async substitution (for $auth.token() calls)
   // Unescape braces in header values before checking (similar to header parser)
@@ -726,15 +799,33 @@ export async function doRequestFromBlock(
       timings: timingsForScripts,
     };
 
+    const postScriptRequestCtx = buildScriptRequestContextFromBlock({
+      block,
+      phase: "postRequest",
+      effectiveBody,
+      env,
+      startDir,
+      mutableVars,
+      resolver,
+      iteration: collectionIndex,
+      collectionPlan: scriptCollectionPlan,
+      urlSent: url,
+      headersSent: requestHeaders,
+      bodySent: bodyPayloadToScriptString(bodyPayload),
+      responseUrl: url,
+      responseHeaders: res.headers,
+    });
+
     await runScripts(
       block.scripts.postRequest,
       "postRequest",
       block,
       filePath,
       responseLike,
-      undefined,
+      mutableVars,
       flow,
       scriptConsole,
+      postScriptRequestCtx,
     );
 
     // @kulala-expect-status-code 200 (or 200,201)
@@ -757,7 +848,9 @@ export async function doRequestFromBlock(
       }
     }
 
-    incrementReplayCount(stableDocIdForReplay ?? filePath ?? "", block.name);
+    if (!iterationOptions?.skipPreScripts) {
+      incrementReplayCount(stableDocIdForReplay ?? filePath ?? "", block.name);
+    }
 
     if (logEnabled) {
       saveHistoryEntry({

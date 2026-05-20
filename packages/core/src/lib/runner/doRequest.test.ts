@@ -974,6 +974,62 @@ test("doRequestFromBlock: pre-request Lua variables are available for substituti
   }
 });
 
+test("doRequestFromBlock: collection variable expands requests with 0-based request.iteration()", async () => {
+  const block = makeBlock({
+    request: {
+      method: "GET",
+      url: `${baseUrl}/path?id={{id}}` as KulalaHttpURL,
+      headerSection: [],
+    },
+    scripts: {
+      preRequest: [
+        {
+          type: "preRequest",
+          source: "inline",
+          lang: "js",
+          content: `request.variables.set("id", [1, 2]);`,
+          lineNumber: 1,
+        },
+      ],
+      postRequest: [
+        {
+          type: "postRequest",
+          source: "inline",
+          lang: "js",
+          content: `client.global.set("LAST_ITER", String(request.iteration()));`,
+          lineNumber: 1,
+        },
+      ],
+    },
+  });
+
+  const result = await doRequestFromBlock(
+    block,
+    "/tmp/example.http",
+    undefined,
+    undefined,
+    undefined,
+  );
+
+  expect(Array.isArray(result)).toBe(true);
+  const batch = result as Array<{
+    success: boolean;
+    body?: { type: string; content: unknown };
+  }>;
+  expect(batch).toHaveLength(2);
+  expect(batch.every((r) => r.success)).toBe(true);
+  expect(getVariable("global", "LAST_ITER")).toBe("1");
+
+  const urls = batch.map((r) => {
+    if (r.success && r.body?.type === "json") {
+      return String((r.body.content as { url?: string }).url ?? "");
+    }
+    return "";
+  });
+  expect(urls[0]).toContain("id=1");
+  expect(urls[1]).toContain("id=2");
+});
+
 test("doRequestFromBlock: pre-request JS with await still substitutes {{NAME}} in URL", async () => {
   const block = makeBlock({
     request: {

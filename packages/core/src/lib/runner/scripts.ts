@@ -29,6 +29,12 @@ import { inspect } from "node:util";
 import type { Lua } from "wasmoon-lua5.1";
 
 import type { KulalaGrpcFlag } from "../grpc/types";
+import {
+  buildScriptCookies,
+  buildScriptRequestApi,
+  buildScriptRequestContextFromBlock,
+  type ScriptRequestContext,
+} from "./script-request-context";
 
 export type ScriptFlowContext = {
   /** "Execution flow" local headers (not persisted). */
@@ -58,15 +64,14 @@ type ScriptResponse = {
    */
   body: string | unknown;
   contentType: ScriptContentType;
+  cookies: () => import("./script-request-context").ScriptCookie[];
+  cookiesByName: (
+    name: string,
+  ) => import("./script-request-context").ScriptCookie[];
 };
 
-type ScriptRequest = {
-  variables: {
-    set: (name: string, value: unknown) => void;
-    get: (name: string) => string | undefined;
-    all: () => Record<string, string>;
-  };
-};
+/** JetBrains HTTP Client request object (shape varies by script phase). */
+export type ScriptRequest = ReturnType<typeof buildScriptRequestApi>;
 
 type ScriptClient = {
   test: (testName: string, func: () => unknown) => void;
@@ -262,24 +267,35 @@ function buildConsoleOrigin(args: {
   return origin;
 }
 
-function makeResponseForScripts(response?: RunnerResponseLike): ScriptResponse {
+function makeResponseForScripts(
+  response?: RunnerResponseLike,
+  responseUrl?: string,
+): ScriptResponse {
   if (!response) {
     return {
       status: 0,
       headers: makeHeaders({}),
       body: "",
       contentType: { mimeType: "", charset: "" },
+      cookies: () => [],
+      cookiesByName: () => [],
     };
   }
   const bodyRaw = response.body;
   const text = typeof bodyRaw === "string" ? bodyRaw : String(bodyRaw ?? "");
   const ctHeader = response.headers["content-type"];
   const body = resolveScriptBody(text, ctHeader);
+  const urlForCookies = responseUrl ?? "";
+  const allCookies = () =>
+    urlForCookies ? buildScriptCookies(response.headers, urlForCookies) : [];
   return {
     status: response.statusCode,
     headers: makeHeaders(response.headers),
     body,
     contentType: parseContentTypeHeader(ctHeader),
+    cookies: allCookies,
+    cookiesByName: (name: string) =>
+      allCookies().filter((c) => c.name === name),
   };
 }
 
@@ -516,11 +532,46 @@ async function executeLuaScript(
       },
     },
   };
+  const req = ctx.request;
+  const luaBody =
+    typeof req.body === "function"
+      ? () => (req.body as () => string | undefined)()
+      : {
+          getRaw: () =>
+            (req.body as { getRaw: () => string | undefined }).getRaw(),
+          tryGetSubstituted: () =>
+            (
+              req.body as {
+                tryGetSubstituted: () => string | undefined;
+              }
+            ).tryGetSubstituted(),
+        };
+  const luaUrl =
+    typeof req.url === "function"
+      ? () => (req.url as () => string)()
+      : {
+          getRaw: () => (req.url as { getRaw: () => string }).getRaw(),
+          tryGetSubstituted: () =>
+            (
+              req.url as { tryGetSubstituted: () => string }
+            ).tryGetSubstituted(),
+        };
   luaCtx.request = {
     variables: {
-      set: (k: string, v: unknown) => ctx.request.variables.set(k, v),
-      get: (k: string) => ctx.request.variables.get(k),
-      all: () => ctx.request.variables.all(),
+      set: (k: string, v: unknown) => req.variables.set(k, v),
+      get: (k: string) => req.variables.get(k),
+      all: () => req.variables.all(),
+    },
+    environment: {
+      get: (k: string) => req.environment.get(k),
+    },
+    method: req.method,
+    iteration: () => req.iteration(),
+    body: luaBody,
+    url: luaUrl,
+    headers: {
+      all: () => req.headers.all(),
+      findByName: (name: string) => req.headers.findByName(name),
     },
   };
   luaCtx.response = {
@@ -532,6 +583,8 @@ async function executeLuaScript(
     },
     body: ctx.response.body,
     contentType: ctx.response.contentType,
+    cookies: () => ctx.response.cookies(),
+    cookiesByName: (name: string) => ctx.response.cookiesByName(name),
   };
 
   // Basic assert/test helpers (useful for parity and future scripting tests).
@@ -562,6 +615,7 @@ export const runScripts = async (
   vars?: Record<string, string>,
   flow?: ScriptFlowContext,
   scriptConsole?: KulalaScriptConsoleLine[],
+  requestContext?: ScriptRequestContext,
 ): Promise<void> => {
   const mutableVars = vars ?? {};
   for (const script of scripts) {
@@ -601,20 +655,18 @@ export const runScripts = async (
     try {
       process.chdir(tempCwd);
 
-      const requestObj: ScriptRequest = {
-        variables: {
-          set: (name: string, value: unknown) => {
-            if (type === "postRequest") {
-              throw new Error(
-                "request.variables.set is not available in post-request scripts",
-              );
-            }
-            mutableVars[name] = toStringValue(value);
-          },
-          get: (name: string) => mutableVars[name],
-          all: () => ({ ...mutableVars }),
-        },
-      };
+      const scriptReqCtx =
+        requestContext ??
+        buildScriptRequestContextFromBlock({
+          block,
+          phase: type,
+          effectiveBody: block.request.body,
+          env: "default",
+          startDir: tempCwd,
+          mutableVars,
+          iteration: 0,
+        });
+      const requestObj: ScriptRequest = buildScriptRequestApi(scriptReqCtx);
 
       const clientObj: ScriptClient = {
         test: (testName: string, func: () => unknown) => {
@@ -685,7 +737,10 @@ export const runScripts = async (
         },
       };
 
-      const responseObj = makeResponseForScripts(response);
+      const responseObj = makeResponseForScripts(
+        response,
+        requestContext?.responseUrl,
+      );
 
       if (script.lang === "lua") {
         await executeLuaScript(script.content, {
