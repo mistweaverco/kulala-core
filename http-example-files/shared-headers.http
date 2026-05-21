@@ -1,0 +1,19 @@
+### First
+
+# If you run all requests (not one by one),
+# this is considered as a shared header,
+# and the header will be sent in all requests.
+
+< {%
+  client.global.headers.set("X-Kulala", "Family");
+%}
+
+GET https://echo.getkulala.net/get HTTP/1.1
+
+### Second
+
+GET https://echo.getkulala.net/get HTTP/1.1
+
+### Third
+
+GET https://echo.getkulala.net/get HTTP/1.1
