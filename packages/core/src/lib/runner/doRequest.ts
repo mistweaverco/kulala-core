@@ -5,6 +5,8 @@ import { mergeGrpcFlags } from "../grpc/parse-target";
 import type { KulalaWebSocketPlanResponse } from "./types";
 import type { KulalaBlock } from "../parser/types/block";
 import {
+  applyDefaultHeaders,
+  loadDefaultHeaders,
   substituteInObject,
   substituteInObjectAsync,
   substituteInString,
@@ -446,6 +448,16 @@ export async function doRequestFromBlock(
   let headers = setUserAgentHeaderIfNotPresent(
     buildHeadersFromSection(block.request.headerSection),
   );
+  const envDefaultHeaders = loadDefaultHeaders(env, startDir);
+  if (Object.keys(envDefaultHeaders).length > 0) {
+    const withDefaults = applyDefaultHeaders({
+      headers,
+      url,
+      defaultHeaders: envDefaultHeaders,
+    });
+    headers = withDefaults.headers;
+    url = withDefaults.url;
+  }
   const accept = getOpArgs(["accept"]);
   if (
     accept &&

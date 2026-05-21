@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "fs";
 import { dirname, join } from "path";
+import { DEFAULT_HEADERS_KEY, KULALA_SHARED_KEY } from "./default-headers";
 import { flattenToDotPaths } from "./flatten-json";
 
 export const HTTP_CLIENT_ENV_JSON = "http-client.env.json";
@@ -46,15 +47,36 @@ export function loadHttpClientEnvJsonRaw(
  * Supports nested objects: values flattened to dotted paths (e.g. client.host.url, client.['host.url']).
  * Returns Record<string, string> for the given env key (e.g. "default", "dev").
  */
+function sectionToEnvVars(
+  section: Record<string, unknown>,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  const forVars = { ...section };
+  delete forVars[DEFAULT_HEADERS_KEY];
+  flattenToDotPaths(forVars, "", out);
+  return out;
+}
+
+function loadKulalaSharedEnvJson(filePath: string): Record<string, string> {
+  try {
+    const raw = readFileSync(filePath, "utf8");
+    const data = JSON.parse(raw) as unknown;
+    if (typeof data !== "object" || data === null) return {};
+    const section = (data as Record<string, unknown>)[KULALA_SHARED_KEY];
+    if (typeof section !== "object" || section === null) return {};
+    return sectionToEnvVars(section as Record<string, unknown>);
+  } catch {
+    return {};
+  }
+}
+
 function loadHttpClientEnvJson(
   filePath: string,
   env: string,
 ): Record<string, string> {
   const section = loadHttpClientEnvJsonRaw(filePath, env);
   if (!section) return {};
-  const out: Record<string, string> = {};
-  flattenToDotPaths(section, "", out);
-  return out;
+  return sectionToEnvVars(section);
 }
 
 /**
@@ -84,7 +106,9 @@ function parseDotEnv(content: string): Record<string, string> {
 
 /**
  * Load environment variables from system, http-client.env.json, and .env.
- * Order (later overrides earlier): system env → http-client.env.json (merged from dirs upward, closest wins) → http-client.private.env.json → .env.
+ * Order (later overrides earlier): system env → `$kulalaShared` vars → per-env section
+ * (http-client.env.json / private, merged root → closest) → .env.
+ * `$kulalaDefaultHeaders` is excluded (applied separately when sending requests).
  * Also exposes system env as {{$env.VAR_NAME}} per JetBrains HTTP Client spec.
  * See https://www.jetbrains.com/help/idea/http-client-variables.html
  */
@@ -101,22 +125,22 @@ export function loadEnvVars(
 
   const dirs = dirsUpward(startDir);
 
+  const mergeHttpClientFile = (filePath: string) => {
+    if (!existsSync(filePath)) return;
+    const shared = loadKulalaSharedEnvJson(filePath);
+    for (const [k, v] of Object.entries(shared)) out[k] = v;
+    const section = loadHttpClientEnvJson(filePath, env);
+    for (const [k, v] of Object.entries(section)) out[k] = v;
+  };
+
   // 2. http-client.env.json from root to closest (so closest wins)
   for (let i = dirs.length - 1; i >= 0; i--) {
-    const p = join(dirs[i]!, HTTP_CLIENT_ENV_JSON);
-    if (existsSync(p)) {
-      const section = loadHttpClientEnvJson(p, env);
-      for (const [k, v] of Object.entries(section)) out[k] = v;
-    }
+    mergeHttpClientFile(join(dirs[i]!, HTTP_CLIENT_ENV_JSON));
   }
 
   // 3. http-client.private.env.json (same merge order)
   for (let i = dirs.length - 1; i >= 0; i--) {
-    const p = join(dirs[i]!, HTTP_CLIENT_PRIVATE_ENV_JSON);
-    if (existsSync(p)) {
-      const section = loadHttpClientEnvJson(p, env);
-      for (const [k, v] of Object.entries(section)) out[k] = v;
-    }
+    mergeHttpClientFile(join(dirs[i]!, HTTP_CLIENT_PRIVATE_ENV_JSON));
   }
 
   // 4. .env (first found when walking from startDir up)

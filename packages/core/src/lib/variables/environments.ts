@@ -5,6 +5,7 @@ import {
   HTTP_CLIENT_ENV_JSON,
   HTTP_CLIENT_PRIVATE_ENV_JSON,
 } from "./env-files";
+import { DEFAULT_HEADERS_KEY, KULALA_SHARED_KEY } from "./default-headers";
 import {
   findKubaYamlDir,
   getKubaEnv,
@@ -13,13 +14,13 @@ import {
 } from "./kuba";
 
 export type KulalaEnvironmentCatalog = {
-  /** Shared section merged from http-client.env.json files (JetBrains `$shared`). */
-  $shared?: Record<string, unknown>;
+  /** Kulala-only: shared variables and `$kulalaDefaultHeaders` for all environments. */
+  $kulalaShared?: Record<string, unknown>;
   /** Environment name → variables (http-client sections + kuba flat vars). */
   environments: Record<string, Record<string, unknown>>;
 };
 
-const RESERVED_HTTP_CLIENT_KEYS = new Set(["$shared", "$schema"]);
+const RESERVED_HTTP_CLIENT_KEYS = new Set(["$schema", KULALA_SHARED_KEY]);
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -42,17 +43,17 @@ function deepMergeObjects(
 }
 
 function readHttpClientEnvFile(filePath: string): {
-  shared: Record<string, unknown>;
+  kulalaShared: Record<string, unknown>;
   environments: Record<string, Record<string, unknown>>;
 } {
-  const shared: Record<string, unknown> = {};
+  const kulalaShared: Record<string, unknown> = {};
   const environments: Record<string, Record<string, unknown>> = {};
   try {
     const raw = readFileSync(filePath, "utf8");
     const data = JSON.parse(raw) as unknown;
-    if (!isPlainObject(data)) return { shared, environments };
-    if (isPlainObject(data.$shared)) {
-      Object.assign(shared, data.$shared);
+    if (!isPlainObject(data)) return { kulalaShared, environments };
+    if (isPlainObject(data[KULALA_SHARED_KEY])) {
+      Object.assign(kulalaShared, data[KULALA_SHARED_KEY]);
     }
     for (const [key, value] of Object.entries(data)) {
       if (RESERVED_HTTP_CLIENT_KEYS.has(key)) continue;
@@ -63,7 +64,7 @@ function readHttpClientEnvFile(filePath: string): {
   } catch {
     // ignore unreadable files
   }
-  return { shared, environments };
+  return { kulalaShared, environments };
 }
 
 /**
@@ -71,9 +72,9 @@ function readHttpClientEnvFile(filePath: string): {
  */
 export function mergeHttpClientEnvCatalog(
   startDir: string,
-): Pick<KulalaEnvironmentCatalog, "$shared" | "environments"> {
+): Pick<KulalaEnvironmentCatalog, "$kulalaShared" | "environments"> {
   const dirs = dirsUpward(startDir);
-  let shared: Record<string, unknown> = {};
+  let kulalaShared: Record<string, unknown> = {};
   const environments: Record<string, Record<string, unknown>> = {};
 
   for (const fileName of [
@@ -84,8 +85,8 @@ export function mergeHttpClientEnvCatalog(
       const p = join(dirs[i]!, fileName);
       if (!existsSync(p)) continue;
       const parsed = readHttpClientEnvFile(p);
-      if (Object.keys(parsed.shared).length > 0) {
-        shared = deepMergeObjects(shared, parsed.shared);
+      if (Object.keys(parsed.kulalaShared).length > 0) {
+        kulalaShared = deepMergeObjects(kulalaShared, parsed.kulalaShared);
       }
       for (const [envName, section] of Object.entries(parsed.environments)) {
         environments[envName] = deepMergeObjects(
@@ -97,9 +98,20 @@ export function mergeHttpClientEnvCatalog(
   }
 
   return {
-    $shared: Object.keys(shared).length > 0 ? shared : undefined,
+    $kulalaShared:
+      Object.keys(kulalaShared).length > 0 ? kulalaShared : undefined,
     environments,
   };
+}
+
+/** Variables from `$kulalaShared`, excluding `$kulalaDefaultHeaders`. */
+export function kulalaSharedVariables(
+  section: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  if (!section) return {};
+  const out: Record<string, unknown> = { ...section };
+  delete out[DEFAULT_HEADERS_KEY];
+  return out;
 }
 
 function flatVarsToSection(
@@ -121,7 +133,7 @@ export async function loadEnvironmentCatalog(
 ): Promise<KulalaEnvironmentCatalog> {
   const http = mergeHttpClientEnvCatalog(startDir);
   const catalog: KulalaEnvironmentCatalog = {
-    $shared: http.$shared,
+    $kulalaShared: http.$kulalaShared,
     environments: { ...http.environments },
   };
 
@@ -138,7 +150,10 @@ export async function loadEnvironmentCatalog(
     }
   }
 
-  if (Object.keys(catalog.environments).length === 0 && !catalog.$shared) {
+  if (
+    Object.keys(catalog.environments).length === 0 &&
+    !catalog.$kulalaShared
+  ) {
     catalog.environments.default = {};
   }
 

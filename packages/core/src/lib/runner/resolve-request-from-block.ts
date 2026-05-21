@@ -27,6 +27,8 @@ import {
 import { runScripts, type ScriptFlowContext } from "./scripts";
 import { buildScriptRequestContextFromBlock } from "./script-request-context";
 import {
+  applyDefaultHeaders,
+  loadDefaultHeaders,
   substituteInObject,
   substituteInObjectAsync,
   substituteInString,
@@ -162,6 +164,16 @@ export async function resolveRequestFromBlock(
   let headers = setUserAgentHeaderIfNotPresent(
     buildHeadersFromSection(block.request.headerSection),
   );
+  const envDefaultHeaders = loadDefaultHeaders(env, startDir);
+  if (Object.keys(envDefaultHeaders).length > 0) {
+    const withDefaults = applyDefaultHeaders({
+      headers,
+      url,
+      defaultHeaders: envDefaultHeaders,
+    });
+    headers = withDefaults.headers;
+    url = withDefaults.url;
+  }
   const accept = getOpArgs(["accept"]);
   if (
     accept &&
