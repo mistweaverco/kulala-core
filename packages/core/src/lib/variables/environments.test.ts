@@ -26,7 +26,7 @@ test("mergeHttpClientEnvCatalog: merges env sections closest-wins", () => {
   writeFileSync(
     join(root, "http-client.env.json"),
     JSON.stringify({
-      $shared: { API_URL: "https://root.example" },
+      $kulalaShared: { API_URL: "https://root.example" },
       default: { TOKEN: "root-token" },
       dev: { TOKEN: "root-dev" },
     }),
@@ -40,7 +40,7 @@ test("mergeHttpClientEnvCatalog: merges env sections closest-wins", () => {
   );
 
   const catalog = mergeHttpClientEnvCatalog(child);
-  expect(catalog.$shared?.API_URL).toBe("https://root.example");
+  expect(catalog.$kulalaShared?.API_URL).toBe("https://root.example");
   expect(catalog.environments.default?.TOKEN).toBe("child-token");
   expect(catalog.environments.dev?.TOKEN).toBe("root-dev");
   expect(catalog.environments.staging?.HOST).toBe("staging.example");

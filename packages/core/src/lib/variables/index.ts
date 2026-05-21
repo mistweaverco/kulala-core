@@ -21,10 +21,17 @@ export {
 } from "./kuba";
 export { loadEnvVars } from "./env-files";
 export {
+  kulalaSharedVariables,
   loadEnvironmentCatalog,
   mergeHttpClientEnvCatalog,
   type KulalaEnvironmentCatalog,
 } from "./environments";
+export {
+  applyDefaultHeaders,
+  DEFAULT_HEADERS_KEY,
+  KULALA_SHARED_KEY,
+  loadDefaultHeaders,
+} from "./default-headers";
 export { getMagicVariables } from "./magic";
 export { resolveVariables, type HttpFileVariableSources } from "./resolve";
 export {
