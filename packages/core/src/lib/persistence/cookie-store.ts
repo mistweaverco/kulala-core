@@ -86,6 +86,15 @@ function defaultPathForUrl(url: URL): string {
   return idx <= 0 ? "/" : p.slice(0, idx);
 }
 
+export function portMatches(
+  port: number | null,
+  cookiePort: number | null,
+): boolean {
+  if (cookiePort === null) return true;
+  if (port === null) return false;
+  return port === cookiePort;
+}
+
 export function domainMatches(host: string, cookieDomain: string): boolean {
   const h = host.toLowerCase();
   const d = cookieDomain.toLowerCase();
@@ -135,11 +144,13 @@ export function cookieAppliesToRequest(
   requestUrlStr: string,
 ): boolean {
   const url = new URL(requestUrlStr);
-  const host = url.hostname.toLowerCase();
+  const hostname = url.hostname.toLowerCase();
   const reqPath = url.pathname || "/";
-  if (!domainMatches(host, c.domain)) return false;
+  if (!domainMatches(hostname, c.domain)) return false;
   if (!pathMatches(reqPath, c.path)) return false;
-  if (c.secure && host !== 'localhost' && url.protocol !== "https:") return false;
+  if (c.secure && url.protocol !== "https:" && hostname !== "localhost") {
+    return false;
+  }
   const now = nowIso();
   if (c.expiresAt && c.expiresAt <= now) return false;
   return true;
@@ -150,7 +161,7 @@ export function storeCookiesFromResponse(
   setCookieHeaders: string[],
 ): void {
   const url = new URL(urlStr);
-  const host = url.hostname.toLowerCase();
+  const hostname = url.hostname.toLowerCase();
   const db = getDb();
   const now = nowIso();
 
@@ -158,7 +169,8 @@ export function storeCookiesFromResponse(
     const parsed = parseSetCookieHeader(h);
     if (!parsed) continue;
 
-    const domain = (parsed.domain ?? host).toLowerCase();
+    const domain = (parsed.domain ?? hostname).toLowerCase();
+    const port = url.port ? Number(url.port) : null;
     const path = parsed.path ?? defaultPathForUrl(url);
     const expiresAt = parsed.expiresAt ?? null;
     const secure = parsed.secure ? 1 : 0;
@@ -168,16 +180,16 @@ export function storeCookiesFromResponse(
     // Expired -> delete
     if (expiresAt && expiresAt <= now) {
       db.run(
-        "DELETE FROM cookie_jar WHERE domain = ? AND path = ? AND name = ?",
-        [domain, path, parsed.name],
+        "DELETE FROM cookie_jar WHERE domain = ? AND port = ? AND path = ? AND name = ?",
+        [domain, port, path, parsed.name],
       );
       continue;
     }
 
     db.run(
-      `INSERT INTO cookie_jar (domain, path, name, value, expires_at, secure, http_only, same_site, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(domain, path, name) DO UPDATE SET
+      `INSERT INTO cookie_jar (domain, port, path, name, value, expires_at, secure, http_only, same_site, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(domain, port, path, name) DO UPDATE SET
          value = excluded.value,
          expires_at = excluded.expires_at,
          secure = excluded.secure,
@@ -186,6 +198,7 @@ export function storeCookiesFromResponse(
          updated_at = excluded.updated_at`,
       [
         domain,
+        port,
         path,
         parsed.name,
         parsed.value,
@@ -201,7 +214,8 @@ export function storeCookiesFromResponse(
 
 export function getCookieHeaderForRequest(urlStr: string): string | undefined {
   const url = new URL(urlStr);
-  const host = url.hostname.toLowerCase();
+  const hostname = url.hostname.toLowerCase();
+  const port = url.port ? Number(url.port) : null;
   const reqPath = url.pathname || "/";
   const isHttps = url.protocol === "https:";
   const now = nowIso();
@@ -212,6 +226,7 @@ export function getCookieHeaderForRequest(urlStr: string): string | undefined {
     .query<
       {
         domain: string;
+        port: number | null;
         path: string;
         name: string;
         value: string;
@@ -220,16 +235,17 @@ export function getCookieHeaderForRequest(urlStr: string): string | undefined {
       },
       []
     >(
-      `SELECT domain, path, name, value, expires_at, secure
+      `SELECT domain, port, path, name, value, expires_at, secure
        FROM cookie_jar`,
     )
     .all();
 
   const out: Array<{ name: string; value: string }> = [];
   for (const r of rows) {
-    if (!domainMatches(host, r.domain)) continue;
+    if (!domainMatches(hostname, r.domain)) continue;
+    if (!portMatches(port, r.port)) continue;
     if (!pathMatches(reqPath, r.path)) continue;
-    if (r.secure === 1 && !isHttps) continue;
+    if (r.secure === 1 && !isHttps && r.domain !== "localhost") continue;
     if (r.expires_at && r.expires_at <= now) continue;
     out.push({ name: r.name, value: r.value });
   }

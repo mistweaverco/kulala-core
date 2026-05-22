@@ -1,19 +1,19 @@
 import { Database } from "bun:sqlite";
-import { unlinkSync, readFileSync, writeFileSync } from "fs";
+import { readFileSync, unlinkSync, writeFileSync } from "fs";
 import { ensureDataDir } from "./data-dir";
 import {
   getKeychainSecret,
-  setKeychainSecret,
   isKeychainAvailable,
+  setKeychainSecret,
 } from "./keychain";
 import {
-  isEncryptedFile,
-  encryptFileToPath,
   decryptFileToPath,
   encrypt,
+  encryptFileToPath,
   generateKey,
-  keyToKeychainSecret,
+  isEncryptedFile,
   keyFromKeychain,
+  keyToKeychainSecret,
 } from "./encrypted-store";
 
 const DB_FILENAME = "kulala.db";
@@ -55,6 +55,7 @@ const SCHEMA_STATEMENTS: string[] = [
   `CREATE TABLE IF NOT EXISTS cookie_jar (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     domain TEXT NOT NULL,
+    port INTEGER,
     path TEXT NOT NULL,
     name TEXT NOT NULL,
     value TEXT NOT NULL,
@@ -63,7 +64,7 @@ const SCHEMA_STATEMENTS: string[] = [
     http_only INTEGER NOT NULL DEFAULT 0,
     same_site TEXT,
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-    UNIQUE(domain, path, name)
+    UNIQUE(domain, port, path, name)
   )`,
 
   // Replay count per request block.
@@ -104,7 +105,7 @@ const SCHEMA_STATEMENTS: string[] = [
   `CREATE INDEX IF NOT EXISTS idx_pending_prompts_expires ON pending_prompts(expires_at)`,
   `CREATE INDEX IF NOT EXISTS idx_request_history_created ON request_history(created_at)`,
   `CREATE INDEX IF NOT EXISTS idx_request_history_doc_block ON request_history(stable_doc_id, block_name)`,
-  `CREATE INDEX IF NOT EXISTS idx_cookie_jar_domain_path ON cookie_jar(domain, path)`,
+  `CREATE INDEX IF NOT EXISTS idx_cookie_jar_domain_path ON cookie_jar(domain, port, path)`,
 ];
 
 function ensureSchema(db: Database): void {
@@ -190,8 +191,9 @@ export async function unlockDb(): Promise<boolean> {
  * Only has an effect when the DB was opened via unlockDb().
  */
 export async function lockDb(): Promise<boolean> {
-  if (dbInstance === null || !keychainMode || openedDbPath === null)
+  if (dbInstance === null || !keychainMode || openedDbPath === null) {
     return false;
+  }
   const dataDir = ensureDataDir();
   const realPath = `${dataDir}/${DB_FILENAME}`;
   const key = await getKeychainSecret();

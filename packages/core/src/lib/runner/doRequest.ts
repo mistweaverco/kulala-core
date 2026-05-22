@@ -719,7 +719,7 @@ export async function doRequestFromBlock(
     } else if (typeof body === "string" && body.length > 0) {
       bodyPayload = body;
     } else if (body != null) {
-      headers['content-type'] = "application/json";
+      headers["content-type"] = "application/json";
       bodyPayload = JSON.stringify(body);
     }
 
