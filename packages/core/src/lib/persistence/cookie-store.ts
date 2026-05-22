@@ -139,7 +139,7 @@ export function cookieAppliesToRequest(
   const reqPath = url.pathname || "/";
   if (!domainMatches(host, c.domain)) return false;
   if (!pathMatches(reqPath, c.path)) return false;
-  if (c.secure && url.protocol !== "https:") return false;
+  if (c.secure && host !== 'localhost' && url.protocol !== "https:") return false;
   const now = nowIso();
   if (c.expiresAt && c.expiresAt <= now) return false;
   return true;
