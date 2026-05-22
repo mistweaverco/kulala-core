@@ -133,6 +133,23 @@ function dataEndsWithLineTerminator(data: Buffer): boolean {
   return b === 0x0a || b === 0x0d;
 }
 
+function dataEndsWithCrlf(data: Buffer): boolean {
+  return (
+    data.length >= 2 &&
+    data[data.length - 2] === 0x0d &&
+    data[data.length - 1] === 0x0a
+  );
+}
+
+/** File ends with LF but not CRLF — MIME still needs `\r\n` before the next `--` delimiter. */
+function dataEndsWithBareLf(data: Buffer): boolean {
+  return (
+    data.length > 0 &&
+    data[data.length - 1] === 0x0a &&
+    (data.length < 2 || data[data.length - 2] !== 0x0d)
+  );
+}
+
 /**
  * Omit the newline that ends the `< path` line after injecting file bytes when:
  * - the next template line is blank (that blank supplies the NL before the boundary), or
@@ -175,6 +192,8 @@ export async function resolveInlineBodyFileRefs(
   const text = stripHttpClientDoubleSlashLineComments(body);
   let pos = 0;
   let skipBlankLineAfterFileTrailingNl = false;
+  /** After omitting `<` line NL, inject CRLF before the next boundary when file ended with bare LF. */
+  let prefixCrlfBeforeNextLine = false;
   while (pos <= text.length) {
     const nl = text.indexOf("\n", pos);
     const lineEnd = nl === -1 ? text.length : nl;
@@ -192,12 +211,23 @@ export async function resolveInlineBodyFileRefs(
         const data = await fs.readFile(resolved);
         chunks.push(Buffer.from(m[1] ?? "", "utf8"));
         chunks.push(data);
-        chunks.push(Buffer.from(suffix, "utf8"));
         const omitNl =
           lineNl !== "" &&
           nl !== -1 &&
           shouldOmitLineTerminatorAfterInlineFileRef(text, nl, data);
-        chunks.push(Buffer.from(omitNl ? "" : lineNl, "utf8"));
+        if (suffix.length > 0) {
+          if (!dataEndsWithCrlf(data)) {
+            chunks.push(
+              Buffer.from(!omitNl && lineNl !== "" ? lineNl : "\r\n", "utf8"),
+            );
+          }
+          chunks.push(Buffer.from(suffix, "utf8"));
+        } else {
+          chunks.push(Buffer.from(omitNl ? "" : lineNl, "utf8"));
+        }
+        if (omitNl && dataEndsWithBareLf(data)) {
+          prefixCrlfBeforeNextLine = true;
+        }
         skipBlankLineAfterFileTrailingNl =
           omitNl &&
           dataEndsWithLineTerminator(data) &&
@@ -212,6 +242,10 @@ export async function resolveInlineBodyFileRefs(
         continue;
       }
       skipBlankLineAfterFileTrailingNl = false;
+      if (prefixCrlfBeforeNextLine) {
+        chunks.push(Buffer.from("\r\n", "utf8"));
+        prefixCrlfBeforeNextLine = false;
+      }
       chunks.push(Buffer.from(rawLine + lineNl, "utf8"));
     }
     if (nl === -1) break;

@@ -1,19 +1,19 @@
 import { expect, test } from "bun:test";
 import {
-  getRequestHeaderType,
-  getJSONRequestBody,
-  getGraphQLRequestBody,
-  parseFormUrlEncoded,
+  ensureMultipartContentTypeHeader,
   getFormRequestBody,
-  isFileRef,
+  getGraphQLRequestBody,
+  getJSONRequestBody,
+  getRequestHeaderType,
   isBodyFromFileRef,
-  resolveBodyFromFile,
+  isFileRef,
   isRawMultipartTemplateBody,
+  parseFormUrlEncoded,
+  parseMultipartBoundaryFromBody,
+  parseMultipartBoundaryFromContentType,
+  resolveBodyFromFile,
   resolveInlineBodyFileRefs,
   stripHttpClientDoubleSlashLineComments,
-  parseMultipartBoundaryFromContentType,
-  parseMultipartBoundaryFromBody,
-  ensureMultipartContentTypeHeader,
 } from "./body";
 
 test("getRequestHeaderType returns json for application/json", () => {
@@ -208,7 +208,7 @@ test("resolveInlineBodyFileRefs substitutes file lines", async () => {
   await Bun.write(join(dir, "part.bin"), Buffer.from([0, 1, 2, 255]));
 
   const template = ["--boundary", "< ./part.bin", "--boundary--", ""].join(
-    "\n",
+    "\r\n",
   );
   const out = await resolveInlineBodyFileRefs(template, dir);
   expect(out.indexOf(Buffer.from([0, 1, 2, 255]))).not.toBe(-1);
@@ -224,7 +224,7 @@ test("resolveInlineBodyFileRefs keeps same-line suffix after path", async () => 
 
   const template = `< ./f.txt --end--\n`;
   const out = await resolveInlineBodyFileRefs(template, dir);
-  expect(out.toString("utf8")).toBe("Z--end--\n");
+  expect(out.toString("utf8")).toBe("Z\r\n--end--");
 });
 
 test("resolveInlineBodyFileRefs: blank line after file ref yields single LF before next boundary", async () => {
@@ -243,8 +243,8 @@ test("resolveInlineBodyFileRefs: blank line after file ref yields single LF befo
     "--b--",
   ].join("\n");
   const out = (await resolveInlineBodyFileRefs(template, dir)).toString("utf8");
-  expect(out).toContain("BODY\n--b--");
-  expect(out).not.toContain("BODY\n\n--b--");
+  expect(out).toContain("BODY\r\n--b--");
+  expect(out).not.toContain("BODY\r\n\r\n--b--");
 });
 
 test("resolveInlineBodyFileRefs: file with trailing LF then boundary line — one LF before --", async () => {
@@ -266,8 +266,58 @@ test("resolveInlineBodyFileRefs: file with trailing LF then boundary line — on
     "--boundary--",
   ].join("\n");
   const out = (await resolveInlineBodyFileRefs(template, dir)).toString("utf8");
-  expect(out).toContain("BODY\n--boundary");
+  expect(out).toContain("BODY\n\r\n--boundary");
   expect(out).not.toContain("BODY\n\n--boundary");
+});
+
+test("resolveInlineBodyFileRefs: same-line closing boundary without template newline (IntelliJ)", async () => {
+  const { mkdtempSync } = await import("fs");
+  const { join } = await import("path");
+  const { tmpdir } = await import("os");
+  const dir = mkdtempSync(join(tmpdir(), "kulala-multipart-"));
+  await Bun.write(join(dir, "f.txt"), "kulala familiy\n");
+
+  const template = "< ./f.txt --boundary--";
+  const out = (await resolveInlineBodyFileRefs(template, dir)).toString("utf8");
+  expect(out).toBe("kulala familiy\n\r\n--boundary--");
+});
+
+test("resolveInlineBodyFileRefs: IntelliJ-style multi-part template is busboy-parseable", async () => {
+  const { mkdtempSync, writeFileSync } = await import("fs");
+  const { join } = await import("path");
+  const { tmpdir } = await import("os");
+  const { Busboy } = await import("@fastify/busboy");
+  const dir = mkdtempSync(join(tmpdir(), "kulala-multipart-"));
+  writeFileSync(join(dir, "part.txt"), "kulala familiy\n");
+
+  const template = [
+    "--boundary",
+    'Content-Disposition: form-data; name="first"; filename="part.txt"',
+    "",
+    "< ./part.txt",
+    "--boundary",
+    'Content-Disposition: form-data; name="second"; filename="input-second.txt"',
+    "",
+    "Text",
+    "--boundary",
+    'Content-Disposition: form-data; name="third";',
+    "",
+    "< ./part.txt --boundary--",
+  ].join("\n");
+
+  const body = await resolveInlineBodyFileRefs(template, dir);
+  const err = await new Promise<Error | null>((resolve) => {
+    const bb = Busboy({
+      headers: {
+        "content-type": "multipart/form-data; boundary=boundary",
+        "content-length": String(body.length),
+      },
+    });
+    bb.on("error", resolve);
+    bb.on("finish", () => resolve(null));
+    bb.end(body);
+  });
+  expect(err).toBeNull();
 });
 
 test("resolveInlineBodyFileRefs: trailing LF in file + blank before boundary — one LF before --", async () => {
@@ -286,6 +336,6 @@ test("resolveInlineBodyFileRefs: trailing LF in file + blank before boundary —
     "--b--",
   ].join("\n");
   const out = (await resolveInlineBodyFileRefs(template, dir)).toString("utf8");
-  expect(out).toContain("BODY\n--b--");
+  expect(out).toContain("BODY\n\r\n--b--");
   expect(out).not.toContain("BODY\n\n--b--");
 });
