@@ -15,8 +15,8 @@ import { dirname, join } from "node:path";
 import {
   cookieAppliesToRequest,
   getCookieHeaderForRequest,
-  normalizeSetCookieFromLine,
   type NormalizedSetCookie,
+  normalizeSetCookieFromLine,
 } from "../persistence";
 
 type CurlWriteOut = {

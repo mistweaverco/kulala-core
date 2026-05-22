@@ -1,0 +1,38 @@
+@URL = http://localhost:3000/cookies
+
+### NON_LOCAL_SET_COOKIE
+
+GET https://httpbin.org/cookies/set/kulala/test HTTP/1.1
+
+### NON_LOCAL_PREVENT_GET_COOKIES
+
+// @no-cookie-jar
+# Prevents the cookies set by
+# NON_LOCAL_SET_COOKIE from being sent in the request
+
+GET https://httpbin.org/cookies HTTP/1.1
+
+### NON_LOCAL_GET_COOKIES
+# Gets the cookies set by NON_LOCAL_SET_COOKIE
+
+GET https://httpbin.org/cookies HTTP/1.1
+
+### LOCAL_SET_COOKIE
+
+GET {{ URL }}/set/kulala/family HTTP/1.1
+Content-Type: application/json
+
+### LOCAL_PREVENT_GET_COOKIES
+
+// @no-cookie-jar
+# Prevents the cookies set by
+# LOCAL_SET_COOKIE from being sent in the next request
+
+GET {{ URL }} HTTP/1.1
+Content-Type: application/json
+
+### LOCAL_GET_COOKIES
+# Gets the cookies set by LOCAL_SET_COOKIE
+
+GET {{ URL }} HTTP/1.1
+Content-Type: application/json
