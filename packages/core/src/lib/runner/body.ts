@@ -172,14 +172,14 @@ export async function resolveInlineBodyFileRefs(
   const chunks: Buffer[] = [];
   // Always normalize newlines and strip `//` lines here so wire bytes are correct
   // even if a caller omits the same preprocessing as doRequest.
-  let text = stripHttpClientDoubleSlashLineComments(body);
+  const text = stripHttpClientDoubleSlashLineComments(body);
   let pos = 0;
   let skipBlankLineAfterFileTrailingNl = false;
   while (pos <= text.length) {
     const nl = text.indexOf("\n", pos);
     const lineEnd = nl === -1 ? text.length : nl;
     const rawLine = text.slice(pos, lineEnd);
-    const lineNl = nl === -1 ? "" : "\n";
+    const lineNl = nl === -1 ? "" : "\r\n";
     const m = rawLine.match(/^(\s*)<\s+(.+)$/);
     if (m?.[2]) {
       const { path: rel, suffix } = parseInlineBodyFileRefTail(m[2]);
