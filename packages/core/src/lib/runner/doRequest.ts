@@ -719,7 +719,7 @@ export async function doRequestFromBlock(
     } else if (typeof body === "string" && body.length > 0) {
       bodyPayload = body;
     } else if (body != null) {
-      bodyPayload = body;
+      bodyPayload = JSON.stringify(body);
     }
 
     // Cookie jar: apply stored cookies unless disabled or explicitly set by user.
