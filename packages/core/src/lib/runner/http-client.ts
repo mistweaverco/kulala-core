@@ -53,9 +53,7 @@ export type HttpRequestOptions = {
   body?: string | Buffer | FormData;
   /** When "HTTP/2", use http2 for https URLs. Otherwise use http/https. */
   httpVersion?: "HTTP/1.0" | "HTTP/1.1" | "HTTP/2";
-  /** If true, allow insecure TLS (curl --insecure). */
-  insecure?: boolean;
-  /** Request timeout in seconds (curl --max-time). */
+  /** Request timeout in seconds (curl --max-time). JetBrains `# @timeout` only. */
   timeoutSec?: number;
   /** Connection timeout in seconds (curl --connect-timeout). */
   connectionTimeoutSec?: number;
@@ -68,6 +66,8 @@ export type HttpRequestOptions = {
    * next URL (browser-like, with domain/path filtering via the jar).
    */
   cookieJarEnabled?: boolean;
+  /** Extra curl argv from `# @kulala-curl-*` operators (merged file + block). */
+  extraCurlArgv?: string[];
 };
 
 /** Encode FormData to buffer and content-type using form-data-encoder. */

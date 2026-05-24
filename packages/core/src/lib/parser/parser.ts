@@ -352,13 +352,16 @@ function attachSourceFileContext(
   blockList: KulalaBlock[],
   vars: Record<string, string>,
   vscodeRestclientCompat: boolean,
+  fileHeaderOperators: KulalaOperator[],
 ): KulalaBlock[] {
   const hasVars = Object.keys(vars).length > 0;
-  if (!hasVars && !vscodeRestclientCompat) return blockList;
+  const hasOps = fileHeaderOperators.length > 0;
+  if (!hasVars && !vscodeRestclientCompat && !hasOps) return blockList;
   return blockList.map((b) => ({
     ...b,
     ...(hasVars ? { sourceFileHeaderVariables: vars } : {}),
     ...(vscodeRestclientCompat ? { sourceVscodeRestclientCompat: true } : {}),
+    ...(hasOps ? { sourceFileHeaderOperators: fileHeaderOperators } : {}),
   }));
 }
 
@@ -369,11 +372,14 @@ function withSourceDocumentContext(
   const vars = sourceDoc.fileHeaderVariables;
   const hasVars = vars !== undefined && Object.keys(vars).length > 0;
   const compat = sourceDoc.vscodeRestclientCompat === true;
-  if (!hasVars && !compat) return block;
+  const ops = sourceDoc.fileHeaderOperators ?? [];
+  const hasOps = ops.length > 0;
+  if (!hasVars && !compat && !hasOps) return block;
   return {
     ...block,
     ...(hasVars ? { sourceFileHeaderVariables: vars } : {}),
     ...(compat ? { sourceVscodeRestclientCompat: true } : {}),
+    ...(hasOps ? { sourceFileHeaderOperators: ops } : {}),
   };
 }
 
@@ -510,6 +516,7 @@ export const getDocument = async (
             result.blocks,
             result.fileHeaderVariables ?? {},
             result.vscodeRestclientCompat === true,
+            result.fileHeaderOperators ?? [],
           ),
         );
       }
@@ -578,6 +585,7 @@ export const getDocument = async (
             result.blocks,
             result.fileHeaderVariables ?? {},
             result.vscodeRestclientCompat === true,
+            result.fileHeaderOperators ?? [],
           )) {
             const runBlock: KulalaBlock = {
               ...block,
@@ -618,6 +626,9 @@ export const getDocument = async (
             if (doc.vscodeRestclientCompat) {
               block.sourceVscodeRestclientCompat = true;
             }
+            if (doc.fileHeaderOperators?.length) {
+              block.sourceFileHeaderOperators = doc.fileHeaderOperators;
+            }
             // Store run directive for variable overrides
             (block as BlockWithRunDirective).__runDirective = blockRunDirective;
             delete (block as BlockWithRunDirective).__blockRunDirective;
@@ -639,6 +650,10 @@ export const getDocument = async (
             }
             if (referencedBlock.sourceVscodeRestclientCompat) {
               block.sourceVscodeRestclientCompat = true;
+            }
+            if (referencedBlock.sourceFileHeaderOperators?.length) {
+              block.sourceFileHeaderOperators =
+                referencedBlock.sourceFileHeaderOperators;
             }
             // Store run directive for variable overrides
             (block as BlockWithRunDirective).__runDirective = blockRunDirective;
@@ -665,6 +680,7 @@ export const getDocument = async (
             result.blocks,
             result.fileHeaderVariables ?? {},
             result.vscodeRestclientCompat === true,
+            result.fileHeaderOperators ?? [],
           )) {
             const runBlock: KulalaBlock = { ...importedBlock };
             (runBlock as BlockWithRunDirective).__runDirective =
@@ -695,5 +711,6 @@ export const getDocument = async (
       ? { fileHeaderVariables }
       : {}),
     ...(vscodeRestclientCompat ? { vscodeRestclientCompat: true } : {}),
+    ...(fileHeaderOperators.length > 0 ? { fileHeaderOperators } : {}),
   };
 };

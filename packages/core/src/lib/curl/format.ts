@@ -57,7 +57,10 @@ export function formatCurlCommand(input: CurlFormatInput): string {
   if (cookie) parts.push("--cookie", shellQuote(cookie));
 
   parts.push(...httpVersionFlag(input.httpVersion));
-  if (input.insecure) parts.push("--insecure");
+  const extra = input.extraCurlArgv ?? [];
+  for (const arg of extra) {
+    parts.push(/\s/.test(arg) ? shellQuote(arg) : arg);
+  }
 
   parts.push(shellQuote(input.url));
   return parts.join(" ");

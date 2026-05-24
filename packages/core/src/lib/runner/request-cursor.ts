@@ -71,6 +71,7 @@ export async function inspectRequestAtCursor(
     resolver,
     env,
     flow,
+    doc,
   );
   if ("prompt" in resolved && resolved.prompt) return resolved;
   if (!("ok" in resolved) || !resolved.ok) {
@@ -118,6 +119,7 @@ export async function toCurlAtCursor(
     resolver,
     env,
     flow,
+    doc,
   );
   if ("prompt" in resolved && resolved.prompt) return resolved;
   if (!("ok" in resolved) || !resolved.ok) {
@@ -133,7 +135,7 @@ export async function toCurlAtCursor(
     headers: r.headers,
     body: r.body,
     httpVersion: r.httpVersion,
-    insecure: r.insecure,
+    extraCurlArgv: r.extraCurlArgv,
     userAgent:
       input.userAgent ?? r.headers["User-Agent"] ?? r.headers["user-agent"],
   });

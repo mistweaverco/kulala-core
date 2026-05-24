@@ -7,9 +7,6 @@ export type KulalaOperatorName =
   | "no-auto-encoding"
   | "timeout"
   | "connection-timeout"
-  | "kulala-curl-insecure"
-  | "kulala-curl-timeout"
-  | "kulala-curl-connect-timeout"
   | "kulala-file-contents-to-variable"
   | "kulala-expect-status-code"
   | "kulala-prompt"
@@ -29,9 +26,6 @@ export const kulalaOperatorNames: Set<KulalaOperatorName> = new Set([
   "no-auto-encoding",
   "timeout",
   "connection-timeout",
-  "kulala-curl-insecure",
-  "kulala-curl-timeout",
-  "kulala-curl-connect-timeout",
   "kulala-file-contents-to-variable",
   "kulala-expect-status-code",
   "kulala-prompt",

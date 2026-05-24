@@ -1,4 +1,7 @@
+import type { KulalaDocument } from "../parser/types";
 import type { KulalaBlock } from "../parser/types/block";
+import { curlArgvFromOperators } from "../curl/passthrough";
+import { getEffectiveOperators } from "./effective-operators";
 import { OAuth2Manager } from "../auth/oauth2/manager";
 import { OAuth2PromptError } from "../auth/oauth2/prompt-error";
 import {
@@ -46,7 +49,7 @@ export type ResolvedRequestPreview = {
   headers: Record<string, string>;
   body?: string;
   httpVersion?: string;
-  insecure?: boolean;
+  extraCurlArgv?: string[];
 };
 
 export type ResolveRequestResult =
@@ -65,20 +68,21 @@ export async function resolveRequestFromBlock(
   resolver: VariableResolver | undefined,
   env: string = "default",
   flow?: ScriptFlowContext,
+  doc?: KulalaDocument,
 ): Promise<ResolveRequestResult> {
   const startDir = filePath
     ? (await import("path")).dirname(filePath)
     : process.cwd();
   const mutableVars = { ...(vars ?? {}) };
+  const effectiveOperators = getEffectiveOperators(doc, block);
+  const extraCurlArgv = curlArgvFromOperators(effectiveOperators);
   const getOps = (names: string[]) =>
-    block.operators.filter((o) => names.includes(o.name));
+    effectiveOperators.filter((o) => names.includes(o.name));
   const getOpArgs = (names: string[]): string | undefined =>
     getOps(names)
       .map((o) => String(o.args ?? ""))
       .find((s) => s.trim() !== "");
   const hasOp = (names: string[]): boolean => getOps(names).length > 0;
-  const insecure = hasOp(["kulala-curl-insecure"]);
-
   const oauth2Manager = new OAuth2Manager(env, startDir);
   const authResolver = async (
     func: "token" | "idToken",
@@ -327,7 +331,7 @@ export async function resolveRequestFromBlock(
       headers: sent.headers ?? {},
       body: sent.body,
       httpVersion: block.request.httpVersion,
-      insecure,
+      extraCurlArgv,
     },
   };
 }
