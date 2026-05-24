@@ -149,6 +149,7 @@ export async function runDocument(
       resolver,
       env,
       flow,
+      { doc },
     );
     const resultItems = Array.isArray(result) ? result : [result];
     for (const item of resultItems) {

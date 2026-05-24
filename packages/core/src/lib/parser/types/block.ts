@@ -26,6 +26,8 @@ export type KulalaBlock = {
   sourceFileHeaderVariables?: Record<string, string>;
   /** `# @vscode-restclient-compat` from the source .http file (imports / run file). */
   sourceVscodeRestclientCompat?: boolean;
+  /** File-header operators from the source .http file (imports / run file). */
+  sourceFileHeaderOperators?: KulalaOperator[];
   /** Block only contains `run ./file.http`; expanded targets are separate blocks. */
   runExpander?: boolean;
   /** This block was expanded from a parent block's `run ./file.http`. */

@@ -281,6 +281,21 @@ GET https://example.com/{{SEGMENT}}/x HTTP/1.1
   );
 });
 
+test("parser: file-header kulala-curl-- passthrough operators", async () => {
+  const content = `# @kulala-curl--insecure
+# @kulala-curl--max-time 30
+
+### REQ
+GET https://example.com HTTP/1.1
+`;
+  const doc = await getDocument(content.trim());
+  expect(doc.fileHeaderOperators?.map((o) => o.name)).toEqual([
+    "kulala-curl--insecure",
+    "kulala-curl--max-time",
+  ]);
+  expect(doc.fileHeaderOperators?.[1]?.args).toBe("30");
+});
+
 test("parser: # @vscode-restclient-compat before first ### enables file flag", async () => {
   const content = `# @vscode-restclient-compat
 
@@ -307,9 +322,9 @@ test("parser: parses kulala-prefixed operators in block preamble", async () => {
   const content = `### Ops
 # @kulala-file-contents-to-variable FOO ./bar.txt
 # @kulala-expect-status-code 200,201
-# @kulala-curl-insecure
-# @kulala-curl-connect-timeout 5
-# @kulala-curl-timeout 10
+# @kulala-curl--insecure
+# @kulala-curl--connect-timeout 5
+# @kulala-curl--max-time 10
 # @kulala-prompt "What is your name?" NAME
 GET https://example.com/{{FOO}} HTTP/1.1
 `;
@@ -321,9 +336,9 @@ GET https://example.com/{{FOO}} HTTP/1.1
   expect(names).toEqual([
     "kulala-file-contents-to-variable",
     "kulala-expect-status-code",
-    "kulala-curl-insecure",
-    "kulala-curl-connect-timeout",
-    "kulala-curl-timeout",
+    "kulala-curl--insecure",
+    "kulala-curl--connect-timeout",
+    "kulala-curl--max-time",
     "kulala-prompt",
   ]);
   expect(block.operators[5]?.args).toBe(`"What is your name?" NAME`);

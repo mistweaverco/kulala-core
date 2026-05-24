@@ -12,7 +12,7 @@ GET https://httpbin.org/get?name={{NAME}} HTTP/1.1
 
 ### INSECURE_REQUEST_TIMEOUT_REQUEST
 
-// @kulala-curl-insecure
+// @kulala-curl--insecure
 // @timeout 5 ms
 
 POST https://httpbin.org/post
@@ -76,7 +76,7 @@ GET https://httpbin.org/get?
 
 ### CONNECTION_TIMEOUT_PRIVATE_IP_NO_RESOLVE
 
-// @kulala-curl-insecure
+// @kulala-curl--insecure
 // @timeout 5 s
 // @connection-timeout 5 s
 POST https://10.77.77.77:1337/login HTTP/1.1

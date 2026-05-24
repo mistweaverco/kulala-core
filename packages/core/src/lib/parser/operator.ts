@@ -1,3 +1,4 @@
+import { isKulalaCurlPassthroughOperator } from "../curl/passthrough";
 import type { KulalaError } from "./types/error";
 import type { KulalaOperator } from "./types/operator";
 import { kulalaOperatorNames } from "./types/operator";
@@ -8,8 +9,6 @@ const operatorNameRequiresArgs = new Set([
   "timeout",
   "connection-timeout",
   "kulala-prompt",
-  "kulala-curl-timeout",
-  "kulala-curl-connect-timeout",
   "kulala-file-contents-to-variable",
   "kulala-expect-status-code",
   "grpc-import-path",
@@ -36,24 +35,28 @@ export const getOperator = (
       context: match,
     };
   }
-  if (operatorNameRequiresArgs.has(match[1]) && !match[2]) {
+  const operatorName = match[1]!;
+  const isKnown =
+    kulalaOperatorNames.has(operatorName as KulalaOperator["name"]) ||
+    isKulalaCurlPassthroughOperator(operatorName);
+  if (operatorNameRequiresArgs.has(operatorName) && !match[2]) {
     return {
-      errorMessage: `Operator "${match[1]}" requires an argument at line ${
+      errorMessage: `Operator "${operatorName}" requires an argument at line ${
         lineIdx + 1
       }`,
       lineNumber: lineIdx,
       context: line,
     };
   }
-  if (!kulalaOperatorNames.has(match[1] as KulalaOperator["name"])) {
+  if (!isKnown) {
     return {
-      errorMessage: `Unknown operator "${match[1]}" at line ${lineIdx + 1}`,
+      errorMessage: `Unknown operator "${operatorName}" at line ${lineIdx + 1}`,
       lineNumber: lineIdx,
       context: line,
     };
   }
   return {
-    name: match[1] as KulalaOperator["name"],
+    name: operatorName as KulalaOperator["name"],
     args: match[2] || undefined,
     lineNumber: lineIdx,
   };

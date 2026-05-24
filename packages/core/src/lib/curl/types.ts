@@ -24,7 +24,8 @@ export type CurlFormatInput = {
   headers?: Record<string, string>;
   body?: string;
   httpVersion?: string;
-  insecure?: boolean;
+  /** Extra curl flags from `# @kulala-curl-*` operators. */
+  extraCurlArgv?: string[];
   /** Default kulala-core user agent when not set in headers. */
   userAgent?: string;
   verbose?: boolean;

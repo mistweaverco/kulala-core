@@ -1,6 +1,7 @@
 import type { KulalaVariable } from "./variable";
 import type { KulalaBlock } from "./block";
 import type { KulalaDirective } from "./directive";
+import type { KulalaOperator } from "./operator";
 export type KulalaDocument = {
   filepath?: string;
   variables?: Record<string, KulalaVariable>;
@@ -8,6 +9,8 @@ export type KulalaDocument = {
   fileHeaderVariables?: Record<string, string>;
   /** `# @vscode-restclient-compat` before the first ### — enables {{REQUEST.response…}} vars. */
   vscodeRestclientCompat?: boolean;
+  /** `# @…` / `// @…` operators before the first ### (e.g. `# @kulala-curl--insecure`). */
+  fileHeaderOperators?: KulalaOperator[];
   directives: KulalaDirective[];
   blocks: KulalaBlock[];
   hasErrors?: boolean;

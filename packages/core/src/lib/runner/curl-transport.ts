@@ -321,22 +321,25 @@ export async function curlHttpRequest(
       args.push("--request", currentMethod);
     }
 
-    if (options.insecure) {
-      args.push("--insecure");
-    }
+    const extra = options.extraCurlArgv ?? [];
     if (
       options.timeoutSec !== undefined &&
-      Number.isFinite(options.timeoutSec)
+      Number.isFinite(options.timeoutSec) &&
+      !extra.includes("--max-time")
     ) {
       const sec = Math.max(0, options.timeoutSec);
       args.push("--max-time", String(sec));
     }
     if (
       options.connectionTimeoutSec !== undefined &&
-      Number.isFinite(options.connectionTimeoutSec)
+      Number.isFinite(options.connectionTimeoutSec) &&
+      !extra.includes("--connect-timeout")
     ) {
       const sec = Math.max(0, options.connectionTimeoutSec);
       args.push("--connect-timeout", String(sec));
+    }
+    if (extra.length > 0) {
+      args.push(...extra);
     }
 
     // Protocol selection

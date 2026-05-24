@@ -3,7 +3,10 @@ import { grpcNativeRequest } from "../grpc";
 import { grpcFlagsFromOperators } from "../grpc/collect-flags";
 import { mergeGrpcFlags } from "../grpc/parse-target";
 import type { KulalaWebSocketPlanResponse } from "./types";
+import type { KulalaDocument } from "../parser/types";
 import type { KulalaBlock } from "../parser/types/block";
+import { curlArgvFromOperators, curlArgvHasFlag } from "../curl/passthrough";
+import { getEffectiveOperators } from "./effective-operators";
 import {
   applyDefaultHeaders,
   loadDefaultHeaders,
@@ -76,6 +79,8 @@ export type DoRequestFromBlockOptions = {
   collectionPlan?: CollectionIterationPlan;
   /** Internal: child call when expanding a collection variable. */
   skipPreScripts?: boolean;
+  /** Parsed document (file-header operators merged into each request). */
+  doc?: KulalaDocument;
 };
 
 /** JetBrains: `### Shared` pre/post scripts wrap each request in the file. */
@@ -179,14 +184,6 @@ export async function doRequestFromBlock(
     return n;
   };
 
-  const parseCurlPassthroughSeconds = (raw: string): number | undefined => {
-    const s = raw.trim();
-    if (!s) return undefined;
-    const n = Number(s);
-    if (!Number.isFinite(n) || n < 0) return undefined;
-    return n;
-  };
-
   const parsePromptArgs = (
     raw: string,
   ): { varName: string; label?: string } | null => {
@@ -251,8 +248,13 @@ export async function doRequestFromBlock(
   const mutableVars = vars ?? {};
 
   const stableDocId = stableDocIdForReplay ?? filePath ?? "";
+  const effectiveOperators = getEffectiveOperators(
+    iterationOptions?.doc,
+    block,
+  );
+  const extraCurlArgv = curlArgvFromOperators(effectiveOperators);
   const getOps = (names: string[]) =>
-    block.operators.filter((o) => names.includes(o.name));
+    effectiveOperators.filter((o) => names.includes(o.name));
   const getOpArgs = (names: string[]): string | undefined =>
     getOps(names)
       .map((o) => String(o.args ?? ""))
@@ -388,7 +390,12 @@ export async function doRequestFromBlock(
           resolver,
           env,
           flow,
-          { collectionIndex: i, collectionPlan, skipPreScripts: true },
+          {
+            collectionIndex: i,
+            collectionPlan,
+            skipPreScripts: true,
+            doc: iterationOptions?.doc,
+          },
         );
         const one = Array.isArray(child) ? child[0]! : child;
         batch.push(one);
@@ -603,7 +610,7 @@ export async function doRequestFromBlock(
   if (methodUpper === "GRPC") {
     const grpcFlags = mergeGrpcFlags(
       flow?.sharedGrpcFlags ?? [],
-      grpcFlagsFromOperators(block.operators, startDir),
+      grpcFlagsFromOperators(effectiveOperators, startDir),
     );
     const grpcRes = await grpcNativeRequest({
       target: url,
@@ -617,7 +624,9 @@ export async function doRequestFromBlock(
             ? JSON.stringify(body)
             : undefined,
       cwd: startDir,
-      insecure: getOps(["kulala-curl-insecure"]).length > 0,
+      insecure:
+        curlArgvHasFlag(extraCurlArgv, "--insecure") ||
+        curlArgvHasFlag(extraCurlArgv, "-k"),
     });
     const ok = grpcRes.statusCode >= 200 && grpcRes.statusCode < 400;
     if (!ok) {
@@ -674,21 +683,13 @@ export async function doRequestFromBlock(
     ? { ...headers, "Content-Type": "application/json" }
     : headers;
 
-  const insecureOp = getOps(["kulala-curl-insecure"]).length > 0;
   const timeoutSecJetBrains = parseDurationToSec(getOpArgs(["timeout"]) ?? "");
   const connectionTimeoutSecJetBrains = parseDurationToSec(
     getOpArgs(["connection-timeout"]) ?? "",
   );
-  const timeoutSecCurl = parseCurlPassthroughSeconds(
-    getOpArgs(["kulala-curl-timeout"]) ?? "",
-  );
-  const connectionTimeoutSecCurl = parseCurlPassthroughSeconds(
-    getOpArgs(["kulala-curl-connect-timeout"]) ?? "",
-  );
-  const effectiveTimeoutSec =
-    timeoutSecCurl ?? timeoutSecJetBrains ?? undefined;
+  const effectiveTimeoutSec = timeoutSecJetBrains ?? undefined;
   const effectiveConnectionTimeoutSec =
-    connectionTimeoutSecCurl ?? connectionTimeoutSecJetBrains ?? undefined;
+    connectionTimeoutSecJetBrains ?? undefined;
   const followRedirects = !hasOp(["no-redirect"]);
 
   try {
@@ -738,12 +739,12 @@ export async function doRequestFromBlock(
       headers: requestHeaders,
       body: bodyPayload,
       httpVersion: block.request.httpVersion,
-      insecure: insecureOp,
       timeoutSec: effectiveTimeoutSec,
       connectionTimeoutSec: effectiveConnectionTimeoutSec,
       followRedirects,
       propagateCookiesOnRedirect: cookieJarEnabled,
       cookieJarEnabled,
+      extraCurlArgv,
     });
 
     const rawBody = res.body;
