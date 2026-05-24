@@ -1,17 +1,17 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { setDbForTesting, getDbInMemory, closeDb } from "../persistence";
+import { closeDb, getDbInMemory, setDbForTesting } from "../persistence";
 import {
   getStableDocumentId,
   resolveVariables,
-  substituteInString,
-  substituteInStringAsync,
   substituteInObject,
   substituteInObjectAsync,
+  substituteInString,
+  substituteInStringAsync,
 } from "./index";
 import { loadEnvVars } from "./env-files";
 import { flattenToDotPaths } from "./flatten-json";
 import { getMagicVariables } from "./magic";
-import { resolveRequestVariable, isRequestVariableKey } from "./request-vars";
+import { isRequestVariableKey, resolveRequestVariable } from "./request-vars";
 import { isVscodeRestclientCompatEnabled } from "../runner/vscode-restclient-compat";
 import {
   loadRequestVarResults,
@@ -228,7 +228,7 @@ test("isRequestVariableKey detects request variable references", () => {
   expect(isRequestVariableKey("API_KEY")).toBe(false);
 });
 
-test("request variables substitute to empty without # @vscode-restclient-compat", () => {
+test("request variables substitute to empty without # @kulala-vscode-restclient-compat", () => {
   const map = new Map([
     [
       "LOGIN",

@@ -6,7 +6,7 @@
  * - Persistence: global, document-scoped, and request-scoped variables from SQLite.
  * - System env as {{$env.VAR}}: JetBrains-style (https://www.jetbrains.com/help/idea/http-client-variables.html).
  * - Dynamic variables: $uuid, $random.uuid, $timestamp, $isoTimestamp, $date, $randomInt (0..1000).
- * - Request variables (only with `# @vscode-restclient-compat` in the .http file):
+ * - Request variables (only with `# @kulala-vscode-restclient-compat` in the .http file):
  *   {{REQUEST_NAME.response.body.$.field}}, {{REQUEST_NAME.response.headers.Name}}.
  *   Latest responses are persisted per document so named requests work across separate runs.
  * - JSONPath-style in env/kuba: nested JSON flattened to dotted paths (client.host.url, client.['host.url']).
@@ -23,10 +23,10 @@ export {
 } from "./kuba";
 export { loadEnvVars } from "./env-files";
 export {
+  type KulalaEnvironmentCatalog,
   kulalaSharedVariables,
   loadEnvironmentCatalog,
   mergeHttpClientEnvCatalog,
-  type KulalaEnvironmentCatalog,
 } from "./environments";
 export {
   applyDefaultHeaders,
@@ -35,16 +35,16 @@ export {
   loadDefaultHeaders,
 } from "./default-headers";
 export { getMagicVariables } from "./magic";
-export { resolveVariables, type HttpFileVariableSources } from "./resolve";
+export { type HttpFileVariableSources, resolveVariables } from "./resolve";
 export {
-  substituteInString,
-  substituteInStringAsync,
   substituteInObject,
   substituteInObjectAsync,
+  substituteInString,
+  substituteInStringAsync,
 } from "./substitute";
 export {
-  resolveRequestVariable,
   isRequestVariableKey,
   type PreviousResponse,
+  resolveRequestVariable,
 } from "./request-vars";
 export { OAuth2Manager } from "../auth/oauth2/manager";

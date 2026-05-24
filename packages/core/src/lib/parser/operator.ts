@@ -84,5 +84,5 @@ export function extractFileHeaderOperators(content: string): KulalaOperator[] {
 export function hasVscodeRestclientCompatOperator(
   operators: KulalaOperator[],
 ): boolean {
-  return operators.some((o) => o.name === "vscode-restclient-compat");
+  return operators.some((o) => o.name === "kulala-vscode-restclient-compat");
 }

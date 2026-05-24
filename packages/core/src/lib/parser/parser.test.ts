@@ -296,8 +296,8 @@ GET https://example.com HTTP/1.1
   expect(doc.fileHeaderOperators?.[1]?.args).toBe("30");
 });
 
-test("parser: # @vscode-restclient-compat before first ### enables file flag", async () => {
-  const content = `# @vscode-restclient-compat
+test("parser: # @kulala-vscode-restclient-compat before first ### enables file flag", async () => {
+  const content = `# @kulala-vscode-restclient-compat
 
 ### REQUEST_ONE
 GET https://example.com HTTP/1.1
