@@ -17,7 +17,8 @@ export type KulalaOperatorName =
   | "grpc-proto"
   | "grpc-protoset"
   | "grpc-plaintext"
-  | "grpc-v";
+  | "grpc-v"
+  | "vscode-restclient-compat";
 
 export const kulalaOperatorNames: Set<KulalaOperatorName> = new Set([
   "name",
@@ -39,6 +40,7 @@ export const kulalaOperatorNames: Set<KulalaOperatorName> = new Set([
   "grpc-protoset",
   "grpc-plaintext",
   "grpc-v",
+  "vscode-restclient-compat",
 ]);
 
 export type KulalaOperatorArgs = string | number | boolean;

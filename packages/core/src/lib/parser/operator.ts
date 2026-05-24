@@ -58,3 +58,28 @@ export const getOperator = (
     lineNumber: lineIdx,
   };
 };
+
+const isOperatorError = (obj: unknown): obj is KulalaError =>
+  typeof obj === "object" && obj !== null && "errorMessage" in obj;
+
+/** Operators (`# @…` / `// @…`) before the first `###` block marker. */
+export function extractFileHeaderOperators(content: string): KulalaOperator[] {
+  const out: KulalaOperator[] = [];
+  let lineIdx = 0;
+  for (const line of content.split("\n")) {
+    const t = line.trim();
+    if (t.startsWith("###")) break;
+    if (line.startsWith("# @") || line.startsWith("// @")) {
+      const op = getOperator(line, lineIdx);
+      if (!isOperatorError(op)) out.push(op);
+    }
+    lineIdx++;
+  }
+  return out;
+}
+
+export function hasVscodeRestclientCompatOperator(
+  operators: KulalaOperator[],
+): boolean {
+  return operators.some((o) => o.name === "vscode-restclient-compat");
+}

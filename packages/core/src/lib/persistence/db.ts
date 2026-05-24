@@ -105,6 +105,19 @@ const SCHEMA_STATEMENTS: string[] = [
   `CREATE INDEX IF NOT EXISTS idx_pending_prompts_expires ON pending_prompts(expires_at)`,
   `CREATE INDEX IF NOT EXISTS idx_request_history_created ON request_history(created_at)`,
   `CREATE INDEX IF NOT EXISTS idx_request_history_doc_block ON request_history(stable_doc_id, block_name)`,
+
+  // Latest response per named request (VS Code REST Client request variables).
+  `CREATE TABLE IF NOT EXISTS request_var_results (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    stable_doc_id TEXT NOT NULL,
+    result_key TEXT NOT NULL,
+    body_type TEXT NOT NULL CHECK(body_type IN ('json', 'text')),
+    body_content TEXT NOT NULL,
+    headers_json TEXT,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(stable_doc_id, result_key)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_request_var_results_doc ON request_var_results(stable_doc_id)`,
   `CREATE INDEX IF NOT EXISTS idx_cookie_jar_domain_path ON cookie_jar(domain, port, path)`,
 ];
 

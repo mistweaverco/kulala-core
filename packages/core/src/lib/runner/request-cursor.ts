@@ -2,6 +2,7 @@ import { getDocument } from "../parser/parser";
 import { getStableDocumentId, resolveVariables } from "../variables";
 import { findBlocksAtCursor } from "./block";
 import { collectSharedGrpcFlags } from "../grpc";
+import { createRequestVarContext } from "./request-var-context";
 import {
   resolveRequestFromBlock,
   resolvedRequestToInspectLines,
@@ -61,11 +62,13 @@ export async function inspectRequestAtCursor(
     sharedGrpcFlags: collectSharedGrpcFlags(doc.blocks, startDir),
   };
 
+  const { resolver } = createRequestVarContext(doc, block, stableDocId);
+
   const resolved = await resolveRequestFromBlock(
     block,
     doc.filepath,
     vars,
-    undefined,
+    resolver,
     env,
     flow,
   );
@@ -106,11 +109,13 @@ export async function toCurlAtCursor(
     sharedGrpcFlags: collectSharedGrpcFlags(doc.blocks, startDir),
   };
 
+  const { resolver } = createRequestVarContext(doc, block, stableDocId);
+
   const resolved = await resolveRequestFromBlock(
     block,
     doc.filepath,
     vars,
-    undefined,
+    resolver,
     env,
     flow,
   );

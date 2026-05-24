@@ -6,6 +6,8 @@ export type KulalaDocument = {
   variables?: Record<string, KulalaVariable>;
   /** @name=value definitions before the first ### block (JetBrains in-file variables). */
   fileHeaderVariables?: Record<string, string>;
+  /** `# @vscode-restclient-compat` before the first ### — enables {{REQUEST.response…}} vars. */
+  vscodeRestclientCompat?: boolean;
   directives: KulalaDirective[];
   blocks: KulalaBlock[];
   hasErrors?: boolean;

@@ -8,16 +8,16 @@ import {
 } from "../parser/lib/helpers";
 import { getStableDocumentId, resolveVariables } from "../variables";
 import {
-  type PreviousResponse,
-  resolveRequestVariable,
-} from "../variables/request-vars";
-import {
   filterExecutableBlocks,
   findBlocksAtCursor,
   resolveBlocksToRun,
 } from "./block";
 import { doRequestFromBlock } from "./doRequest";
 import { collectSharedGrpcFlags, grpcFlagsFromOperators } from "../grpc";
+import {
+  createRequestVarContext,
+  recordRequestVarResult,
+} from "./request-var-context";
 import type {
   KulalaRequestErrorResponse,
   KulalaRequestSuccessResponse,
@@ -27,6 +27,8 @@ import type {
   KulalaResponseWrapper,
 } from "./types";
 import type { ScriptFlowContext } from "./scripts";
+
+export { isVscodeRestclientCompatEnabled } from "./vscode-restclient-compat";
 
 /** JetBrains `# @name REQUEST_ID` — key for {{REQUEST_ID.response...}} (falls back to `###` block name). */
 export function getBlockResultKey(block: KulalaBlock): string {
@@ -101,7 +103,6 @@ export async function runDocument(
     | KulalaPromptResponse
     | KulalaWebSocketPlanResponse
   )[] = [];
-  const previousResults = new Map<string, PreviousResponse>();
   const flow: ScriptFlowContext = {
     globalHeaders: {},
     sharedGrpcFlags: collectSharedGrpcFlags(doc.blocks, startDir),
@@ -135,8 +136,11 @@ export async function runDocument(
       }
     }
 
-    const resolver = (key: string) =>
-      resolveRequestVariable(key, previousResults);
+    const { previousResults, resolver } = createRequestVarContext(
+      doc,
+      block,
+      stableDocId,
+    );
     const result = await doRequestFromBlock(
       block,
       doc.filepath,
@@ -160,10 +164,14 @@ export async function runDocument(
       }
 
       if (item.success && "status" in item && "body" in item) {
-        previousResults.set(getBlockResultKey(block), {
-          body: item.body,
-          headers: item.headers,
-        });
+        recordRequestVarResult(
+          doc,
+          block,
+          stableDocId,
+          getBlockResultKey(block),
+          { body: item.body, headers: item.headers },
+          previousResults,
+        );
       }
     }
   }

@@ -2,7 +2,7 @@
 
 ### REQUEST_ONE
 
-POST https://httpbin.org/post HTTP/1.1
+POST https://echo.getkulala.net/post HTTP/1.1
 Accept: application/json
 Content-Type: application/json
 
@@ -11,17 +11,17 @@ Content-Type: application/json
 }
 
 ### REQUEST_TWO
-POST https://httpbin.org/post HTTP/1.1
+POST https://echo.getkulala.net/post HTTP/1.1
 Accept: application/json
 Content-Type: application/json
 
 {
-  "token": "{{REQUEST_ONE.response.body.$.json.token}}"
+  "token": "{{REQUEST_ONE.response.body.$.body.token}}"
 }
 
 ###
 
-POST https://httpbin.org/post HTTP/1.1
+POST https://echo.getkulala.net/post HTTP/1.1
 Accept: application/json
 Content-Type: application/json
 
