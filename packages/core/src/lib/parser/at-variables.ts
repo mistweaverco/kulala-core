@@ -3,6 +3,9 @@
  * See https://www.jetbrains.com/help/idea/http-client-variables.html
  */
 
+import { isRequestLine } from "./request";
+import { isPreRequestScriptLine } from "./script";
+
 const AT_VAR_LINE = /^@([A-Za-z0-9_.-]+)\s*=\s*(.*)$/;
 
 /**
@@ -24,7 +27,7 @@ export function parseAtVariableLine(
 }
 
 /**
- * Collect @ variables from lines before the first ### block marker.
+ * Collect @ variables from lines before the first request or ### block marker.
  */
 export function extractFileHeaderAtVariables(
   content: string,
@@ -32,7 +35,12 @@ export function extractFileHeaderAtVariables(
   const out: Record<string, string> = {};
   for (const line of content.split("\n")) {
     const t = line.trim();
-    if (t.startsWith("###")) break;
+    if (
+      t.startsWith("###") ||
+      isRequestLine(line) ||
+      isPreRequestScriptLine(line)
+    )
+      break;
     if (!t || t.startsWith("#")) continue;
     const p = parseAtVariableLine(line);
     if (p) out[p.name] = p.value;

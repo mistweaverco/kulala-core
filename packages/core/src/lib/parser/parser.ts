@@ -14,7 +14,11 @@ import {
 } from "./operator";
 import type { KulalaError } from "./types/error";
 import type { KulalaScript } from "./types/script";
-import { getInlineScriptConsumedLineCount, getScript } from "./script";
+import {
+  getInlineScriptConsumedLineCount,
+  getScript,
+  isPreRequestScriptLine,
+} from "./script";
 import { getHeader } from "./header";
 import { getBody } from "./body";
 import type { KulalaHeader } from "./types/header";
@@ -31,6 +35,7 @@ import {
   parseAtVariableLine,
 } from "./at-variables";
 import type { KulalaDirective, KulalaRunDirective } from "./types/directive";
+import { isRequestLine } from "./request";
 import { resolve, dirname } from "path";
 const blockRegex = /###(.*?)\n([\s\S]+?)(?=###|$)/g;
 const nameRegex = /### (.+?)\n/;
@@ -55,7 +60,8 @@ const getLineType = (
   lineIdx: number,
   seenBlockTypes: KulalaSeenBlockLineTypes,
 ): KulalaBlockLineType => {
-  if (lineIdx === 0) return { name: "name", lineNumber: lineIdx };
+  if (lineIdx === 0 && line.startsWith("###"))
+    return { name: "name", lineNumber: lineIdx };
   if (line.startsWith("###")) return { name: "name", lineNumber: lineIdx };
   // Redirect response (>> path / >>! path) must be checked before generic body
   if (
@@ -89,11 +95,7 @@ const getLineType = (
     return { name: "operator", lineNumber: lineIdx };
   if (line.startsWith("#") || line.trim().startsWith("//"))
     return { name: "comment", lineNumber: lineIdx };
-  if (
-    line.match(
-      /^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS|TRACE|CONNECT|GRAPHQL|GRPC|WS|WSS|WEBSOCKET) /i,
-    )
-  ) {
+  if (isRequestLine(line)) {
     return { name: "request", lineNumber: lineIdx };
   }
   if (
@@ -123,6 +125,32 @@ const getLineType = (
 const isError = (obj: unknown): obj is KulalaError => {
   return typeof obj === "object" && obj !== null && "errorMessage" in obj;
 };
+
+function findImplicitBlockStart(content: string):
+  | {
+      charIndex: number;
+      lineIndex: number;
+    }
+  | undefined {
+  let charIndex = 0;
+  let firstPreRequestScript:
+    | {
+        charIndex: number;
+        lineIndex: number;
+      }
+    | undefined;
+  const lines = content.split("\n");
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    const line = lines[lineIndex]!;
+    if (firstPreRequestScript === undefined && isPreRequestScriptLine(line)) {
+      firstPreRequestScript = { charIndex, lineIndex };
+    }
+    if (isRequestLine(line))
+      return firstPreRequestScript ?? { charIndex, lineIndex };
+    charIndex += lines[lineIndex]!.length + 1;
+  }
+  return undefined;
+}
 
 const getParsedBlock = async (
   rawBlock: string,
@@ -306,8 +334,12 @@ function extractDirectives(content: string): {
     const line = lines[i]!;
     const trimmed = line.trim();
 
-    // Stop at first block marker
-    if (trimmed.startsWith("###")) {
+    // Stop at first request, pre-request script, or block marker.
+    if (
+      trimmed.startsWith("###") ||
+      isRequestLine(line) ||
+      isPreRequestScriptLine(line)
+    ) {
       break;
     }
 
@@ -395,11 +427,39 @@ const getBlocks = async (
 ): Promise<KulalaBlock[]> => {
   const blocks: KulalaBlock[] = [];
   const rawBlocks = content.matchAll(blockRegex);
+
+  const firstBlockMarker = content.search(/^###/m);
+  const prefix =
+    firstBlockMarker === -1 ? content : content.slice(0, firstBlockMarker);
+  const implicitBlockStart = findImplicitBlockStart(prefix);
+  if (implicitBlockStart) {
+    const rawImplicitBlock = prefix.slice(implicitBlockStart.charIndex);
+    const implicitBlock = await getParsedBlock(
+      rawImplicitBlock,
+      0,
+      {
+        start: 1,
+        end: blockMatchLineCount(prefix),
+      },
+      filepath,
+    );
+    implicitBlock.contentStartLine = implicitBlockStart.lineIndex + 1;
+    blocks.push(implicitBlock);
+  }
+
+  const blockIndexOffset = blocks.length;
   for (const [idx, rawBlock] of Array.from(rawBlocks).entries()) {
     const start = content.substring(0, rawBlock.index).split("\n").length;
     const end = start + blockMatchLineCount(rawBlock[0]) - 1;
     const position = { start, end };
-    blocks.push(await getParsedBlock(rawBlock[0], idx, position, filepath));
+    blocks.push(
+      await getParsedBlock(
+        rawBlock[0],
+        idx + blockIndexOffset,
+        position,
+        filepath,
+      ),
+    );
   }
   return blocks;
 };
@@ -486,12 +546,12 @@ export const getDocument = async (
   // Include block-level parse errors in the document error set.
   for (const block of blocks) {
     for (const err of block.errors ?? []) {
-      const blockStart = block.position?.start ?? 0;
+      const contentStart = block.contentStartLine ?? block.position?.start ?? 0;
       const relLine = err.lineNumber ?? 0;
       allErrors.push({
         ...err,
         blockName: block.name,
-        lineNumber: blockStart + relLine + directiveLinesRemoved,
+        lineNumber: contentStart + relLine + directiveLinesRemoved,
       });
     }
   }

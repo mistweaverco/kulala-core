@@ -24,6 +24,8 @@ const getValidHttpMethods = (): KulalaHttpMethodAvailable[] => [
 ];
 
 const HTTP_VERSION = /^HTTP\/\d+(\.\d+)?$/;
+const REQUEST_LINE =
+  /^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS|TRACE|CONNECT|GRAPHQL|GRPC|WS|WSS|WEBSOCKET) /i;
 
 const VALID_HTTP_VERSIONS: KulalaHttpVersion[] = [
   "HTTP/1.0",
@@ -57,6 +59,8 @@ const splitRequestTargetAndVersion = (
 // Check if a line is a request continuation (indented URL part or comment).
 export const isRequestContinuationLine = (line: string): boolean =>
   line.length > 0 && /^\s/.test(line);
+
+export const isRequestLine = (line: string): boolean => REQUEST_LINE.test(line);
 
 /**
  * Parse request line(s).

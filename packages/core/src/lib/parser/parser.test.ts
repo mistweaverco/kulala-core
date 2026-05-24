@@ -2,6 +2,79 @@ import { expect, test } from "bun:test";
 import { resolveVariables, substituteInString } from "../variables";
 import { getDocument } from "./parser";
 
+test("parser: first request does not require a block delimiter", async () => {
+  const content = `GRAPHQL https://api.github.com/graphql HTTP/1.1
+Accept: application/json
+
+query User() {
+  viewer {
+    bio
+  }
+}`;
+
+  const doc = await getDocument(content);
+  const block = doc.blocks[0];
+
+  expect(doc.blocks).toHaveLength(1);
+  expect(block.errors).toEqual([]);
+  expect(block.name).toBe("REQUEST_001");
+  expect(block.request.method).toBe("GRAPHQL");
+  expect(block.request.url).toBe("https://api.github.com/graphql");
+  expect(block.request.httpVersion).toBe("HTTP/1.1");
+  expect(block.request.body).toEqual({
+    query: `query User() {
+  viewer {
+    bio
+  }
+}`,
+  });
+});
+
+test("parser: implicit first request can be followed by delimited requests", async () => {
+  const content = `GET https://example.com HTTP/1.1
+
+### Next
+GET https://nixos.org HTTP/1.1`;
+
+  const doc = await getDocument(content);
+
+  expect(doc.blocks).toHaveLength(2);
+  expect(doc.blocks[0]?.name).toBe("REQUEST_001");
+  expect(doc.blocks[0]?.request.url).toBe("https://example.com");
+  expect(doc.blocks[1]?.name).toBe("Next");
+  expect(doc.blocks[1]?.request.url).toBe("https://nixos.org");
+});
+
+test("parser: implicit first request starts after file header metadata", async () => {
+  const content = `@TOKEN = header-value
+# @no-log
+
+POST https://example.com HTTP/1.1
+Content-Type: text/plain
+
+@TOKEN = body-value
+# @no-cookie-jar
+run ./not-a-directive.http
+import ./also-not-a-directive.http`;
+
+  const doc = await getDocument(content);
+  const block = doc.blocks[0];
+
+  expect(doc.directives).toEqual([]);
+  expect(doc.fileHeaderVariables).toEqual({ TOKEN: "header-value" });
+  expect(doc.fileHeaderOperators?.map((o) => o.name)).toEqual(["no-log"]);
+  expect(block?.preambleVariables).toBeUndefined();
+  expect(block?.operators).toEqual([]);
+  expect(block?.position).toEqual({ start: 1, end: 10 });
+  expect(block?.contentStartLine).toBe(4);
+  expect(block?.request.body).toBe(
+    `@TOKEN = body-value
+# @no-cookie-jar
+run ./not-a-directive.http
+import ./also-not-a-directive.http`,
+  );
+});
+
 test("parser: GraphQL query with type annotations not parsed as header", async () => {
   const content = `### GQL_WITH_VARIABLES
 

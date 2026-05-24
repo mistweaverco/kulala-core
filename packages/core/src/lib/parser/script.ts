@@ -15,6 +15,9 @@ function indexOfInlineScriptEnd(contents: string): number {
 export const preRequestScriptMarker = "< ";
 export const postRequestScriptMarker = "> ";
 
+export const isPreRequestScriptLine = (line: string): boolean =>
+  line.startsWith(preRequestScriptMarker);
+
 /** Lines consumed by an inline `{% ... %}` script (including the opening and closing lines). */
 export function getInlineScriptConsumedLineCount(
   line: string,
