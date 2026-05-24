@@ -1,0 +1,28 @@
+{
+  "name": "busbox-http-server",
+  "private": false,
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mistweaverco/kulala-core.git"
+  },
+  "homepage": "https://github.com/mistweaverco/kulala-core#readme",
+  "bugs": {
+    "url": "https://github.com/mistweaverco/kulala-core/issues"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
+  },
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "devDependencies": {
+    "@types/node": "25.5.0",
+    "@fastify/busboy": "3.2.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
