@@ -29,3 +29,19 @@ Content-Disposition: form-data; name="third";
 
 // These file contents will be sent as plain text.
 < ./multipart-form-data.txt --boundary--
+
+### BUSBOY_LOCAL_SERVER_REQ
+
+POST http://localhost:3000/post HTTP/1.1
+Content-Type: multipart/form-data; boundary=KULALA
+
+--KULALA
+Content-Disposition: form-data; name="title"
+
+P
+--KULALA
+Content-Disposition: form-data; name="thumb"; filename="multipart-form-data.png"
+Content-Type: image/png
+
+< ./multipart-form-data.png
+--KULALA--
