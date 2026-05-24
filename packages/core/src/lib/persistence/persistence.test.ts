@@ -14,6 +14,8 @@ import {
   getVariable,
   getVariables,
   deleteVariable,
+  saveRequestVarResult,
+  loadRequestVarResults,
 } from "./index";
 import type { KulalaDocument } from "../parser/types";
 
@@ -138,4 +140,22 @@ test("variable store: delete", () => {
   expect(removed).toBe(true);
   expect(getVariable("global", "toDelete")).toBeUndefined();
   expect(deleteVariable("global", "toDelete")).toBe(false);
+});
+
+test("request var store: upsert and load latest per named request", () => {
+  const docId = "/foo/vars.http";
+  saveRequestVarResult(docId, "LOGIN", {
+    body: { type: "json", content: { token: "v1" } },
+    headers: { "X-Auth": "a" },
+  });
+  saveRequestVarResult(docId, "LOGIN", {
+    body: { type: "json", content: { token: "v2" } },
+    headers: { "X-Auth": "b" },
+  });
+  const loaded = loadRequestVarResults(docId);
+  expect(loaded.get("LOGIN")?.body).toEqual({
+    type: "json",
+    content: { token: "v2" },
+  });
+  expect(loaded.get("LOGIN")?.headers["X-Auth"]).toBe("b");
 });

@@ -281,6 +281,16 @@ GET https://example.com/{{SEGMENT}}/x HTTP/1.1
   );
 });
 
+test("parser: # @vscode-restclient-compat before first ### enables file flag", async () => {
+  const content = `# @vscode-restclient-compat
+
+### REQUEST_ONE
+GET https://example.com HTTP/1.1
+`;
+  const doc = await getDocument(content.trim());
+  expect(doc.vscodeRestclientCompat).toBe(true);
+});
+
 test("parser: parses JetBrains # @name operator", async () => {
   const content = `### AUTH_REQUEST
 # @name LOGIN_REQUEST

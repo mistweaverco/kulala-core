@@ -24,6 +24,8 @@ export type KulalaBlock = {
   preambleVariables?: Record<string, string>;
   /** @ variables from the start of the .http file this block was parsed from (imports / run file). */
   sourceFileHeaderVariables?: Record<string, string>;
+  /** `# @vscode-restclient-compat` from the source .http file (imports / run file). */
+  sourceVscodeRestclientCompat?: boolean;
   /** Block only contains `run ./file.http`; expanded targets are separate blocks. */
   runExpander?: boolean;
   /** This block was expanded from a parent block's `run ./file.http`. */

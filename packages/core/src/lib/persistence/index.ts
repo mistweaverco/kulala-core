@@ -62,6 +62,12 @@ export {
 } from "./history-store";
 
 export {
+  saveRequestVarResult,
+  loadRequestVarResults,
+  mergePersistedRequestVarResults,
+} from "./request-var-store";
+
+export {
   storeCookiesFromResponse,
   getCookieHeaderForRequest,
   cookieAppliesToRequest,

@@ -11,7 +11,12 @@ import {
 import { loadEnvVars } from "./env-files";
 import { flattenToDotPaths } from "./flatten-json";
 import { getMagicVariables } from "./magic";
-import { resolveRequestVariable } from "./request-vars";
+import { resolveRequestVariable, isRequestVariableKey } from "./request-vars";
+import { isVscodeRestclientCompatEnabled } from "../runner/vscode-restclient-compat";
+import {
+  loadRequestVarResults,
+  saveRequestVarResult,
+} from "../persistence/request-var-store";
 
 beforeEach(() => {
   setDbForTesting(getDbInMemory());
@@ -182,6 +187,105 @@ test("resolveRequestVariable resolves response.headers", () => {
   expect(resolveRequestVariable("REQ.response.headers.Date", map)).toBe(
     "Mon, 01 Jan 2024 00:00:00 GMT",
   );
+});
+
+test("resolveRequestVariable resolves VS Code headers['Name'] syntax", () => {
+  const map = new Map([
+    [
+      "REQ",
+      {
+        body: { type: "text" as const, content: "" },
+        headers: { Date: "Mon, 01 Jan 2024 00:00:00 GMT" },
+      },
+    ],
+  ]);
+  expect(resolveRequestVariable("REQ.response.headers['Date']", map)).toBe(
+    "Mon, 01 Jan 2024 00:00:00 GMT",
+  );
+});
+
+test("resolveRequestVariable resolves nested JSONPath ($.json.token)", () => {
+  const map = new Map([
+    [
+      "REQUEST_ONE",
+      {
+        body: {
+          type: "json" as const,
+          content: { json: { token: "foobar" } },
+        },
+        headers: {},
+      },
+    ],
+  ]);
+  expect(
+    resolveRequestVariable("REQUEST_ONE.response.body.$.json.token", map),
+  ).toBe("foobar");
+});
+
+test("isRequestVariableKey detects request variable references", () => {
+  expect(isRequestVariableKey("LOGIN.response.body.$.token")).toBe(true);
+  expect(isRequestVariableKey("REQ.response.headers['Date']")).toBe(true);
+  expect(isRequestVariableKey("API_KEY")).toBe(false);
+});
+
+test("request variables substitute to empty without # @vscode-restclient-compat", () => {
+  const map = new Map([
+    [
+      "LOGIN",
+      {
+        body: { type: "json" as const, content: { token: "abc" } },
+        headers: {},
+      },
+    ],
+  ]);
+  const resolver = (key: string) => resolveRequestVariable(key, map);
+  expect(
+    substituteInString("{{LOGIN.response.body.$.token}}", {}, undefined),
+  ).toBe("");
+  expect(
+    substituteInString("{{LOGIN.response.body.$.token}}", {}, resolver),
+  ).toBe("abc");
+});
+
+test("persisted request var results survive separate runs", () => {
+  const docId = "test-doc-vscode-vars";
+  saveRequestVarResult(docId, "REQUEST_ONE", {
+    body: {
+      type: "json",
+      content: { json: { token: "from-disk" } },
+    },
+    headers: { Date: "Mon, 01 Jan 2024 00:00:00 GMT" },
+  });
+  const loaded = loadRequestVarResults(docId);
+  expect(loaded.get("REQUEST_ONE")?.body).toEqual({
+    type: "json",
+    content: { json: { token: "from-disk" } },
+  });
+  expect(
+    resolveRequestVariable("REQUEST_ONE.response.body.$.json.token", loaded),
+  ).toBe("from-disk");
+  expect(
+    resolveRequestVariable("REQUEST_ONE.response.headers['Date']", loaded),
+  ).toBe("Mon, 01 Jan 2024 00:00:00 GMT");
+});
+
+test("isVscodeRestclientCompatEnabled respects file and source flags", () => {
+  const block = { name: "A" } as import("../parser/types/block").KulalaBlock;
+  expect(
+    isVscodeRestclientCompatEnabled({ directives: [], blocks: [] }, block),
+  ).toBe(false);
+  expect(
+    isVscodeRestclientCompatEnabled(
+      { directives: [], blocks: [], vscodeRestclientCompat: true },
+      block,
+    ),
+  ).toBe(true);
+  expect(
+    isVscodeRestclientCompatEnabled(
+      { directives: [], blocks: [] },
+      { ...block, sourceVscodeRestclientCompat: true },
+    ),
+  ).toBe(true);
 });
 
 test("flattenToDotPaths: nested JSON becomes dotted paths (JetBrains-style)", () => {

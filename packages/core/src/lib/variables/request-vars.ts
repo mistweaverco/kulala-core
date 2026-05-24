@@ -24,6 +24,74 @@ function getByPath(obj: unknown, path: string): unknown {
   return current;
 }
 
+type ParsedRequestVarRef = {
+  blockName: string;
+  section: "response" | "request";
+  part: "body" | "headers";
+  path?: string;
+  headerName?: string;
+};
+
+function parseRequestVariableKey(key: string): ParsedRequestVarRef | undefined {
+  const trimmed = key.trim();
+  const bodyMatch = trimmed.match(
+    /^([^.]+)\.(response|request)\.body(?:\.(.+))?$/,
+  );
+  if (bodyMatch) {
+    return {
+      blockName: bodyMatch[1]!,
+      section: bodyMatch[2] as "response" | "request",
+      part: "body",
+      path: bodyMatch[3],
+    };
+  }
+  const headerBracketMatch = trimmed.match(
+    /^([^.]+)\.(response|request)\.headers\[['"]([^'"]+)['"]\]$/,
+  );
+  if (headerBracketMatch) {
+    return {
+      blockName: headerBracketMatch[1]!,
+      section: headerBracketMatch[2] as "response" | "request",
+      part: "headers",
+      headerName: headerBracketMatch[3],
+    };
+  }
+  const headerDotMatch = trimmed.match(
+    /^([^.]+)\.(response|request)\.headers\.(.+)$/,
+  );
+  if (headerDotMatch) {
+    return {
+      blockName: headerDotMatch[1]!,
+      section: headerDotMatch[2] as "response" | "request",
+      part: "headers",
+      headerName: headerDotMatch[3],
+    };
+  }
+  return undefined;
+}
+
+function formatResolvedValue(value: unknown): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean")
+    return String(value);
+  return JSON.stringify(value);
+}
+
+function resolveHeaderValue(
+  headers: Record<string, string>,
+  headerName: string,
+): string | undefined {
+  const normalized = headerName.replace(/^['"]|['"]$/g, "");
+  if (headers[headerName] !== undefined) return headers[headerName];
+  if (headers[normalized] !== undefined) return headers[normalized];
+  const lower = normalized.toLowerCase();
+  const found = Object.entries(headers).find(
+    ([k]) => k.toLowerCase() === lower,
+  );
+  return found ? found[1] : undefined;
+}
+
 /**
  * Resolve a request variable key against previous run results.
  * Key forms: REQUEST_NAME.response.body.$.path (JSON fields on the parsed body), REQUEST_NAME.response.headers.HeaderName, REQUEST_NAME.response.headers['Header Name'].
@@ -33,40 +101,23 @@ export function resolveRequestVariable(
   key: string,
   previousResults: Map<string, PreviousResponse>,
 ): string | undefined {
-  const trimmed = key.trim();
-  const parts = trimmed.split(".");
-  if (parts.length < 4) return undefined;
-  const [blockName, reqOrRes, bodyOrHeaders, ...rest] = parts;
-  if (!blockName || !reqOrRes || !bodyOrHeaders) return undefined;
-  const result = previousResults.get(blockName);
+  const parsed = parseRequestVariableKey(key);
+  if (!parsed) return undefined;
+  const result = previousResults.get(parsed.blockName);
   if (!result) return undefined;
-  if (reqOrRes !== "response") return undefined; // only response supported for now
-  if (bodyOrHeaders === "body") {
-    const pathPart = rest.join(".");
+  if (parsed.section !== "response") return undefined;
+  if (parsed.part === "body") {
+    const pathPart = parsed.path ?? "";
     const body = result.body;
-    let content: unknown;
-    if (body.type === "json") content = body.content;
-    else content = body.content;
+    const content =
+      body.type === "json" ? body.content : (body.content as unknown);
     const value = pathPart.startsWith("$")
       ? getByPath(content, pathPart)
-      : getByPath(content, "$." + pathPart);
-    if (value === undefined || value === null) return undefined;
-    if (typeof value === "string") return value;
-    if (typeof value === "number" || typeof value === "boolean")
-      return String(value);
-    return JSON.stringify(value);
+      : getByPath(content, pathPart ? "$." + pathPart : "$");
+    return formatResolvedValue(value);
   }
-  if (bodyOrHeaders === "headers") {
-    const headerKey = rest.join(".");
-    const normalized = headerKey.replace(/^['"]|['"]$/g, "");
-    const headers = result.headers;
-    if (headers[headerKey] !== undefined) return headers[headerKey];
-    if (headers[normalized] !== undefined) return headers[normalized];
-    const lower = normalized.toLowerCase();
-    const found = Object.entries(headers).find(
-      ([k]) => k.toLowerCase() === lower,
-    );
-    return found ? found[1] : undefined;
+  if (parsed.part === "headers" && parsed.headerName) {
+    return resolveHeaderValue(result.headers, parsed.headerName);
   }
   return undefined;
 }
@@ -75,6 +126,5 @@ export function resolveRequestVariable(
  * Check if a variable key looks like a request variable reference.
  */
 export function isRequestVariableKey(key: string): boolean {
-  const t = key.trim();
-  return t.includes(".response.") || t.includes(".request.");
+  return parseRequestVariableKey(key.trim()) !== undefined;
 }

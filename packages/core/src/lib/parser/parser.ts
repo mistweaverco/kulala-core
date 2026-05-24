@@ -7,7 +7,11 @@ import type {
 
 import { pad } from "./lib/helpers";
 import type { KulalaOperator } from "./types/operator";
-import { getOperator } from "./operator";
+import {
+  extractFileHeaderOperators,
+  getOperator,
+  hasVscodeRestclientCompatOperator,
+} from "./operator";
 import type { KulalaError } from "./types/error";
 import type { KulalaScript } from "./types/script";
 import { getInlineScriptConsumedLineCount, getScript } from "./script";
@@ -344,12 +348,33 @@ function extractDirectives(content: string): {
   };
 }
 
-function attachSourceFileHeaderVars(
+function attachSourceFileContext(
   blockList: KulalaBlock[],
   vars: Record<string, string>,
+  vscodeRestclientCompat: boolean,
 ): KulalaBlock[] {
-  if (Object.keys(vars).length === 0) return blockList;
-  return blockList.map((b) => ({ ...b, sourceFileHeaderVariables: vars }));
+  const hasVars = Object.keys(vars).length > 0;
+  if (!hasVars && !vscodeRestclientCompat) return blockList;
+  return blockList.map((b) => ({
+    ...b,
+    ...(hasVars ? { sourceFileHeaderVariables: vars } : {}),
+    ...(vscodeRestclientCompat ? { sourceVscodeRestclientCompat: true } : {}),
+  }));
+}
+
+function withSourceDocumentContext(
+  block: KulalaBlock,
+  sourceDoc: KulalaDocument,
+): KulalaBlock {
+  const vars = sourceDoc.fileHeaderVariables;
+  const hasVars = vars !== undefined && Object.keys(vars).length > 0;
+  const compat = sourceDoc.vscodeRestclientCompat === true;
+  if (!hasVars && !compat) return block;
+  return {
+    ...block,
+    ...(hasVars ? { sourceFileHeaderVariables: vars } : {}),
+    ...(compat ? { sourceVscodeRestclientCompat: true } : {}),
+  };
 }
 
 /** Inclusive 1-based end line for a block regex match (handles split("\\n") trailing ""). */
@@ -444,6 +469,11 @@ export const getDocument = async (
   const fileHeaderVariables = extractFileHeaderAtVariables(
     contentWithoutDirectives,
   );
+  const fileHeaderOperators = extractFileHeaderOperators(
+    contentWithoutDirectives,
+  );
+  const vscodeRestclientCompat =
+    hasVscodeRestclientCompatOperator(fileHeaderOperators);
   const nativeBlockCount = blocks.length;
   const allErrors = [...directiveErrors];
 
@@ -476,9 +506,10 @@ export const getDocument = async (
       } else {
         importedDocuments.set(directive.filepath, result);
         importedBlocks.push(
-          ...attachSourceFileHeaderVars(
+          ...attachSourceFileContext(
             result.blocks,
             result.fileHeaderVariables ?? {},
+            result.vscodeRestclientCompat === true,
           ),
         );
       }
@@ -501,10 +532,13 @@ export const getDocument = async (
           if (block) {
             found = true;
             // Clone block and apply variable overrides if any
-            const runBlock: KulalaBlock = {
-              ...block,
-              name: `${block.name}_from_${importPath.split("/").pop()}`,
-            };
+            const runBlock: KulalaBlock = withSourceDocumentContext(
+              {
+                ...block,
+                name: `${block.name}_from_${importPath.split("/").pop()}`,
+              },
+              doc,
+            );
             // Store variable overrides in a custom property (we'll handle this in runner)
             (runBlock as BlockWithRunDirective).__runDirective = directive;
             runBlocks.push(runBlock);
@@ -540,9 +574,10 @@ export const getDocument = async (
             lineNumber: directive.lineNumber,
           });
         } else {
-          for (const block of attachSourceFileHeaderVars(
+          for (const block of attachSourceFileContext(
             result.blocks,
             result.fileHeaderVariables ?? {},
+            result.vscodeRestclientCompat === true,
           )) {
             const runBlock: KulalaBlock = {
               ...block,
@@ -580,6 +615,9 @@ export const getDocument = async (
               block.sourceFileHeaderVariables =
                 referencedBlock.sourceFileHeaderVariables;
             }
+            if (doc.vscodeRestclientCompat) {
+              block.sourceVscodeRestclientCompat = true;
+            }
             // Store run directive for variable overrides
             (block as BlockWithRunDirective).__runDirective = blockRunDirective;
             delete (block as BlockWithRunDirective).__blockRunDirective;
@@ -598,6 +636,9 @@ export const getDocument = async (
             if (referencedBlock.sourceFileHeaderVariables !== undefined) {
               block.sourceFileHeaderVariables =
                 referencedBlock.sourceFileHeaderVariables;
+            }
+            if (referencedBlock.sourceVscodeRestclientCompat) {
+              block.sourceVscodeRestclientCompat = true;
             }
             // Store run directive for variable overrides
             (block as BlockWithRunDirective).__runDirective = blockRunDirective;
@@ -620,9 +661,10 @@ export const getDocument = async (
             lineNumber: blockRunDirective.lineNumber,
           });
         } else {
-          for (const importedBlock of attachSourceFileHeaderVars(
+          for (const importedBlock of attachSourceFileContext(
             result.blocks,
             result.fileHeaderVariables ?? {},
+            result.vscodeRestclientCompat === true,
           )) {
             const runBlock: KulalaBlock = { ...importedBlock };
             (runBlock as BlockWithRunDirective).__runDirective =
@@ -652,5 +694,6 @@ export const getDocument = async (
     ...(Object.keys(fileHeaderVariables).length > 0
       ? { fileHeaderVariables }
       : {}),
+    ...(vscodeRestclientCompat ? { vscodeRestclientCompat: true } : {}),
   };
 };
