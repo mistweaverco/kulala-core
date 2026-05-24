@@ -20,6 +20,8 @@ export type KulalaBlock = {
     start: number;
     end: number;
   };
+  /** 1-based file line where parsed request content begins (implicit blocks include file-header lines in `position`). */
+  contentStartLine?: number;
   /** @name=value lines in this block before the request (JetBrains in-file variables). */
   preambleVariables?: Record<string, string>;
   /** @ variables from the start of the .http file this block was parsed from (imports / run file). */

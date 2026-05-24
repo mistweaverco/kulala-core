@@ -1,8 +1,15 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "fs";
+import { join } from "path";
 import { getDocument } from "../parser/parser";
 import { findBlockAtCursor } from "./block";
 import { resolveRequestFromBlock } from "./resolve-request-from-block";
 import { toCurlAtCursor } from "./request-cursor";
+
+const implicitFirstRequestPath = join(
+  import.meta.dir,
+  "../../../../../http-example-files/implicit-first-request.http",
+);
 
 const graphqlContent = `### GQL_TEST
 
@@ -31,6 +38,78 @@ describe("resolveRequestFromBlock", () => {
     expect(result.request.method).toBe("POST");
     expect(result.request.headers["Content-Type"]).toBe("application/json");
     expect(result.request.body).toContain("query");
+  });
+
+  test("cursor on pre-request script resolves implicit first request", async () => {
+    const content = `< {%
+  request.variables.set("users", [
+    { name: "Alice" },
+    { name: "Bob" },
+  ])
+%}
+
+GET https://httpbin.org/get?user={{users[*].name}} HTTP/1.1
+Content-Type: application/json`;
+    const doc = await getDocument(content, "/test.http");
+
+    expect(doc.blocks[0]?.position).toEqual({ start: 1, end: 9 });
+    expect(doc.blocks[0]?.scripts.preRequest).toHaveLength(1);
+    expect(findBlockAtCursor(doc, { line: 1, column: 1 })?.name).toBe(
+      "REQUEST_001",
+    );
+    expect(findBlockAtCursor(doc, { line: 6, column: 1 })?.name).toBe(
+      "REQUEST_001",
+    );
+    expect(findBlockAtCursor(doc, { line: 8, column: 1 })?.name).toBe(
+      "REQUEST_001",
+    );
+  });
+
+  test("cursor on doc-scoped variables resolves implicit first request", async () => {
+    const content = `@MY_VAR = 123
+# @kulala-curl--insecure
+
+< {%
+  request.variables.set("users", [
+    { name: "Alice" },
+    { name: "Bob" },
+  ])
+%}
+
+GET https://httpbin.org/get?user={{users[*].name}} HTTP/1.1
+Content-Type: application/json`;
+    const doc = await getDocument(content, "/test.http");
+
+    expect(doc.blocks[0]?.position).toEqual({ start: 1, end: 12 });
+    expect(doc.blocks[0]?.contentStartLine).toBe(4);
+    expect(doc.blocks[0]?.scripts.preRequest).toHaveLength(1);
+    expect(findBlockAtCursor(doc, { line: 1, column: 1 })?.name).toBe(
+      "REQUEST_001",
+    );
+    expect(findBlockAtCursor(doc, { line: 6, column: 1 })?.name).toBe(
+      "REQUEST_001",
+    );
+    expect(findBlockAtCursor(doc, { line: 8, column: 1 })?.name).toBe(
+      "REQUEST_001",
+    );
+  });
+
+  test("cursor on file-header lines resolves implicit-first-request.http", async () => {
+    const content = readFileSync(implicitFirstRequestPath, "utf8");
+    const doc = await getDocument(content, implicitFirstRequestPath);
+
+    expect(doc.blocks[0]?.position).toEqual({ start: 1, end: 13 });
+    expect(doc.blocks[0]?.contentStartLine).toBe(4);
+    expect(findBlockAtCursor(doc, { line: 1, column: 1 })?.name).toBe(
+      "REQUEST_001",
+    );
+    expect(findBlockAtCursor(doc, { line: 2, column: 1 })?.name).toBe(
+      "REQUEST_001",
+    );
+    expect(findBlockAtCursor(doc, { line: 11, column: 1 })?.name).toBe(
+      "REQUEST_001",
+    );
+    expect(findBlockAtCursor(doc, { line: 14, column: 1 })?.name).toBe("FOO");
   });
 });
 

@@ -234,7 +234,8 @@ function buildConsoleOrigin(args: {
   tempCallsite?: ParsedTempCallsite | undefined;
 }): KulalaScriptConsoleOrigin {
   const { script, block, phase, httpDocumentPath, tempCallsite } = args;
-  const httpDirectiveLine = block.position.start + script.lineNumber;
+  const httpDirectiveLine =
+    (block.contentStartLine ?? block.position.start) + script.lineNumber;
   let originFile: string;
   if (script.source === "inline") {
     const fp = script.filepath?.trim() ?? "";

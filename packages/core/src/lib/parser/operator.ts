@@ -1,4 +1,6 @@
 import { isKulalaCurlPassthroughOperator } from "../curl/passthrough";
+import { isRequestLine } from "./request";
+import { isPreRequestScriptLine } from "./script";
 import type { KulalaError } from "./types/error";
 import type { KulalaOperator } from "./types/operator";
 import { kulalaOperatorNames } from "./types/operator";
@@ -65,13 +67,18 @@ export const getOperator = (
 const isOperatorError = (obj: unknown): obj is KulalaError =>
   typeof obj === "object" && obj !== null && "errorMessage" in obj;
 
-/** Operators (`# @…` / `// @…`) before the first `###` block marker. */
+/** Operators (`# @…` / `// @…`) before the first request or `###` block marker. */
 export function extractFileHeaderOperators(content: string): KulalaOperator[] {
   const out: KulalaOperator[] = [];
   let lineIdx = 0;
   for (const line of content.split("\n")) {
     const t = line.trim();
-    if (t.startsWith("###")) break;
+    if (
+      t.startsWith("###") ||
+      isRequestLine(line) ||
+      isPreRequestScriptLine(line)
+    )
+      break;
     if (line.startsWith("# @") || line.startsWith("// @")) {
       const op = getOperator(line, lineIdx);
       if (!isOperatorError(op)) out.push(op);
