@@ -29,7 +29,7 @@ function cutHeader(line: string): [string, string] {
 export function parseCurlCommand(curl: string): CurlParsedRequest | null {
   if (!curl?.trim()) return null;
 
-  let line = curl
+  const line = curl
     .replace(/\\\r?\n/g, "")
     .replace(/\s+/g, " ")
     .trim();

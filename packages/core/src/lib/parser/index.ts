@@ -4,7 +4,6 @@ import { KulalaRunner } from "./../runner";
 import {
   writeErrorToStderr,
   writeRequestResponseToStdout,
-  writeToStderr,
   writeToStdout,
 } from "./lib/helpers";
 import { getDocument } from "./parser";

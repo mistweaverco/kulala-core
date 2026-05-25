@@ -3,6 +3,8 @@ import {
   buildScriptCookies,
   buildScriptRequestApi,
   buildScriptRequestContextFromBlock,
+  type PostRequestScriptApi,
+  type PreRequestScriptApi,
 } from "./script-request-context";
 import type { KulalaBlock } from "../parser/types/block";
 import type { KulalaHttpURL } from "../parser/types/request";
@@ -38,7 +40,7 @@ describe("script-request-context", () => {
       mutableVars: vars,
       iteration: 0,
     });
-    const req = buildScriptRequestApi(ctx);
+    const req = buildScriptRequestApi(ctx) as PreRequestScriptApi;
     expect(req.method).toBe("POST");
     expect(req.body.getRaw()).toBe('{"id": "{{ID}}"}');
     expect(req.body.tryGetSubstituted()).toBe('{"id": "42"}');
@@ -68,7 +70,7 @@ describe("script-request-context", () => {
       headersSent: { "Content-Type": "application/json" },
       bodySent: '{"id":"42"}',
     });
-    const req = buildScriptRequestApi(ctx);
+    const req = buildScriptRequestApi(ctx) as PostRequestScriptApi;
     expect(req.body()).toBe('{"id":"42"}');
     expect(req.url()).toBe("https://api.example.com/items");
     const h = req.headers.findByName("Content-Type");

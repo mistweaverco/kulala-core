@@ -110,6 +110,46 @@ type PostRequestHeader = {
   value: () => string;
 };
 
+type ScriptVariablesApi = {
+  set: (name: string, value: unknown) => void;
+  get: (name: string) => unknown;
+  all: () => Record<string, string>;
+};
+
+export type PreRequestScriptApi = {
+  variables: ScriptVariablesApi;
+  environment: { get: (name: string) => string | null };
+  method: string;
+  iteration: () => number;
+  templateValue: (index: number) => unknown;
+  headers: {
+    all: () => PreRequestHeader[];
+    findByName: (headerName: string) => PreRequestHeader | undefined;
+  };
+  body: {
+    getRaw: () => string | undefined;
+    tryGetSubstituted: () => string | undefined;
+  };
+  url: {
+    getRaw: () => string;
+    tryGetSubstituted: () => string;
+  };
+};
+
+export type PostRequestScriptApi = {
+  variables: ScriptVariablesApi;
+  environment: { get: (name: string) => string | null };
+  method: string;
+  iteration: () => number;
+  templateValue: (index: number) => unknown;
+  headers: {
+    all: () => PostRequestHeader[];
+    findByName: (headerName: string) => PostRequestHeader | undefined;
+  };
+  body: () => string | undefined;
+  url: () => string;
+};
+
 function makePreRequestHeader(
   name: string,
   rawValue: string,
@@ -130,7 +170,11 @@ function makePostRequestHeader(name: string, value: string): PostRequestHeader {
   };
 }
 
-export function buildScriptRequestApi(ctx: ScriptRequestContext) {
+export type ScriptRequestApi = PreRequestScriptApi | PostRequestScriptApi;
+
+export function buildScriptRequestApi(
+  ctx: ScriptRequestContext,
+): ScriptRequestApi {
   const envVars = loadEnvVars(ctx.env, ctx.startDir);
 
   const variables = {

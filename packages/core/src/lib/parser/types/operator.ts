@@ -1,3 +1,6 @@
+/** `# @kulala-curl--*` passthrough operators (dynamic curl long-option names). */
+export type KulalaCurlPassthroughOperatorName = `kulala-curl--${string}`;
+
 export type KulalaOperatorName =
   | "name"
   | "accept"
@@ -15,7 +18,8 @@ export type KulalaOperatorName =
   | "grpc-protoset"
   | "grpc-plaintext"
   | "grpc-v"
-  | "kulala-vscode-restclient-compat";
+  | "kulala-vscode-restclient-compat"
+  | KulalaCurlPassthroughOperatorName;
 
 export const kulalaOperatorNames: Set<KulalaOperatorName> = new Set([
   "name",

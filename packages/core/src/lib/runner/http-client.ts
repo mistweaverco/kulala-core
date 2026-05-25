@@ -68,6 +68,8 @@ export type HttpRequestOptions = {
   cookieJarEnabled?: boolean;
   /** Extra curl argv from `# @kulala-curl-*` operators (merged file + block). */
   extraCurlArgv?: string[];
+  /** Skip TLS certificate verification (curl --insecure / -k). */
+  insecure?: boolean;
 };
 
 /** Encode FormData to buffer and content-type using form-data-encoder. */

@@ -19,6 +19,7 @@ export default ts.config(
     ignores: [
       "build/",
       "dist/",
+      "http-example-files/**/*.js",
       "packages/core/src/lib/runner/vendored-curl.embed.generated.ts",
     ],
   },

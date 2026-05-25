@@ -1,5 +1,4 @@
 import type {
-  KulalaHttpMethod,
   KulalaHttpMethodAvailable,
   KulalaHttpURL,
   KulalaHttpVersion,
@@ -23,8 +22,6 @@ const getValidHttpMethods = (): KulalaHttpMethodAvailable[] => [
   "WS",
   "WSS",
 ];
-
-const PROTOCOL_METHODS = new Set(["GRPC", "WS", "WSS"]);
 
 const HTTP_VERSION = /^HTTP\/\d+(\.\d+)?$/;
 
