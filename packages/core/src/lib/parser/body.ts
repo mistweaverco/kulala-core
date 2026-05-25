@@ -1,3 +1,4 @@
+import { parseGraphQLContent } from "./graphql-content";
 import type { KulalaError } from "./types/error";
 import { postRequestScriptMarker } from "./script";
 import type {
@@ -93,50 +94,27 @@ export const getBody = async (
     ) {
       path = path.slice(1, -1);
     }
+    const firstNewline = content.indexOf("\n");
+    const trailingAfterFileRef =
+      firstNewline === -1 ? "" : content.slice(firstNewline + 1).trim();
+    const bodyFromFile: KulalaRequestBodyFromFileContent = {
+      __bodyFromFile: path,
+    };
+    if (method === "GRAPHQL" && trailingAfterFileRef) {
+      bodyFromFile.__graphqlVariablesSuffix = trailingAfterFileRef;
+    }
     return {
       type: "bodyFromFile",
-      content: { __bodyFromFile: path },
+      content: bodyFromFile,
     };
   }
 
   // GraphQL requests: query as plain text, optional variables JSON after blank line
   // Format per https://neovim.getkulala.net/docs/usage/graphql
   if (method === "GRAPHQL") {
-    // Split by double newline (blank line) to separate query and variables
-    const parts = content
-      .split(/\n\s*\n/)
-      .map((p) => p.trim())
-      .filter(Boolean);
-    // Note: stdin JSON encoding may escape braces as \{ and \}. Undo that for GraphQL queries.
-    const query = (parts[0] ?? "").replace(/\\\{/g, "{").replace(/\\\}/g, "}");
-    let variables: Record<string, unknown> | undefined = undefined;
-
-    // If there's a second part, try to parse it as JSON for variables
-    if (parts.length > 1) {
-      try {
-        const jsonStr = parts[1]!
-          .replace(/\\\{/g, "{")
-          .replace(/\\\}/g, "}")
-          .replace(/,(\s*[}\]])/g, "$1");
-        const parsed = JSON.parse(jsonStr) as unknown;
-        if (
-          typeof parsed === "object" &&
-          parsed !== null &&
-          !Array.isArray(parsed)
-        ) {
-          variables = parsed as Record<string, unknown>;
-        }
-      } catch {
-        // If variables JSON parsing fails, ignore variables
-      }
-    }
-
     return {
       type: "graphql",
-      content: {
-        query,
-        ...(variables !== undefined ? { variables } : {}),
-      },
+      content: parseGraphQLContent(content),
     };
   }
 

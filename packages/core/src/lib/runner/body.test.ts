@@ -12,6 +12,7 @@ import {
   parseMultipartBoundaryFromBody,
   parseMultipartBoundaryFromContentType,
   resolveBodyFromFile,
+  resolveEffectiveBodyFromFileRef,
   resolveInlineBodyFileRefs,
   stripHttpClientDoubleSlashLineComments,
 } from "./body";
@@ -72,6 +73,33 @@ test("getGraphQLRequestBody returns undefined when no query string", () => {
   expect(getGraphQLRequestBody({ variables: {} })).toBeUndefined();
 });
 
+test("getGraphQLRequestBody parses raw GraphQL text from body-from-file", () => {
+  const fileContent = [
+    "query User {",
+    "  viewer {",
+    "    bio",
+    "  }",
+    "}",
+  ].join("\n");
+  expect(getGraphQLRequestBody(fileContent)).toEqual({
+    query: "query User {\n  viewer {\n    bio\n  }\n}",
+  });
+});
+
+test("getGraphQLRequestBody parses raw GraphQL text with variables from file", () => {
+  const fileContent = [
+    "query Person($id: ID) {",
+    "  person(personID: $id) { name }",
+    "}",
+    "",
+    '{ "id": 1 }',
+  ].join("\n");
+  expect(getGraphQLRequestBody(fileContent)).toEqual({
+    query: "query Person($id: ID) {\n  person(personID: $id) { name }\n}",
+    variables: { id: 1 },
+  });
+});
+
 test("parseFormUrlEncoded parses key=value pairs", () => {
   expect(parseFormUrlEncoded("a=1&b=2")).toEqual({ a: "1", b: "2" });
   expect(parseFormUrlEncoded("name=John+Doe")).toEqual({ name: "John Doe" });
@@ -110,6 +138,32 @@ test("isBodyFromFileRef returns false for other values", () => {
   expect(isBodyFromFileRef({ filePath: "/tmp" })).toBe(false);
   expect(isBodyFromFileRef({ __bodyFromFile: 123 })).toBe(false);
   expect(isBodyFromFileRef(null)).toBe(false);
+});
+
+test("resolveEffectiveBodyFromFileRef merges GRAPHQL file query with inline variables", async () => {
+  const { mkdtempSync } = await import("fs");
+  const { join } = await import("path");
+  const { tmpdir } = await import("os");
+  const dir = mkdtempSync(join(tmpdir(), "kulala-gql-merge-"));
+  const queryFile = join(dir, "query.graphql");
+  await Bun.write(
+    queryFile,
+    ["query Film($id: ID) {", "  film(id: $id) { title }", "}"].join("\n"),
+  );
+
+  const result = await resolveEffectiveBodyFromFileRef(
+    {
+      __bodyFromFile: "query.graphql",
+      __graphqlVariablesSuffix: '{ "id": 1 }',
+    },
+    dir,
+    "GRAPHQL",
+  );
+
+  expect(result).toEqual({
+    query: "query Film($id: ID) {\n  film(id: $id) { title }\n}",
+    variables: { id: 1 },
+  });
 });
 
 test("resolveBodyFromFile reads file relative to baseDir", async () => {
