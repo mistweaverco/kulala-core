@@ -1,6 +1,9 @@
+import { resolveVariableReference } from "./variable-lookup";
+
 /**
  * Replace {{variableName}} or {{ variableName }} in a string with values from vars.
- * Supports simple names (e.g. API_KEY) and compound request vars (e.g. REQUEST_ONE.response.body.$.token).
+ * Supports simple names (e.g. API_KEY), JetBrains JSONPath (e.g. CREDENTIALS.password, users[*].name),
+ * and compound request vars (e.g. REQUEST_ONE.response.body.$.token).
  * Optional whitespace around the variable name is allowed.
  * Unknown variables are replaced with empty string.
  * If resolver is provided, it is used for missing keys (e.g. request variables).
@@ -22,7 +25,7 @@ export function substituteInString(
       return `{{${key}}}`;
     }
 
-    const fromVars = vars[key];
+    const fromVars = resolveVariableReference(key, vars);
     if (fromVars !== undefined) return fromVars;
     if (resolver) {
       const resolved = resolver(key);
@@ -72,7 +75,7 @@ export async function substituteInStringAsync(
       }
     } else {
       // Regular variable substitution
-      const fromVars = vars[key];
+      const fromVars = resolveVariableReference(key, vars);
       if (fromVars !== undefined) {
         replacement = fromVars;
       } else if (resolver) {

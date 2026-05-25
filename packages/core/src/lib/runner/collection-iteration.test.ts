@@ -53,4 +53,26 @@ describe("collection-iteration", () => {
     });
     expect(templateValueAtIndex(plan, 1)).toBe("y");
   });
+
+  test("detectCollectionIterationPlan supports JSONPath {{ users[*].name }}", () => {
+    const usersBlock: KulalaBlock = {
+      ...block,
+      request: {
+        ...block.request,
+        url: "https://example.com/users/{{users[*].name}}" as KulalaHttpURL,
+      },
+    };
+    const usersJson = JSON.stringify([
+      { name: "Alice", id: 1 },
+      { name: "Bob", id: 2 },
+    ]);
+    const plan = detectCollectionIterationPlan(usersBlock, null, {
+      users: usersJson,
+    });
+    expect(plan.count).toBe(2);
+    expect(plan.collections["users[*].name"]).toEqual(["Alice", "Bob"]);
+    expect(
+      varsForCollectionIndex({}, plan.collections, 1)["users[*].name"],
+    ).toBe("Bob");
+  });
 });

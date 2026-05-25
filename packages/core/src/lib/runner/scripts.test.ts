@@ -1,6 +1,8 @@
 import { describe, expect, test, beforeEach } from "bun:test";
 import { runScripts } from "./scripts";
 import { getDbInMemory, setDbForTesting, getVariable } from "../persistence";
+import { ScriptPromptError } from "./script-prompt-error";
+import { ScriptReplayError, ScriptSkipError } from "./script-control-error";
 import type { KulalaBlock } from "../parser/types/block";
 import type { KulalaHttpURL } from "../parser/types/request";
 
@@ -67,6 +69,41 @@ request.variables.set("NAME", "kulala");`,
     );
 
     expect(vars.NAME).toBe("kulala");
+  });
+
+  test("client.global.get returns structured values (JetBrains parity)", async () => {
+    const vars: Record<string, string> = {};
+    await runScripts(
+      [
+        {
+          type: "preRequest",
+          source: "inline",
+          lang: "js",
+          content: `
+            client.global.set("CACHE", {
+              username: "octo",
+              expiresOnUnixTimestamp: 9999999999999,
+            });
+            const cache = client.global.get("CACHE");
+            if (!cache || cache.username !== "octo") {
+              throw new Error("expected object from client.global.get");
+            }
+            request.variables.set("USER", cache.username);
+          `,
+          lineNumber: 1,
+        },
+      ],
+      "preRequest",
+      dummyBlock,
+      "/tmp/example.http",
+      undefined,
+      vars,
+    );
+
+    expect(vars.USER).toBe("octo");
+    expect(vars["CACHE.username"]).toBe("octo");
+    const { substituteInString } = await import("../variables/substitute");
+    expect(substituteInString("{{CACHE.username}}", vars)).toBe("octo");
   });
 
   test("post-request JS can read response and set vars", async () => {
@@ -143,75 +180,90 @@ client.global.set("DATE", response.headers.valueOf("Date") || "");`,
 
   test("post-request JS cannot call request.variables.set (JetBrains parity)", async () => {
     const vars: Record<string, string> = {};
-    await runScripts(
-      [
-        {
-          type: "postRequest",
-          source: "inline",
-          lang: "js",
-          content: `request.variables.set("NOPE", "x");`,
-          lineNumber: 1,
-        },
-      ],
-      "postRequest",
-      dummyBlock,
-      "/tmp/example.http",
-      undefined,
-      vars,
-    );
+    await expect(
+      runScripts(
+        [
+          {
+            type: "postRequest",
+            source: "inline",
+            lang: "js",
+            content: `request.variables.set("NOPE", "x");`,
+            lineNumber: 1,
+          },
+        ],
+        "postRequest",
+        dummyBlock,
+        "/tmp/example.http",
+        { statusCode: 200, headers: {}, body: "{}" },
+        vars,
+      ),
+    ).rejects.toThrow(/post-request scripts/);
     expect(vars.NOPE).toBeUndefined();
   });
 
   test("client.assert aborts script execution when condition is false", async () => {
-    const vars: Record<string, string> = {};
-    await runScripts(
-      [
-        {
-          type: "postRequest",
-          source: "inline",
-          lang: "js",
-          content: `
-            client.assert(false, "nope");
-            request.variables.set("AFTER", "should-not-run");
-          `,
-          lineNumber: 1,
-        },
-      ],
-      "postRequest",
-      dummyBlock,
-      "/tmp/example.http",
-      undefined,
-      vars,
-    );
-
-    expect(vars.AFTER).toBeUndefined();
+    await expect(
+      runScripts(
+        [
+          {
+            type: "postRequest",
+            source: "inline",
+            lang: "js",
+            content: `client.assert(false, "nope");`,
+            lineNumber: 1,
+          },
+        ],
+        "postRequest",
+        dummyBlock,
+        "/tmp/example.http",
+        { statusCode: 200, headers: {}, body: "{}" },
+        {},
+      ),
+    ).rejects.toThrow("nope");
   });
 
   test("client.test runs the test function and aborts the script on failure", async () => {
-    const vars: Record<string, string> = {};
-    await runScripts(
-      [
-        {
-          type: "postRequest",
-          source: "inline",
-          lang: "js",
-          content: `
-            client.test("fails", () => {
+    await expect(
+      runScripts(
+        [
+          {
+            type: "postRequest",
+            source: "inline",
+            lang: "js",
+            content: `client.test("fails", () => {
               client.assert(false, "boom");
-            });
-            request.variables.set("AFTER", "should-not-run");
-          `,
-          lineNumber: 1,
-        },
-      ],
-      "postRequest",
-      dummyBlock,
-      "/tmp/example.http",
-      undefined,
-      vars,
-    );
+            });`,
+            lineNumber: 1,
+          },
+        ],
+        "postRequest",
+        dummyBlock,
+        "/tmp/example.http",
+        { statusCode: 200, headers: {}, body: "{}" },
+        {},
+      ),
+    ).rejects.toThrow("boom");
+  });
 
-    expect(vars.AFTER).toBeUndefined();
+  test("pre-request script errors propagate and abort the request", async () => {
+    await expect(
+      runScripts(
+        [
+          {
+            type: "preRequest",
+            source: "inline",
+            lang: "js",
+            content: `throw new Error("pre-request failed");`,
+            lineNumber: 1,
+          },
+        ],
+        "preRequest",
+        dummyBlock,
+        "/tmp/example.http",
+        undefined,
+        {},
+      ),
+    ).rejects.toThrow("pre-request failed");
   });
 
   test("client.exit stops executing remaining scripts in the same phase", async () => {
@@ -456,6 +508,140 @@ client.global.set("DATE", response.headers.valueOf("Date") || "");`,
     expect(vars.METHOD).toBe("PUT");
     expect(vars.RAW).toBe("hello {{NAME}}");
     expect(vars.SUB).toBe("hello world");
+  });
+
+  test("$kulala.prompt returns stored value without prompting", async () => {
+    const vars: Record<string, string> = { keepassxc_password: "secret" };
+    await runScripts(
+      [
+        {
+          type: "preRequest",
+          source: "inline",
+          lang: "js",
+          content: `
+            const pwd = $kulala.prompt("Password?", "keepassxc_password", { type: "password" });
+            request.variables.set("GOT", pwd);
+          `,
+          lineNumber: 1,
+        },
+      ],
+      "preRequest",
+      dummyBlock,
+      "/tmp/example.http",
+      undefined,
+      vars,
+      undefined,
+      undefined,
+      undefined,
+      { stableDocId: "stable-doc" },
+    );
+    expect(vars.GOT).toBe("secret");
+  });
+
+  test("$kulala.prompt throws ScriptPromptError when variable is missing", async () => {
+    try {
+      await runScripts(
+        [
+          {
+            type: "preRequest",
+            source: "inline",
+            lang: "js",
+            content: `$kulala.prompt("Your name?", "name");`,
+            lineNumber: 1,
+          },
+        ],
+        "preRequest",
+        dummyBlock,
+        "/tmp/example.http",
+        undefined,
+        {},
+        undefined,
+        undefined,
+        undefined,
+        { stableDocId: "stable-doc" },
+      );
+      throw new Error("expected ScriptPromptError");
+    } catch (e) {
+      expect(e).toBeInstanceOf(ScriptPromptError);
+      const err = e as ScriptPromptError;
+      expect(err.promptResponse.prompt).toBe(true);
+      expect(err.promptResponse.inputs[0]?.id).toBe("name");
+      expect(err.promptResponse.inputs[0]?.label).toBe("Your name?");
+      expect(err.promptResponse.inputs[0]?.type).toBe("text");
+    }
+  });
+
+  test("$kulala.request.skip throws ScriptSkipError in pre-request", async () => {
+    try {
+      await runScripts(
+        [
+          {
+            type: "preRequest",
+            source: "inline",
+            lang: "js",
+            content: `$kulala.request.skip();`,
+            lineNumber: 1,
+          },
+        ],
+        "preRequest",
+        dummyBlock,
+        "/tmp/example.http",
+        undefined,
+        {},
+        undefined,
+        undefined,
+        undefined,
+        { stableDocId: "stable-doc" },
+      );
+      throw new Error("expected ScriptSkipError");
+    } catch (e) {
+      expect(e).toBeInstanceOf(ScriptSkipError);
+    }
+  });
+
+  test("$kulala.request.replay throws ScriptReplayError", async () => {
+    try {
+      await runScripts(
+        [
+          {
+            type: "preRequest",
+            source: "inline",
+            lang: "js",
+            content: `$kulala.request.replay();`,
+            lineNumber: 1,
+          },
+        ],
+        "preRequest",
+        dummyBlock,
+        "/tmp/example.http",
+        undefined,
+        {},
+      );
+      throw new Error("expected ScriptReplayError");
+    } catch (e) {
+      expect(e).toBeInstanceOf(ScriptReplayError);
+    }
+  });
+
+  test("$kulala.request.skip is not available in post-request scripts", async () => {
+    await expect(
+      runScripts(
+        [
+          {
+            type: "postRequest",
+            source: "inline",
+            lang: "js",
+            content: `$kulala.request.skip();`,
+            lineNumber: 1,
+          },
+        ],
+        "postRequest",
+        dummyBlock,
+        "/tmp/example.http",
+        { statusCode: 200, headers: {}, body: "" },
+        {},
+      ),
+    ).rejects.toThrow(/pre-request/);
   });
 
   test("scriptConsole lines include origin (phase, source, file, directive line)", async () => {

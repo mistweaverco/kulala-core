@@ -4,6 +4,12 @@ import { curlArgvFromOperators } from "../curl/passthrough";
 import { getEffectiveOperators } from "./effective-operators";
 import { OAuth2Manager } from "../auth/oauth2/manager";
 import { OAuth2PromptError } from "../auth/oauth2/prompt-error";
+import { ScriptPromptError } from "./script-prompt-error";
+import {
+  MAX_SCRIPT_REPLAYS,
+  ScriptReplayError,
+  ScriptSkipError,
+} from "./script-control-error";
 import {
   buildMultipartBody,
   ensureMultipartContentTypeHeader,
@@ -55,7 +61,8 @@ export type ResolvedRequestPreview = {
 export type ResolveRequestResult =
   | { ok: true; request: ResolvedRequestPreview }
   | { ok: false; error: string }
-  | KulalaPromptResponse;
+  | KulalaPromptResponse
+  | { ok: false; skipped: true };
 
 /**
  * Resolve URL, headers, and body as they would be sent (pre-request scripts + substitution).
@@ -73,6 +80,7 @@ export async function resolveRequestFromBlock(
   const startDir = filePath
     ? (await import("path")).dirname(filePath)
     : process.cwd();
+  const stableDocId = filePath ?? "";
   const mutableVars = { ...(vars ?? {}) };
   const effectiveOperators = getEffectiveOperators(doc, block);
   const extraCurlArgv = curlArgvFromOperators(effectiveOperators);
@@ -100,27 +108,55 @@ export async function resolveRequestFromBlock(
     );
   }
 
-  const preScriptRequestCtx = buildScriptRequestContextFromBlock({
-    block,
-    phase: "preRequest",
-    effectiveBody,
-    env,
-    startDir,
-    mutableVars,
-    resolver,
-    iteration: 0,
-  });
-  await runScripts(
-    block.scripts.preRequest,
-    "preRequest",
-    block,
-    filePath,
-    undefined,
-    mutableVars,
-    flow,
-    undefined,
-    preScriptRequestCtx,
-  );
+  let scriptReplayIndex = 0;
+  scriptReplay: while (true) {
+    if (scriptReplayIndex > MAX_SCRIPT_REPLAYS) {
+      return {
+        ok: false,
+        error: `Too many $kulala.request.replay() calls (max ${MAX_SCRIPT_REPLAYS})`,
+      };
+    }
+    const preScriptRequestCtx = buildScriptRequestContextFromBlock({
+      block,
+      phase: "preRequest",
+      effectiveBody,
+      env,
+      startDir,
+      mutableVars,
+      resolver,
+      iteration: 0,
+    });
+    try {
+      await runScripts(
+        block.scripts.preRequest,
+        "preRequest",
+        block,
+        filePath,
+        undefined,
+        mutableVars,
+        flow,
+        undefined,
+        preScriptRequestCtx,
+        { stableDocId },
+      );
+    } catch (error) {
+      if (error instanceof ScriptPromptError) {
+        return error.promptResponse;
+      }
+      if (error instanceof ScriptSkipError) {
+        return { ok: false, skipped: true };
+      }
+      if (error instanceof ScriptReplayError) {
+        scriptReplayIndex += 1;
+        continue scriptReplay;
+      }
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+    break;
+  }
 
   const collectionPlan = detectCollectionIterationPlan(
     block,

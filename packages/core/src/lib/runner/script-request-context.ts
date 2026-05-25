@@ -1,6 +1,10 @@
 import type { KulalaBlock } from "../parser/types/block";
 import { loadEnvVars } from "../variables/env-files";
 import { substituteInString } from "../variables/substitute";
+import {
+  parseStoredVariable,
+  writeVariableToMaps,
+} from "../variables/variable-lookup";
 import type { VariableResolver } from "./types";
 import { buildHeadersFromSection } from "./headers";
 import { normalizeSetCookieFromLine } from "../persistence/cookie-store";
@@ -136,16 +140,9 @@ export function buildScriptRequestApi(ctx: ScriptRequestContext) {
           "request.variables.set is not available in post-request scripts",
         );
       }
-      const toStringValue = (v: unknown): string => {
-        if (v == null) return "";
-        if (typeof v === "string") return v;
-        if (typeof v === "number" || typeof v === "boolean") return String(v);
-        if (typeof v === "object") return JSON.stringify(v);
-        return String(v);
-      };
-      ctx.mutableVars[name] = toStringValue(value);
+      writeVariableToMaps(name, value, ctx.mutableVars);
     },
-    get: (name: string) => parseVariableGet(ctx.mutableVars[name]),
+    get: (name: string) => parseStoredVariable(ctx.mutableVars[name]),
     all: () => ({ ...ctx.mutableVars }),
   };
 
@@ -163,19 +160,6 @@ export function buildScriptRequestApi(ctx: ScriptRequestContext) {
       return undefined;
     }
     return templateValueAtIndex(ctx.collectionPlan, index);
-  };
-
-  const parseVariableGet = (raw: string | undefined): unknown => {
-    if (raw === undefined) return undefined;
-    const t = raw.trim();
-    if (t.startsWith("[") || t.startsWith("{")) {
-      try {
-        return JSON.parse(t) as unknown;
-      } catch {
-        return raw;
-      }
-    }
-    return raw;
   };
 
   if (ctx.phase === "preRequest") {

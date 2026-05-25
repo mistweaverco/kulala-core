@@ -85,6 +85,25 @@ test("resolveVariables includes persistence vars", async () => {
   expect(vars.baseUrl).toBe("https://api.example.com");
 });
 
+test("resolveVariables expands nested global vars for JSONPath-style {{ }} refs", async () => {
+  const { setVariable } = await import("../persistence");
+  setVariable("global", "GITHUB_CREDENTIALS", {
+    username: "octo",
+    password: "ghp_test",
+  });
+  const vars = await resolveVariables(
+    "default",
+    "doc-id",
+    "REQ1",
+    process.cwd(),
+  );
+  expect(vars["GITHUB_CREDENTIALS.username"]).toBe("octo");
+  expect(vars["GITHUB_CREDENTIALS.password"]).toBe("ghp_test");
+  expect(substituteInString("user={{GITHUB_CREDENTIALS.username}}", vars)).toBe(
+    "user=octo",
+  );
+});
+
 test("resolveVariables includes JetBrains @-file variables (fileHeader + blockPreamble)", async () => {
   const vars = await resolveVariables("default", "d", "b", process.cwd(), {
     fileHeader: { DOC_ENV_TEST: "production" },

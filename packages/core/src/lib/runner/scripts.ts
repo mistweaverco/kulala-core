@@ -18,6 +18,11 @@ import {
   setVariable,
 } from "../persistence";
 import {
+  parseStoredVariable,
+  removeVariableFromMaps,
+  writeVariableToMaps,
+} from "../variables/variable-lookup";
+import {
   exec,
   execFile,
   execFileSync,
@@ -35,6 +40,14 @@ import {
   buildScriptRequestContextFromBlock,
   type ScriptRequestContext,
 } from "./script-request-context";
+import { buildKulalaScriptApi } from "./kulala-script-api";
+import { ScriptPromptError } from "./script-prompt-error";
+import { ScriptReplayError, ScriptSkipError } from "./script-control-error";
+
+export type ScriptRunScope = {
+  /** Stable document id for request-scoped variables and prompts. */
+  stableDocId: string;
+};
 
 export type ScriptFlowContext = {
   /** "Execution flow" local headers (not persisted). */
@@ -81,7 +94,7 @@ type ScriptClient = {
   exit: () => never;
   global: {
     set: (name: string, value: unknown) => void;
-    get: (name: string) => string | undefined;
+    get: (name: string) => unknown;
     isEmpty: () => boolean;
     clear: (name: string) => boolean;
     clearAll: () => void;
@@ -102,14 +115,6 @@ function formatScriptConsoleArgs(args: unknown[]): string {
         : inspect(a, { colors: false, depth: 8, breakLength: 120 }),
     )
     .join(" ");
-}
-
-function toStringValue(v: unknown): string {
-  if (v == null) return "";
-  if (typeof v === "string") return v;
-  if (typeof v === "number" || typeof v === "boolean") return String(v);
-  if (typeof v === "object") return JSON.stringify(v);
-  return String(v);
 }
 
 function makeHeaders(
@@ -362,6 +367,7 @@ async function executeJsTsScript(
     client: ScriptClient;
     request: ScriptRequest;
     response: ScriptResponse;
+    kulala: ReturnType<typeof buildKulalaScriptApi>;
     /** When set, `console.*` is captured via this hook (caller supplies origin). */
     pushCapturedConsole?: (
       level: KulalaScriptConsoleLine["level"],
@@ -373,6 +379,7 @@ async function executeJsTsScript(
     client: (globalThis as Record<string, unknown>).client,
     request: (globalThis as Record<string, unknown>).request,
     response: (globalThis as Record<string, unknown>).response,
+    $kulala: (globalThis as Record<string, unknown>).$kulala,
     require: (globalThis as Record<string, unknown>).require,
     exec: (globalThis as Record<string, unknown>).exec,
     execFile: (globalThis as Record<string, unknown>).execFile,
@@ -401,6 +408,7 @@ async function executeJsTsScript(
     (globalThis as unknown as Record<string, unknown>).client = ctx.client;
     (globalThis as unknown as Record<string, unknown>).request = ctx.request;
     (globalThis as unknown as Record<string, unknown>).response = ctx.response;
+    (globalThis as unknown as Record<string, unknown>).$kulala = ctx.kulala;
 
     // Allow CommonJS requires in scripts.
     const req = createRequire(modulePath);
@@ -466,6 +474,7 @@ async function executeJsTsScript(
     (globalThis as unknown as Record<string, unknown>).client = prev.client;
     (globalThis as unknown as Record<string, unknown>).request = prev.request;
     (globalThis as unknown as Record<string, unknown>).response = prev.response;
+    (globalThis as unknown as Record<string, unknown>).$kulala = prev.$kulala;
     (globalThis as unknown as Record<string, unknown>).require = prev.require;
     (globalThis as unknown as Record<string, unknown>).exec = prev.exec;
     (globalThis as unknown as Record<string, unknown>).execFile = prev.execFile;
@@ -618,6 +627,7 @@ export const runScripts = async (
   flow?: ScriptFlowContext,
   scriptConsole?: KulalaScriptConsoleLine[],
   requestContext?: ScriptRequestContext,
+  scope?: ScriptRunScope,
 ): Promise<void> => {
   const mutableVars = vars ?? {};
   for (const script of scripts) {
@@ -702,17 +712,24 @@ export const runScripts = async (
         global: {
           set: (name: string, value: unknown) => {
             setVariable("global", name, value as Record<string, unknown>);
-            mutableVars[name] = toStringValue(value);
+            writeVariableToMaps(name, value, mutableVars);
           },
           get: (name: string) => {
             const v = getVariable("global", name);
-            return v === undefined ? undefined : toStringValue(v);
+            if (v !== undefined) return v;
+            return parseStoredVariable(mutableVars[name]);
           },
           isEmpty: () => Object.keys(getVariables("global")).length === 0,
-          clear: (name: string) => deleteVariable("global", name),
+          clear: (name: string) => {
+            removeVariableFromMaps(name, mutableVars);
+            return deleteVariable("global", name);
+          },
           clearAll: () => {
             const vars = getVariables("global");
-            for (const k of Object.keys(vars)) deleteVariable("global", k);
+            for (const k of Object.keys(vars)) {
+              removeVariableFromMaps(k, mutableVars);
+              deleteVariable("global", k);
+            }
           },
           delete: (name: string) => deleteVariable("global", name),
           headers: {
@@ -744,6 +761,14 @@ export const runScripts = async (
         requestContext?.responseUrl,
       );
 
+      const stableDocId = scope?.stableDocId ?? filePath ?? "";
+      const kulalaApi = buildKulalaScriptApi({
+        stableDocId,
+        blockName: block.name,
+        mutableVars,
+        phase: type,
+      });
+
       if (script.lang === "lua") {
         await executeLuaScript(script.content, {
           client: clientObj,
@@ -761,6 +786,7 @@ export const runScripts = async (
           client: clientObj,
           request: requestObj,
           response: responseObj,
+          kulala: kulalaApi,
           pushCapturedConsole:
             scriptConsole !== undefined
               ? (level, args) => {
@@ -777,6 +803,13 @@ export const runScripts = async (
       if (error instanceof ScriptExitError) {
         break;
       }
+      if (
+        error instanceof ScriptPromptError ||
+        error instanceof ScriptSkipError ||
+        error instanceof ScriptReplayError
+      ) {
+        throw error;
+      }
       emitConsoleLine(
         "error",
         `Error executing script: ${
@@ -784,6 +817,9 @@ export const runScripts = async (
         }`,
         captureJsCallsite(),
       );
+      // JetBrains: pre-request script errors abort the request; post-request errors
+      // propagate after HTTP has completed (handled in doRequestFromBlock).
+      throw error;
     } finally {
       try {
         process.chdir(cwd);

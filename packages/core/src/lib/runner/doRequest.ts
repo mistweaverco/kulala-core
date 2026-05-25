@@ -18,14 +18,23 @@ import {
 import { OAuth2Manager } from "../auth/oauth2/manager";
 import { OAuth2PromptError } from "../auth/oauth2/prompt-error";
 import {
-  createPrompt,
-  deleteVariable,
   getCookieHeaderForRequest,
   incrementReplayCount,
   saveHistoryEntry,
   setVariable,
   storeCookiesFromResponse,
 } from "../persistence";
+import {
+  buildCustomPromptResponse,
+  consumeRequestPromptVariable,
+} from "./custom-prompt";
+import { ScriptPromptError } from "./script-prompt-error";
+import {
+  MAX_SCRIPT_REPLAYS,
+  ScriptReplayError,
+  ScriptSkipError,
+} from "./script-control-error";
+import { buildRunnerResponseBody } from "./http-response-body";
 import { runScripts, type ScriptFlowContext } from "./scripts";
 import type { KulalaScriptType } from "../parser/types/script";
 import {
@@ -60,6 +69,7 @@ import type {
   KulalaRequestErrorResponse,
   KulalaRequestSent,
   KulalaRequestSuccessResponse,
+  KulalaSkippedResponse,
   KulalaScriptConsoleLine,
   RunnerResponseLike,
   VariableResolver,
@@ -71,6 +81,7 @@ export type DoRequestFromBlockResult =
   | KulalaRequestSuccessResponse
   | KulalaRequestErrorResponse
   | KulalaPromptResponse
+  | KulalaSkippedResponse
   | KulalaWebSocketPlanResponse;
 
 export type DoRequestFromBlockOptions = {
@@ -79,6 +90,8 @@ export type DoRequestFromBlockOptions = {
   collectionPlan?: CollectionIterationPlan;
   /** Internal: child call when expanding a collection variable. */
   skipPreScripts?: boolean;
+  /** Internal: `$kulala.request.replay()` counter for this block run. */
+  scriptReplayIndex?: number;
   /** Parsed document (file-header operators merged into each request). */
   doc?: KulalaDocument;
 };
@@ -104,6 +117,7 @@ async function runSharedScriptsForPhase(
     bodySent?: string;
     responseUrl?: string;
     responseHeaders?: Record<string, string>;
+    stableDocId: string;
   },
 ): Promise<void> {
   for (const shared of opts.flow?.sharedBlocks ?? []) {
@@ -138,6 +152,7 @@ async function runSharedScriptsForPhase(
       opts.flow,
       opts.scriptConsole,
       ctx,
+      { stableDocId: opts.stableDocId },
     );
   }
 }
@@ -270,37 +285,20 @@ export async function doRequestFromBlock(
     const varName = parsed?.varName?.trim() ?? "";
     const label = parsed?.label?.trim();
 
-    // Consume one-time prompt value if it was stored for this request.
-    if (stableDocId && varName && mutableVars[varName] !== undefined) {
-      deleteVariable("request", varName, {
-        document: stableDocId,
-        blockName: block.name,
-      });
-    }
+    consumeRequestPromptVariable({
+      stableDocId,
+      blockName: block.name,
+      varName,
+      mutableVars,
+    });
 
     if (varName && mutableVars[varName] === undefined) {
-      const promptId = createPrompt("custom", {
-        promptType: "custom",
+      return buildCustomPromptResponse({
         stableDocId,
         blockName: block.name,
         varName,
         label,
       });
-      return {
-        success: false,
-        prompt: true,
-        promptId,
-        promptType: "custom",
-        message: `Input required for variable: ${varName}`,
-        inputs: [
-          {
-            id: varName,
-            label: label && label.length > 0 ? label : varName,
-            type: "text",
-            required: true,
-          },
-        ],
-      };
     }
   }
 
@@ -331,688 +329,773 @@ export async function doRequestFromBlock(
     );
   }
 
-  if (!iterationOptions?.skipPreScripts) {
-    await runSharedScriptsForPhase("preRequest", {
-      flow,
-      requestBlock: block,
-      filePath,
-      effectiveBody,
-      env,
-      startDir,
-      mutableVars,
-      resolver,
-      iteration: 0,
-      scriptConsole,
-    });
+  let scriptReplayIndex = iterationOptions?.scriptReplayIndex ?? 0;
 
-    const preScriptRequestCtx = buildScriptRequestContextFromBlock({
-      block,
-      phase: "preRequest",
-      effectiveBody,
-      env,
-      startDir,
-      mutableVars,
-      resolver,
-      iteration: 0,
-    });
+  scriptReplay: while (true) {
+    if (scriptReplayIndex > MAX_SCRIPT_REPLAYS) {
+      return {
+        success: false,
+        error: `Too many $kulala.request.replay() calls (max ${MAX_SCRIPT_REPLAYS})`,
+        ...(scriptConsole.length > 0 ? { scriptConsole } : {}),
+      } as KulalaRequestErrorResponse;
+    }
 
-    // Pre-request scripts run before substitution so they can set request/global vars.
-    await runScripts(
-      block.scripts.preRequest,
-      "preRequest",
-      block,
-      filePath,
-      undefined,
-      mutableVars,
-      flow,
-      scriptConsole,
-      preScriptRequestCtx,
-    );
-
-    const collectionPlan = detectCollectionIterationPlan(
-      block,
-      effectiveBody,
-      mutableVars,
-    );
-    if (collectionPlan.count > 1) {
-      const batch: DoRequestFromBlockResult[] = [];
-      for (let i = 0; i < collectionPlan.count; i++) {
-        const iterVars = varsForCollectionIndex(
+    if (!iterationOptions?.skipPreScripts || scriptReplayIndex > 0) {
+      try {
+        await runSharedScriptsForPhase("preRequest", {
+          flow,
+          requestBlock: block,
+          filePath,
+          effectiveBody,
+          env,
+          startDir,
           mutableVars,
-          collectionPlan.collections,
-          i,
-        );
-        const child = await doRequestFromBlock(
+          resolver,
+          iteration: 0,
+          scriptConsole,
+          stableDocId,
+        });
+
+        const preScriptRequestCtx = buildScriptRequestContextFromBlock({
+          block,
+          phase: "preRequest",
+          effectiveBody,
+          env,
+          startDir,
+          mutableVars,
+          resolver,
+          iteration: 0,
+        });
+
+        // Pre-request scripts run before substitution so they can set request/global vars.
+        await runScripts(
+          block.scripts.preRequest,
+          "preRequest",
           block,
           filePath,
-          iterVars,
-          stableDocIdForReplay,
-          resolver,
-          env,
+          undefined,
+          mutableVars,
           flow,
-          {
-            collectionIndex: i,
-            collectionPlan,
-            skipPreScripts: true,
-            doc: iterationOptions?.doc,
-          },
+          scriptConsole,
+          preScriptRequestCtx,
+          { stableDocId },
         );
-        const one = Array.isArray(child) ? child[0]! : child;
-        batch.push(one);
-        if (!one.success || ("prompt" in one && one.prompt)) {
+      } catch (error) {
+        if (error instanceof ScriptPromptError) {
+          return error.promptResponse;
+        }
+        if (error instanceof ScriptSkipError) {
+          return {
+            success: true,
+            skipped: true,
+            ...(scriptConsole.length > 0 ? { scriptConsole } : {}),
+          } as KulalaSkippedResponse;
+        }
+        if (error instanceof ScriptReplayError) {
+          scriptReplayIndex += 1;
+          continue scriptReplay;
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+          ...(scriptConsole.length > 0 ? { scriptConsole } : {}),
+        } as KulalaRequestErrorResponse;
+      }
+
+      if (!iterationOptions?.skipPreScripts && scriptReplayIndex === 0) {
+        const collectionPlan = detectCollectionIterationPlan(
+          block,
+          effectiveBody,
+          mutableVars,
+        );
+        if (collectionPlan.count > 1) {
+          const batch: DoRequestFromBlockResult[] = [];
+          for (let i = 0; i < collectionPlan.count; i++) {
+            const iterVars = varsForCollectionIndex(
+              mutableVars,
+              collectionPlan.collections,
+              i,
+            );
+            const child = await doRequestFromBlock(
+              block,
+              filePath,
+              iterVars,
+              stableDocIdForReplay,
+              resolver,
+              env,
+              flow,
+              {
+                collectionIndex: i,
+                collectionPlan,
+                skipPreScripts: true,
+                doc: iterationOptions?.doc,
+              },
+            );
+            const one = Array.isArray(child) ? child[0]! : child;
+            batch.push(one);
+            if (
+              !one.success ||
+              ("prompt" in one && one.prompt) ||
+              ("skipped" in one && one.skipped)
+            ) {
+              return batch;
+            }
+          }
+          incrementReplayCount(
+            stableDocIdForReplay ?? filePath ?? "",
+            block.name,
+          );
           return batch;
         }
       }
-      incrementReplayCount(stableDocIdForReplay ?? filePath ?? "", block.name);
-      return batch;
     }
-  }
 
-  const collectionIndex = iterationOptions?.collectionIndex ?? 0;
-  const collectionPlan =
-    iterationOptions?.collectionPlan ??
-    detectCollectionIterationPlan(block, effectiveBody, mutableVars);
-  const scriptCollectionPlan =
-    collectionPlan.count > 1 ? collectionPlan : undefined;
+    const collectionIndex = iterationOptions?.collectionIndex ?? 0;
+    const collectionPlan =
+      iterationOptions?.collectionPlan ??
+      detectCollectionIterationPlan(block, effectiveBody, mutableVars);
+    const scriptCollectionPlan =
+      collectionPlan.count > 1 ? collectionPlan : undefined;
 
-  // Check if we need async substitution (for $auth.token() calls)
-  // Unescape braces in header values before checking (similar to header parser)
-  const unescapeBraces = (str: string): string => {
-    return str.replace(/\\+{/g, "{").replace(/\\+}/g, "}");
-  };
-  const urlStr = typeof block.request.url === "string" ? block.request.url : "";
-  // Unescape braces in header values before stringifying to detect $auth. correctly
-  const headerSectionWithUnescapedBraces = block.request.headerSection.map(
-    (entry) =>
-      entry.type === "header" && entry.value
-        ? { ...entry, value: unescapeBraces(entry.value) }
-        : entry,
-  );
-  const headerStr = JSON.stringify(headerSectionWithUnescapedBraces);
-  const bodyStr = JSON.stringify(effectiveBody ?? {});
-  const needsAsyncSubstitution =
-    urlStr.includes("$auth.") ||
-    headerStr.includes("$auth.") ||
-    bodyStr.includes("$auth.");
-
-  let url: string;
-  try {
-    url = needsAsyncSubstitution
-      ? await substituteInStringAsync(
-          block.request.url,
-          mutableVars,
-          resolver,
-          authResolver,
-        )
-      : substituteInString(block.request.url, mutableVars, resolver);
-  } catch (error) {
-    if (error instanceof OAuth2PromptError) {
-      return error.promptResponse;
-    }
-    throw error;
-  }
-
-  let headers = setUserAgentHeaderIfNotPresent(
-    buildHeadersFromSection(block.request.headerSection),
-  );
-  const envDefaultHeaders = loadDefaultHeaders(env, startDir);
-  if (Object.keys(envDefaultHeaders).length > 0) {
-    const withDefaults = applyDefaultHeaders({
-      headers,
-      url,
-      defaultHeaders: envDefaultHeaders,
-    });
-    headers = withDefaults.headers;
-    url = withDefaults.url;
-  }
-  const accept = getOpArgs(["accept"]);
-  if (
-    accept &&
-    !Object.keys(headers).some((k) => k.toLowerCase() === "accept")
-  ) {
-    headers.Accept = accept;
-  }
-  // JetBrains parity: global headers are applied implicitly to outgoing requests
-  // within the same execution flow, but should not override explicit request headers.
-  if (flow?.globalHeaders) {
-    const existingLc = new Set(
-      Object.keys(headers).map((k) => k.toLowerCase()),
+    // Check if we need async substitution (for $auth.token() calls)
+    // Unescape braces in header values before checking (similar to header parser)
+    const unescapeBraces = (str: string): string => {
+      return str.replace(/\\+{/g, "{").replace(/\\+}/g, "}");
+    };
+    const urlStr =
+      typeof block.request.url === "string" ? block.request.url : "";
+    // Unescape braces in header values before stringifying to detect $auth. correctly
+    const headerSectionWithUnescapedBraces = block.request.headerSection.map(
+      (entry) =>
+        entry.type === "header" && entry.value
+          ? { ...entry, value: unescapeBraces(entry.value) }
+          : entry,
     );
-    for (const [k, v] of Object.entries(flow.globalHeaders)) {
-      if (!existingLc.has(k.toLowerCase())) headers[k] = v;
-    }
-  }
-  if (needsAsyncSubstitution || Object.keys(mutableVars).length > 0) {
+    const headerStr = JSON.stringify(headerSectionWithUnescapedBraces);
+    const bodyStr = JSON.stringify(effectiveBody ?? {});
+    const needsAsyncSubstitution =
+      urlStr.includes("$auth.") ||
+      headerStr.includes("$auth.") ||
+      bodyStr.includes("$auth.");
+
+    let url: string;
     try {
-      const substitutedHeaders: Record<string, string> = {};
-      for (const [k, v] of Object.entries(headers)) {
-        substitutedHeaders[k] = needsAsyncSubstitution
-          ? await substituteInStringAsync(
-              v,
-              mutableVars,
-              resolver,
-              authResolver,
-            )
-          : substituteInString(v, mutableVars, resolver);
-      }
-      headers = substitutedHeaders;
+      url = needsAsyncSubstitution
+        ? await substituteInStringAsync(
+            block.request.url,
+            mutableVars,
+            resolver,
+            authResolver,
+          )
+        : substituteInString(block.request.url, mutableVars, resolver);
     } catch (error) {
       if (error instanceof OAuth2PromptError) {
         return error.promptResponse;
       }
       throw error;
     }
-  }
-  headers = normalizeAuthorizationHeader(headers);
 
-  let body: typeof block.request.body;
-  try {
-    body = needsAsyncSubstitution
-      ? ((await substituteInObjectAsync(
-          effectiveBody,
-          mutableVars,
-          resolver,
-          authResolver,
-        )) as typeof block.request.body)
-      : (substituteInObject(
-          effectiveBody,
-          mutableVars,
-          resolver,
-        ) as typeof block.request.body);
-  } catch (error) {
-    if (error instanceof OAuth2PromptError) {
-      return error.promptResponse;
-    }
-    throw error;
-  }
-
-  const requestHeaderType = getRequestHeaderType(headers);
-  const isGraphQL = block.request.method === "GRAPHQL";
-  const noAutoEncoding = hasOp(["no-auto-encoding"]);
-  const graphqlBody = isGraphQL ? getGraphQLRequestBody(body) : undefined;
-  let json =
-    !isGraphQL && requestHeaderType === "json"
-      ? getJSONRequestBody(body)
-      : undefined;
-  // Body-from-file yields a string; parse as JSON when Content-Type is json
-  if (
-    json === undefined &&
-    requestHeaderType === "json" &&
-    typeof body === "string"
-  ) {
-    try {
-      json = JSON.parse(body) as Record<string, unknown>;
-    } catch {
-      // leave json undefined, may fall through to raw body
-    }
-  }
-  const form =
-    requestHeaderType === "form-urlencoded"
-      ? getFormRequestBody(body, "form-urlencoded")
-      : undefined;
-  const rawMultipartTemplate =
-    requestHeaderType === "form-data" &&
-    typeof body === "string" &&
-    isRawMultipartTemplateBody(body);
-  const formDataBody =
-    requestHeaderType === "form-data" && !rawMultipartTemplate
-      ? getFormRequestBody(body, "form-data")
-      : undefined;
-
-  let rawMultipartBody: Buffer | undefined;
-  if (rawMultipartTemplate) {
-    const text = stripHttpClientDoubleSlashLineComments(body as string);
-    headers = ensureMultipartContentTypeHeader(headers, text);
-    rawMultipartBody = await resolveInlineBodyFileRefs(text, startDir);
-  }
-
-  let multipartBody: FormData | undefined;
-  if (
-    !rawMultipartTemplate &&
-    formDataBody &&
-    typeof formDataBody === "object" &&
-    Object.keys(formDataBody).length > 0
-  ) {
-    multipartBody = await buildMultipartBody(
-      formDataBody as Record<string, unknown>,
-      startDir,
+    let headers = setUserAgentHeaderIfNotPresent(
+      buildHeadersFromSection(block.request.headerSection),
     );
-    headers = Object.fromEntries(
-      Object.entries(headers).filter(
-        ([k]) => k.toLowerCase() !== "content-type",
-      ),
-    );
-  }
-
-  const methodUpper = (block.request.method || "GET").toUpperCase();
-
-  if (methodUpper === "WS" || methodUpper === "WSS") {
-    const bodyStr =
-      typeof body === "string"
-        ? body
-        : body != null
-          ? JSON.stringify(body)
-          : "";
-    return {
-      success: true,
-      protocol: "websocket",
-      url,
-      initialMessage: bodyStr || undefined,
-      request: buildSentRequestSnapshot(
-        methodUpper,
-        url,
+    const envDefaultHeaders = loadDefaultHeaders(env, startDir);
+    if (Object.keys(envDefaultHeaders).length > 0) {
+      const withDefaults = applyDefaultHeaders({
         headers,
-        bodyStr || undefined,
-      ),
-    };
-  }
+        url,
+        defaultHeaders: envDefaultHeaders,
+      });
+      headers = withDefaults.headers;
+      url = withDefaults.url;
+    }
+    const accept = getOpArgs(["accept"]);
+    if (
+      accept &&
+      !Object.keys(headers).some((k) => k.toLowerCase() === "accept")
+    ) {
+      headers.Accept = accept;
+    }
+    // JetBrains parity: global headers are applied implicitly to outgoing requests
+    // within the same execution flow, but should not override explicit request headers.
+    if (flow?.globalHeaders) {
+      const existingLc = new Set(
+        Object.keys(headers).map((k) => k.toLowerCase()),
+      );
+      for (const [k, v] of Object.entries(flow.globalHeaders)) {
+        if (!existingLc.has(k.toLowerCase())) headers[k] = v;
+      }
+    }
+    if (needsAsyncSubstitution || Object.keys(mutableVars).length > 0) {
+      try {
+        const substitutedHeaders: Record<string, string> = {};
+        for (const [k, v] of Object.entries(headers)) {
+          substitutedHeaders[k] = needsAsyncSubstitution
+            ? await substituteInStringAsync(
+                v,
+                mutableVars,
+                resolver,
+                authResolver,
+              )
+            : substituteInString(v, mutableVars, resolver);
+        }
+        headers = substitutedHeaders;
+      } catch (error) {
+        if (error instanceof OAuth2PromptError) {
+          return error.promptResponse;
+        }
+        throw error;
+      }
+    }
+    headers = normalizeAuthorizationHeader(headers);
 
-  if (methodUpper === "GRPC") {
-    const grpcFlags = mergeGrpcFlags(
-      flow?.sharedGrpcFlags ?? [],
-      grpcFlagsFromOperators(effectiveOperators, startDir),
-    );
-    const grpcRes = await grpcNativeRequest({
-      target: url,
-      grpcCommand: block.request.grpcCommand,
-      metadataFlags: grpcFlags,
-      headers,
-      body:
+    let body: typeof block.request.body;
+    try {
+      body = needsAsyncSubstitution
+        ? ((await substituteInObjectAsync(
+            effectiveBody,
+            mutableVars,
+            resolver,
+            authResolver,
+          )) as typeof block.request.body)
+        : (substituteInObject(
+            effectiveBody,
+            mutableVars,
+            resolver,
+          ) as typeof block.request.body);
+    } catch (error) {
+      if (error instanceof OAuth2PromptError) {
+        return error.promptResponse;
+      }
+      throw error;
+    }
+
+    const requestHeaderType = getRequestHeaderType(headers);
+    const isGraphQL = block.request.method === "GRAPHQL";
+    const noAutoEncoding = hasOp(["no-auto-encoding"]);
+    const graphqlBody = isGraphQL ? getGraphQLRequestBody(body) : undefined;
+    let json =
+      !isGraphQL && requestHeaderType === "json"
+        ? getJSONRequestBody(body)
+        : undefined;
+    // Body-from-file yields a string; parse as JSON when Content-Type is json
+    if (
+      json === undefined &&
+      requestHeaderType === "json" &&
+      typeof body === "string"
+    ) {
+      try {
+        json = JSON.parse(body) as Record<string, unknown>;
+      } catch {
+        // leave json undefined, may fall through to raw body
+      }
+    }
+    const form =
+      requestHeaderType === "form-urlencoded"
+        ? getFormRequestBody(body, "form-urlencoded")
+        : undefined;
+    const rawMultipartTemplate =
+      requestHeaderType === "form-data" &&
+      typeof body === "string" &&
+      isRawMultipartTemplateBody(body);
+    const formDataBody =
+      requestHeaderType === "form-data" && !rawMultipartTemplate
+        ? getFormRequestBody(body, "form-data")
+        : undefined;
+
+    let rawMultipartBody: Buffer | undefined;
+    if (rawMultipartTemplate) {
+      const text = stripHttpClientDoubleSlashLineComments(body as string);
+      headers = ensureMultipartContentTypeHeader(headers, text);
+      rawMultipartBody = await resolveInlineBodyFileRefs(text, startDir);
+    }
+
+    let multipartBody: FormData | undefined;
+    if (
+      !rawMultipartTemplate &&
+      formDataBody &&
+      typeof formDataBody === "object" &&
+      Object.keys(formDataBody).length > 0
+    ) {
+      multipartBody = await buildMultipartBody(
+        formDataBody as Record<string, unknown>,
+        startDir,
+      );
+      headers = Object.fromEntries(
+        Object.entries(headers).filter(
+          ([k]) => k.toLowerCase() !== "content-type",
+        ),
+      );
+    }
+
+    const methodUpper = (block.request.method || "GET").toUpperCase();
+
+    if (methodUpper === "WS" || methodUpper === "WSS") {
+      const bodyStr =
         typeof body === "string"
           ? body
           : body != null
             ? JSON.stringify(body)
-            : undefined,
-      cwd: startDir,
-      insecure:
-        curlArgvHasFlag(extraCurlArgv, "--insecure") ||
-        curlArgvHasFlag(extraCurlArgv, "-k"),
-    });
-    const ok = grpcRes.statusCode >= 200 && grpcRes.statusCode < 400;
-    if (!ok) {
+            : "";
       return {
-        success: false,
-        error: grpcRes.body || grpcRes.stderr || "gRPC request failed",
+        success: true,
+        protocol: "websocket",
+        url,
+        initialMessage: bodyStr || undefined,
+        request: buildSentRequestSnapshot(
+          methodUpper,
+          url,
+          headers,
+          bodyStr || undefined,
+        ),
       };
     }
-    const grpcBodyRaw = grpcRes.body ?? "";
-    let grpcBodyParsed: unknown = null;
-    try {
-      grpcBodyParsed = JSON.parse(grpcBodyRaw);
-    } catch {
-      // text response
-    }
-    const grpcResponseBody =
-      grpcBodyParsed !== null && typeof grpcBodyParsed === "object"
-        ? {
-            type: "json" as const,
-            content: grpcBodyParsed as Record<string, unknown>,
-          }
-        : { type: "text" as const, content: grpcBodyRaw };
-    const grpcBodyText =
-      typeof body === "string"
-        ? body
-        : body != null
-          ? JSON.stringify(body)
-          : undefined;
-    return {
-      success: true,
-      status: grpcRes.statusCode,
-      headers: {
-        "content-type": ok ? "application/json" : "kulala/grpc_error",
-      },
-      url,
-      request: buildSentRequestSnapshot("GRPC", url, headers, grpcBodyText),
-      timings: {
-        dns: 0,
-        tcp: 0,
-        tls: 0,
-        request: 0,
-        redirect: 0,
-        firstByte: grpcRes.timings.total,
-        startTransfer: grpcRes.timings.total,
-        total: grpcRes.timings.total,
-      },
-      body: grpcResponseBody,
-      scriptConsole: scriptConsole.length > 0 ? scriptConsole : undefined,
-    };
-  }
 
-  const method = (isGraphQL ? "POST" : block.request.method) || "GET";
-  const requestHeaders: Record<string, string> = isGraphQL
-    ? { ...headers, "Content-Type": "application/json" }
-    : headers;
-
-  const timeoutSecJetBrains = parseDurationToSec(getOpArgs(["timeout"]) ?? "");
-  const connectionTimeoutSecJetBrains = parseDurationToSec(
-    getOpArgs(["connection-timeout"]) ?? "",
-  );
-  const effectiveTimeoutSec = timeoutSecJetBrains ?? undefined;
-  const effectiveConnectionTimeoutSec =
-    connectionTimeoutSecJetBrains ?? undefined;
-  const followRedirects = !hasOp(["no-redirect"]);
-
-  try {
-    let bodyPayload: string | Buffer | FormData | undefined;
-    if (multipartBody) {
-      bodyPayload = multipartBody;
-    } else if (rawMultipartBody) {
-      bodyPayload = rawMultipartBody;
-    } else if (graphqlBody !== undefined) {
-      const payload: { query: string; variables?: Record<string, unknown> } = {
-        query: typeof graphqlBody.query === "string" ? graphqlBody.query : "",
-        ...(graphqlBody.variables != null
-          ? { variables: graphqlBody.variables }
-          : {}),
-      };
-      bodyPayload = JSON.stringify(payload);
-    } else if (json !== undefined) {
-      bodyPayload = JSON.stringify(json);
-    } else if (form !== undefined) {
-      if (noAutoEncoding) {
-        const pairs = Object.entries(form as Record<string, string>);
-        bodyPayload = pairs.map(([k, v]) => `${k}=${v}`).join("&");
-      } else {
-        bodyPayload = new URLSearchParams(
-          form as Record<string, string>,
-        ).toString();
-      }
-    } else if (typeof body === "string" && body.length > 0) {
-      bodyPayload = body;
-    } else if (body != null) {
-      headers["content-type"] = "application/json";
-      bodyPayload = JSON.stringify(body);
-    }
-
-    // Cookie jar: apply stored cookies unless disabled or explicitly set by user.
-    if (
-      cookieJarEnabled &&
-      !Object.keys(requestHeaders).some((k) => k.toLowerCase() === "cookie")
-    ) {
-      const cookie = getCookieHeaderForRequest(url);
-      if (cookie) requestHeaders.Cookie = cookie;
-    }
-
-    const res = await httpRequest({
-      url,
-      method,
-      headers: requestHeaders,
-      body: bodyPayload,
-      httpVersion: block.request.httpVersion,
-      timeoutSec: effectiveTimeoutSec,
-      connectionTimeoutSec: effectiveConnectionTimeoutSec,
-      followRedirects,
-      propagateCookiesOnRedirect: cookieJarEnabled,
-      cookieJarEnabled,
-      extraCurlArgv,
-    });
-
-    const rawBody = res.body;
-    const rawBodyStr =
-      typeof rawBody === "string" ? rawBody : String(rawBody ?? "");
-
-    // Cookie jar: store Set-Cookie response headers unless disabled.
-    if (cookieJarEnabled) {
-      // Persist cookies from redirect chain too (servers often set cookies on 302).
-      if (res.redirectChain && res.redirectChain.length > 0) {
-        for (const hop of res.redirectChain) {
-          const hopSetCookieRaw = hop.headers["set-cookie"];
-          if (
-            typeof hopSetCookieRaw === "string" &&
-            hopSetCookieRaw.trim().length > 0
-          ) {
-            const lines = hopSetCookieRaw
-              .split("\n")
-              .map((s) => s.trim())
-              .filter(Boolean);
-            if (lines.length > 0) storeCookiesFromResponse(hop.url, lines);
-          }
-        }
-      }
-      const setCookieRaw = res.headers["set-cookie"];
-      if (typeof setCookieRaw === "string" && setCookieRaw.trim().length > 0) {
-        const lines = setCookieRaw
-          .split("\n")
-          .map((s) => s.trim())
-          .filter(Boolean);
-        if (lines.length > 0) storeCookiesFromResponse(url, lines);
-      }
-    }
-    const contentType = res.headers["content-type"] || "";
-    let jsonBody: Record<string, unknown> | null = null;
-    if (contentType.toLowerCase().includes("json")) {
-      try {
-        jsonBody = JSON.parse(rawBodyStr);
-      } catch {
-        // ignore JSON parse errors, treat as text
-      }
-    }
-    const responseBody =
-      jsonBody !== null
-        ? {
-            type: "json" as const,
-            content: jsonBody as Record<string, unknown>,
-          }
-        : {
-            type: "text" as const,
-            content: rawBodyStr,
-          };
-
-    const mapChainEntry = (
-      entry: NonNullable<typeof res.redirectChain>[number],
-    ): NonNullable<KulalaRequestSuccessResponse["redirectChain"]>[number] => {
-      const raw = entry.body;
-      const rawStr = typeof raw === "string" ? raw : String(raw ?? "");
-      const ct = entry.headers["content-type"] || "";
-      let json: Record<string, unknown> | null = null;
-      if (ct.toLowerCase().includes("json")) {
-        try {
-          json = JSON.parse(rawStr);
-        } catch {
-          // ignore
-        }
-      }
-      const body =
-        json !== null
-          ? { type: "json" as const, content: json }
-          : { type: "text" as const, content: rawStr };
-      const p = entry.timings.phases;
-      return {
-        status: entry.statusCode,
-        headers: entry.headers,
-        url: entry.url,
-        body,
-        timings: {
-          dns: p.dns ?? 0,
-          tcp: p.tcp ?? 0,
-          tls: p.tls ?? 0,
-          request: p.request ?? 0,
-          redirect: p.redirect ?? 0,
-          firstByte: p.firstByte ?? 0,
-          startTransfer: p.startTransfer ?? 0,
-          total: p.total ?? 0,
-        },
-        ...(entry.verboseTrace ? { verboseTrace: entry.verboseTrace } : {}),
-      };
-    };
-
-    // Redirect response to file (>> path or >>! path)
-    const redirect = block.request.responseRedirect;
-    if (redirect?.filePath) {
-      const pathMod = await import("path");
-      const fs = await import("fs/promises");
-      const resolved = pathMod.resolve(startDir, redirect.filePath);
-      await fs.mkdir(pathMod.dirname(resolved), { recursive: true });
-      const isBuffer = Buffer.isBuffer(rawBody);
-      const bodyToWrite: string | Buffer =
-        typeof rawBody === "string"
-          ? rawBody
-          : isBuffer
-            ? rawBody
-            : String(rawBody ?? "");
-      const writeOpts: { encoding?: BufferEncoding } = isBuffer
-        ? {}
-        : { encoding: "utf-8" };
-      if (redirect.overwrite) {
-        await fs.writeFile(resolved, bodyToWrite, writeOpts);
-      } else {
-        let target = resolved;
-        let n = 0;
-        const ext = pathMod.extname(resolved);
-        const base = resolved.slice(0, -ext.length || undefined);
-        while (true) {
-          try {
-            await fs.access(target);
-            n += 1;
-            target = n === 1 ? `${base}-1${ext}` : `${base}-${n}${ext}`;
-          } catch {
-            await fs.writeFile(target, bodyToWrite, writeOpts);
-            break;
-          }
-        }
-      }
-    }
-
-    const { phases } = res.timings;
-    const total = phases.total ?? 0;
-    const firstByte = phases.firstByte ?? 0;
-    const startTransfer = phases.startTransfer ?? 0;
-    const redirectTime = phases.redirect ?? 0;
-    const timingsForScripts: RunnerResponseLike["timings"] = {
-      phases: { ...phases },
-    };
-    const responseLike: RunnerResponseLike = {
-      body: rawBody,
-      statusCode: res.statusCode,
-      headers: res.headers,
-      timings: timingsForScripts,
-    };
-
-    const postScriptRequestCtx = buildScriptRequestContextFromBlock({
-      block,
-      phase: "postRequest",
-      effectiveBody,
-      env,
-      startDir,
-      mutableVars,
-      resolver,
-      iteration: collectionIndex,
-      collectionPlan: scriptCollectionPlan,
-      urlSent: url,
-      headersSent: requestHeaders,
-      bodySent: bodyPayloadToScriptString(bodyPayload),
-      responseUrl: url,
-      responseHeaders: res.headers,
-    });
-
-    await runScripts(
-      block.scripts.postRequest,
-      "postRequest",
-      block,
-      filePath,
-      responseLike,
-      mutableVars,
-      flow,
-      scriptConsole,
-      postScriptRequestCtx,
-    );
-
-    await runSharedScriptsForPhase("postRequest", {
-      flow,
-      requestBlock: block,
-      filePath,
-      effectiveBody,
-      env,
-      startDir,
-      mutableVars,
-      resolver,
-      iteration: collectionIndex,
-      collectionPlan: scriptCollectionPlan,
-      scriptConsole,
-      response: responseLike,
-      urlSent: url,
-      headersSent: requestHeaders,
-      bodySent: bodyPayloadToScriptString(bodyPayload),
-      responseUrl: url,
-      responseHeaders: res.headers,
-    });
-
-    // @kulala-expect-status-code 200 (or 200,201)
-    const expectArgs = getOpArgs(["kulala-expect-status-code"]);
-    if (expectArgs) {
-      const codes = expectArgs
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean)
-        .map((s) => parseInt(s, 10))
-        .filter((n) => Number.isFinite(n));
-      if (codes.length > 0 && !codes.includes(res.statusCode)) {
+    if (methodUpper === "GRPC") {
+      const grpcFlags = mergeGrpcFlags(
+        flow?.sharedGrpcFlags ?? [],
+        grpcFlagsFromOperators(effectiveOperators, startDir),
+      );
+      const grpcRes = await grpcNativeRequest({
+        target: url,
+        grpcCommand: block.request.grpcCommand,
+        metadataFlags: grpcFlags,
+        headers,
+        body:
+          typeof body === "string"
+            ? body
+            : body != null
+              ? JSON.stringify(body)
+              : undefined,
+        cwd: startDir,
+        insecure:
+          curlArgvHasFlag(extraCurlArgv, "--insecure") ||
+          curlArgvHasFlag(extraCurlArgv, "-k"),
+      });
+      const ok = grpcRes.statusCode >= 200 && grpcRes.statusCode < 400;
+      if (!ok) {
         return {
           success: false,
-          error: `Expected status code ${codes.join(
-            ", ",
-          )} but got ${res.statusCode}`,
+          error: grpcRes.body || grpcRes.stderr || "gRPC request failed",
+        };
+      }
+      const grpcBodyRaw = grpcRes.body ?? "";
+      let grpcBodyParsed: unknown = null;
+      try {
+        grpcBodyParsed = JSON.parse(grpcBodyRaw);
+      } catch {
+        // text response
+      }
+      const grpcResponseBody =
+        grpcBodyParsed !== null && typeof grpcBodyParsed === "object"
+          ? {
+              type: "json" as const,
+              content: grpcBodyParsed as Record<string, unknown>,
+            }
+          : { type: "text" as const, content: grpcBodyRaw };
+      const grpcBodyText =
+        typeof body === "string"
+          ? body
+          : body != null
+            ? JSON.stringify(body)
+            : undefined;
+      return {
+        success: true,
+        status: grpcRes.statusCode,
+        headers: {
+          "content-type": ok ? "application/json" : "kulala/grpc_error",
+        },
+        url,
+        request: buildSentRequestSnapshot("GRPC", url, headers, grpcBodyText),
+        timings: {
+          dns: 0,
+          tcp: 0,
+          tls: 0,
+          request: 0,
+          redirect: 0,
+          firstByte: grpcRes.timings.total,
+          startTransfer: grpcRes.timings.total,
+          total: grpcRes.timings.total,
+        },
+        body: grpcResponseBody,
+        scriptConsole: scriptConsole.length > 0 ? scriptConsole : undefined,
+      };
+    }
+
+    const method = (isGraphQL ? "POST" : block.request.method) || "GET";
+    const requestHeaders: Record<string, string> = isGraphQL
+      ? { ...headers, "Content-Type": "application/json" }
+      : headers;
+
+    const timeoutSecJetBrains = parseDurationToSec(
+      getOpArgs(["timeout"]) ?? "",
+    );
+    const connectionTimeoutSecJetBrains = parseDurationToSec(
+      getOpArgs(["connection-timeout"]) ?? "",
+    );
+    const effectiveTimeoutSec = timeoutSecJetBrains ?? undefined;
+    const effectiveConnectionTimeoutSec =
+      connectionTimeoutSecJetBrains ?? undefined;
+    const followRedirects = !hasOp(["no-redirect"]);
+
+    try {
+      let bodyPayload: string | Buffer | FormData | undefined;
+      if (multipartBody) {
+        bodyPayload = multipartBody;
+      } else if (rawMultipartBody) {
+        bodyPayload = rawMultipartBody;
+      } else if (graphqlBody !== undefined) {
+        const payload: { query: string; variables?: Record<string, unknown> } =
+          {
+            query:
+              typeof graphqlBody.query === "string" ? graphqlBody.query : "",
+            ...(graphqlBody.variables != null
+              ? { variables: graphqlBody.variables }
+              : {}),
+          };
+        bodyPayload = JSON.stringify(payload);
+      } else if (json !== undefined) {
+        bodyPayload = JSON.stringify(json);
+      } else if (form !== undefined) {
+        if (noAutoEncoding) {
+          const pairs = Object.entries(form as Record<string, string>);
+          bodyPayload = pairs.map(([k, v]) => `${k}=${v}`).join("&");
+        } else {
+          bodyPayload = new URLSearchParams(
+            form as Record<string, string>,
+          ).toString();
+        }
+      } else if (typeof body === "string" && body.length > 0) {
+        bodyPayload = body;
+      } else if (body != null) {
+        headers["content-type"] = "application/json";
+        bodyPayload = JSON.stringify(body);
+      }
+
+      // Cookie jar: apply stored cookies unless disabled or explicitly set by user.
+      if (
+        cookieJarEnabled &&
+        !Object.keys(requestHeaders).some((k) => k.toLowerCase() === "cookie")
+      ) {
+        const cookie = getCookieHeaderForRequest(url);
+        if (cookie) requestHeaders.Cookie = cookie;
+      }
+
+      const res = await httpRequest({
+        url,
+        method,
+        headers: requestHeaders,
+        body: bodyPayload,
+        httpVersion: block.request.httpVersion,
+        timeoutSec: effectiveTimeoutSec,
+        connectionTimeoutSec: effectiveConnectionTimeoutSec,
+        followRedirects,
+        propagateCookiesOnRedirect: cookieJarEnabled,
+        cookieJarEnabled,
+        extraCurlArgv,
+      });
+
+      const rawBody = res.body;
+      const rawBodyStr =
+        typeof rawBody === "string" ? rawBody : String(rawBody ?? "");
+
+      // Cookie jar: store Set-Cookie response headers unless disabled.
+      if (cookieJarEnabled) {
+        // Persist cookies from redirect chain too (servers often set cookies on 302).
+        if (res.redirectChain && res.redirectChain.length > 0) {
+          for (const hop of res.redirectChain) {
+            const hopSetCookieRaw = hop.headers["set-cookie"];
+            if (
+              typeof hopSetCookieRaw === "string" &&
+              hopSetCookieRaw.trim().length > 0
+            ) {
+              const lines = hopSetCookieRaw
+                .split("\n")
+                .map((s) => s.trim())
+                .filter(Boolean);
+              if (lines.length > 0) storeCookiesFromResponse(hop.url, lines);
+            }
+          }
+        }
+        const setCookieRaw = res.headers["set-cookie"];
+        if (
+          typeof setCookieRaw === "string" &&
+          setCookieRaw.trim().length > 0
+        ) {
+          const lines = setCookieRaw
+            .split("\n")
+            .map((s) => s.trim())
+            .filter(Boolean);
+          if (lines.length > 0) storeCookiesFromResponse(url, lines);
+        }
+      }
+      const contentType = res.headers["content-type"] || "";
+      const responseBody = buildRunnerResponseBody(rawBodyStr, contentType);
+
+      const mapChainEntry = (
+        entry: NonNullable<typeof res.redirectChain>[number],
+      ): NonNullable<KulalaRequestSuccessResponse["redirectChain"]>[number] => {
+        const raw = entry.body;
+        const rawStr = typeof raw === "string" ? raw : String(raw ?? "");
+        const ct = entry.headers["content-type"] || "";
+        let json: Record<string, unknown> | null = null;
+        if (ct.toLowerCase().includes("json")) {
+          try {
+            json = JSON.parse(rawStr);
+          } catch {
+            // ignore
+          }
+        }
+        const body =
+          json !== null
+            ? { type: "json" as const, content: json }
+            : { type: "text" as const, content: rawStr };
+        const p = entry.timings.phases;
+        return {
+          status: entry.statusCode,
+          headers: entry.headers,
+          url: entry.url,
+          body,
+          timings: {
+            dns: p.dns ?? 0,
+            tcp: p.tcp ?? 0,
+            tls: p.tls ?? 0,
+            request: p.request ?? 0,
+            redirect: p.redirect ?? 0,
+            firstByte: p.firstByte ?? 0,
+            startTransfer: p.startTransfer ?? 0,
+            total: p.total ?? 0,
+          },
+          ...(entry.verboseTrace ? { verboseTrace: entry.verboseTrace } : {}),
+        };
+      };
+
+      // Redirect response to file (>> path or >>! path)
+      const redirect = block.request.responseRedirect;
+      if (redirect?.filePath) {
+        const pathMod = await import("path");
+        const fs = await import("fs/promises");
+        const resolved = pathMod.resolve(startDir, redirect.filePath);
+        await fs.mkdir(pathMod.dirname(resolved), { recursive: true });
+        const isBuffer = Buffer.isBuffer(rawBody);
+        const bodyToWrite: string | Buffer =
+          typeof rawBody === "string"
+            ? rawBody
+            : isBuffer
+              ? rawBody
+              : String(rawBody ?? "");
+        const writeOpts: { encoding?: BufferEncoding } = isBuffer
+          ? {}
+          : { encoding: "utf-8" };
+        if (redirect.overwrite) {
+          await fs.writeFile(resolved, bodyToWrite, writeOpts);
+        } else {
+          let target = resolved;
+          let n = 0;
+          const ext = pathMod.extname(resolved);
+          const base = resolved.slice(0, -ext.length || undefined);
+          while (true) {
+            try {
+              await fs.access(target);
+              n += 1;
+              target = n === 1 ? `${base}-1${ext}` : `${base}-${n}${ext}`;
+            } catch {
+              await fs.writeFile(target, bodyToWrite, writeOpts);
+              break;
+            }
+          }
+        }
+      }
+
+      const { phases } = res.timings;
+      const total = phases.total ?? 0;
+      const firstByte = phases.firstByte ?? 0;
+      const startTransfer = phases.startTransfer ?? 0;
+      const redirectTime = phases.redirect ?? 0;
+      const timingsForScripts: RunnerResponseLike["timings"] = {
+        phases: { ...phases },
+      };
+      const responseLike: RunnerResponseLike = {
+        body: rawBody,
+        statusCode: res.statusCode,
+        headers: res.headers,
+        timings: timingsForScripts,
+      };
+
+      const postScriptRequestCtx = buildScriptRequestContextFromBlock({
+        block,
+        phase: "postRequest",
+        effectiveBody,
+        env,
+        startDir,
+        mutableVars,
+        resolver,
+        iteration: collectionIndex,
+        collectionPlan: scriptCollectionPlan,
+        urlSent: url,
+        headersSent: requestHeaders,
+        bodySent: bodyPayloadToScriptString(bodyPayload),
+        responseUrl: url,
+        responseHeaders: res.headers,
+      });
+
+      try {
+        await runScripts(
+          block.scripts.postRequest,
+          "postRequest",
+          block,
+          filePath,
+          responseLike,
+          mutableVars,
+          flow,
+          scriptConsole,
+          postScriptRequestCtx,
+          { stableDocId },
+        );
+
+        await runSharedScriptsForPhase("postRequest", {
+          flow,
+          requestBlock: block,
+          filePath,
+          effectiveBody,
+          env,
+          startDir,
+          mutableVars,
+          resolver,
+          iteration: collectionIndex,
+          collectionPlan: scriptCollectionPlan,
+          scriptConsole,
+          response: responseLike,
+          urlSent: url,
+          headersSent: requestHeaders,
+          bodySent: bodyPayloadToScriptString(bodyPayload),
+          responseUrl: url,
+          responseHeaders: res.headers,
+          stableDocId,
+        });
+      } catch (error) {
+        if (error instanceof ScriptReplayError) {
+          scriptReplayIndex += 1;
+          continue scriptReplay;
+        }
+        const { phases } = res.timings;
+        const redirectTime = phases.redirect ?? 0;
+        const firstByte = phases.firstByte ?? 0;
+        const startTransfer = phases.startTransfer ?? 0;
+        const total = phases.total ?? 0;
+        return {
+          success: false,
+          httpCompleted: true,
+          error: error instanceof Error ? error.message : String(error),
+          status: res.statusCode,
+          headers: res.headers,
+          url: res.url,
+          request: buildSentRequestSnapshot(
+            method,
+            url,
+            requestHeaders,
+            bodyPayload,
+          ),
+          timings: {
+            dns: phases.dns ?? 0,
+            tcp: phases.tcp ?? 0,
+            tls: phases.tls ?? 0,
+            request: phases.request ?? 0,
+            redirect: redirectTime,
+            firstByte,
+            startTransfer,
+            total,
+          },
+          body: responseBody,
+          ...(res.redirectChain
+            ? {
+                redirectChain: res.redirectChain.map(mapChainEntry),
+              }
+            : {}),
+          ...(res.verboseTrace ? { verboseTrace: res.verboseTrace } : {}),
           ...(scriptConsole.length > 0 ? { scriptConsole } : {}),
         } as KulalaRequestErrorResponse;
       }
-    }
 
-    if (!iterationOptions?.skipPreScripts) {
-      incrementReplayCount(stableDocIdForReplay ?? filePath ?? "", block.name);
-    }
+      // @kulala-expect-status-code 200 (or 200,201)
+      const expectArgs = getOpArgs(["kulala-expect-status-code"]);
+      if (expectArgs) {
+        const codes = expectArgs
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .map((s) => parseInt(s, 10))
+          .filter((n) => Number.isFinite(n));
+        if (codes.length > 0 && !codes.includes(res.statusCode)) {
+          return {
+            success: false,
+            error: `Expected status code ${codes.join(
+              ", ",
+            )} but got ${res.statusCode}`,
+            ...(scriptConsole.length > 0 ? { scriptConsole } : {}),
+          } as KulalaRequestErrorResponse;
+        }
+      }
 
-    if (logEnabled) {
-      saveHistoryEntry({
-        stableDocId: stableDocId || undefined,
-        blockName: block.name,
-        method,
-        url,
-        requestHeaders,
-        requestBodyText:
-          typeof bodyPayload === "string"
-            ? bodyPayload
-            : Buffer.isBuffer(bodyPayload)
-              ? bodyPayload.toString("utf-8")
-              : undefined,
-        statusCode: res.statusCode,
-        responseHeaders: res.headers,
-        responseBodyText: rawBodyStr,
-      });
-    }
+      if (!iterationOptions?.skipPreScripts) {
+        incrementReplayCount(
+          stableDocIdForReplay ?? filePath ?? "",
+          block.name,
+        );
+      }
 
-    return {
-      success: true,
-      status: res.statusCode,
-      headers: res.headers,
-      url: res.url,
-      request: buildSentRequestSnapshot(
-        method,
-        url,
-        requestHeaders,
-        bodyPayload,
-      ),
-      ...(res.redirectChain
-        ? { redirectChain: res.redirectChain.map(mapChainEntry) }
-        : {}),
-      timings: {
-        dns: phases.dns ?? 0,
-        tcp: phases.tcp ?? 0,
-        tls: phases.tls ?? 0,
-        request: phases.request ?? 0,
-        redirect: redirectTime,
-        firstByte,
-        startTransfer,
-        total,
-      },
-      body: responseBody,
-      ...(res.verboseTrace ? { verboseTrace: res.verboseTrace } : {}),
-      ...(scriptConsole.length > 0 ? { scriptConsole } : {}),
-    } as KulalaRequestSuccessResponse;
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : String(error),
-      ...(scriptConsole.length > 0 ? { scriptConsole } : {}),
-    } as KulalaRequestErrorResponse;
+      if (logEnabled) {
+        saveHistoryEntry({
+          stableDocId: stableDocId || undefined,
+          blockName: block.name,
+          method,
+          url,
+          requestHeaders,
+          requestBodyText:
+            typeof bodyPayload === "string"
+              ? bodyPayload
+              : Buffer.isBuffer(bodyPayload)
+                ? bodyPayload.toString("utf-8")
+                : undefined,
+          statusCode: res.statusCode,
+          responseHeaders: res.headers,
+          responseBodyText: rawBodyStr,
+        });
+      }
+
+      return {
+        success: true,
+        status: res.statusCode,
+        headers: res.headers,
+        url: res.url,
+        request: buildSentRequestSnapshot(
+          method,
+          url,
+          requestHeaders,
+          bodyPayload,
+        ),
+        ...(res.redirectChain
+          ? { redirectChain: res.redirectChain.map(mapChainEntry) }
+          : {}),
+        timings: {
+          dns: phases.dns ?? 0,
+          tcp: phases.tcp ?? 0,
+          tls: phases.tls ?? 0,
+          request: phases.request ?? 0,
+          redirect: redirectTime,
+          firstByte,
+          startTransfer,
+          total,
+        },
+        body: responseBody,
+        ...(res.verboseTrace ? { verboseTrace: res.verboseTrace } : {}),
+        ...(scriptConsole.length > 0 ? { scriptConsole } : {}),
+      } as KulalaRequestSuccessResponse;
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+        ...(scriptConsole.length > 0 ? { scriptConsole } : {}),
+      } as KulalaRequestErrorResponse;
+    }
   }
 }

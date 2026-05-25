@@ -99,6 +99,19 @@ export type KulalaRequestErrorResponse = {
   error: string;
   /** Present when scripts ran before the failure (e.g. pre-request or failed expect-status). */
   scriptConsole?: KulalaScriptConsoleLine[];
+  /**
+   * HTTP finished before the failure (JetBrains: response-handler script errors).
+   * Response fields below are populated so the UI can still show the received response.
+   */
+  httpCompleted?: boolean;
+  status?: number;
+  headers?: Record<string, string>;
+  url?: string;
+  request?: KulalaRequestSent;
+  timings?: KulalaRequestSuccessResponse["timings"];
+  body?: KulalaRequestSuccessResponse["body"];
+  redirectChain?: KulalaRequestSuccessResponse["redirectChain"];
+  verboseTrace?: string;
 };
 
 export type KulalaPromptResponse = {
@@ -115,6 +128,14 @@ export type KulalaPromptResponse = {
   }>;
 };
 
+/** Pre-request script called `$kulala.request.skip()` — no HTTP request was sent. */
+export type KulalaSkippedResponse = {
+  success: true;
+  skipped: true;
+  blockName?: string;
+  scriptConsole?: KulalaScriptConsoleLine[];
+};
+
 export type KulalaResponseWrapper =
   | {
       type: "responses";
@@ -122,6 +143,7 @@ export type KulalaResponseWrapper =
         | KulalaRequestSuccessResponse
         | KulalaRequestErrorResponse
         | KulalaPromptResponse
+        | KulalaSkippedResponse
         | KulalaWebSocketPlanResponse
       >;
     }
