@@ -1,3 +1,8 @@
+import {
+  parseGraphQLContent,
+  parseGraphQLVariablesJson,
+} from "../parser/graphql-content";
+import type { KulalaRequestBodyFromFileContent } from "../parser/types/body";
 import type { RequestHeaderType } from "./types";
 
 /**
@@ -306,6 +311,13 @@ export function getGraphQLRequestBody(
       variables: graphqlBody.variables,
     };
   }
+  // Body-from-file (< path) resolves to raw GraphQL text for GRAPHQL requests
+  if (typeof body === "string" && body.trim().length > 0) {
+    const parsed = parseGraphQLContent(body);
+    if (parsed.query.length > 0) {
+      return parsed;
+    }
+  }
   return undefined;
 }
 
@@ -359,7 +371,7 @@ export function getFormRequestBody(
 /** True if body is a "read body from file" reference: { __bodyFromFile: string }. */
 export function isBodyFromFileRef(
   body: unknown,
-): body is { __bodyFromFile: string } {
+): body is KulalaRequestBodyFromFileContent {
   return (
     typeof body === "object" &&
     body !== null &&
@@ -381,6 +393,33 @@ export async function resolveBodyFromFile(
   const resolved = path.resolve(baseDir, filePath);
   const content = await fs.readFile(resolved, "utf-8");
   return content;
+}
+
+/**
+ * Resolve a body-from-file reference. For GRAPHQL, returns `{ query, variables? }`;
+ * inline variables in the .http file (after `< path`) override variables from the file.
+ */
+export async function resolveEffectiveBodyFromFileRef(
+  ref: KulalaRequestBodyFromFileContent,
+  baseDir: string,
+  method?: string,
+): Promise<string | { query: string; variables?: Record<string, unknown> }> {
+  const fileContent = await resolveBodyFromFile(ref.__bodyFromFile, baseDir);
+  if ((method ?? "").toUpperCase() !== "GRAPHQL") {
+    return fileContent;
+  }
+  const fromFile = parseGraphQLContent(fileContent);
+  const suffixVars = ref.__graphqlVariablesSuffix
+    ? parseGraphQLVariablesJson(ref.__graphqlVariablesSuffix)
+    : undefined;
+  return {
+    query: fromFile.query,
+    ...(suffixVars !== undefined
+      ? { variables: suffixVars }
+      : fromFile.variables !== undefined
+        ? { variables: fromFile.variables }
+        : {}),
+  };
 }
 
 /** True if value looks like a file reference: { filePath: string, filename?: string }. */

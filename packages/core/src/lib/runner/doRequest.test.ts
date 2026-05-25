@@ -1554,6 +1554,81 @@ test("doRequestFromBlock: maps text response body when Content-Type is not json"
   }
 });
 
+test("doRequestFromBlock: GRAPHQL with body from file and inline variables", async () => {
+  const { mkdtempSync } = await import("fs");
+  const { join } = await import("path");
+  const { tmpdir } = await import("os");
+  const dir = mkdtempSync(join(tmpdir(), "kulala-gql-vars-"));
+  const queryFile = join(dir, "query.graphql");
+  await Bun.write(
+    queryFile,
+    ["query Person($id: ID) {", "  person(personID: $id) { name }", "}"].join(
+      "\n",
+    ),
+  );
+  const httpFilePath = join(dir, "request.http");
+
+  const block = makeBlock({
+    request: {
+      method: "GRAPHQL",
+      url: `${baseUrl}/graphql` as KulalaHttpURL,
+      headerSection: [],
+      body: {
+        __bodyFromFile: "query.graphql",
+        __graphqlVariablesSuffix: '{ "id": 1 }',
+      },
+    },
+  });
+
+  const result = await doRequestFromBlock(
+    block,
+    httpFilePath,
+    undefined,
+    undefined,
+    undefined,
+  );
+
+  expect(result).toHaveProperty("success", true);
+  if (result.success && result.body.type === "json") {
+    expect(result.body.content).toEqual({ data: {} });
+  }
+});
+
+test("doRequestFromBlock: GRAPHQL with body from file sends JSON query payload", async () => {
+  const { mkdtempSync } = await import("fs");
+  const { join } = await import("path");
+  const { tmpdir } = await import("os");
+  const dir = mkdtempSync(join(tmpdir(), "kulala-gql-body-"));
+  const queryFile = join(dir, "query.graphql");
+  await Bun.write(
+    queryFile,
+    ["query User {", "  viewer {", "    bio", "  }", "}"].join("\n"),
+  );
+  const httpFilePath = join(dir, "request.http");
+
+  const block = makeBlock({
+    request: {
+      method: "GRAPHQL",
+      url: `${baseUrl}/graphql` as KulalaHttpURL,
+      headerSection: [],
+      body: { __bodyFromFile: "query.graphql" },
+    },
+  });
+
+  const result = await doRequestFromBlock(
+    block,
+    httpFilePath,
+    undefined,
+    undefined,
+    undefined,
+  );
+
+  expect(result).toHaveProperty("success", true);
+  if (result.success && result.body.type === "json") {
+    expect(result.body.content).toEqual({ data: {} });
+  }
+});
+
 test("doRequestFromBlock: reads request body from file (JetBrains < path syntax)", async () => {
   const { mkdtempSync } = await import("fs");
   const { join } = await import("path");

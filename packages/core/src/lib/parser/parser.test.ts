@@ -139,6 +139,29 @@ Content-Type: application/json
   expect(block.request.body).toBeDefined();
 });
 
+test("parser: GRAPHQL with query file and inline variables", async () => {
+  const content = `### GQL_FILE_AND_VARS
+
+GRAPHQL https://swapi-graphql.netlify.app/graphql HTTP/1.1
+Accept: application/json
+
+< ./graphql.graphql
+
+{
+  "id": 1
+}`;
+
+  const doc = await getDocument(content);
+  const block = doc.blocks[0];
+
+  expect(block.errors).toEqual([]);
+  expect(block.request.method).toBe("GRAPHQL");
+  expect(block.request.body).toEqual({
+    __bodyFromFile: "./graphql.graphql",
+    __graphqlVariablesSuffix: '{\n  "id": 1\n}',
+  });
+});
+
 test("parser: POST with body from file (< path) JetBrains syntax", async () => {
   const content = `### POST_BODY_FROM_FILE
 

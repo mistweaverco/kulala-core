@@ -110,6 +110,37 @@ test("getBody: GraphQL query only (no variables)", async () => {
   });
 });
 
+test("getBody: GRAPHQL with body from file (< path) uses bodyFromFile", async () => {
+  const lines = [
+    "GRAPHQL https://api.example.com/graphql HTTP/1.1",
+    "",
+    "< ./query.graphql",
+  ];
+  const result = await getBody(lines, 2, "GRAPHQL");
+  expect(result).toEqual({
+    type: "bodyFromFile",
+    content: { __bodyFromFile: "./query.graphql" },
+  });
+});
+
+test("getBody: GRAPHQL with body from file and inline variables", async () => {
+  const lines = [
+    "GRAPHQL https://api.example.com/graphql HTTP/1.1",
+    "",
+    "< ./query.graphql",
+    "",
+    '{ "id": 1 }',
+  ];
+  const result = await getBody(lines, 2, "GRAPHQL");
+  expect(result).toEqual({
+    type: "bodyFromFile",
+    content: {
+      __bodyFromFile: "./query.graphql",
+      __graphqlVariablesSuffix: '{ "id": 1 }',
+    },
+  });
+});
+
 test("getBody: body from file (< path) JetBrains syntax", async () => {
   const lines = [
     "POST https://example.com:8080/api/html/post HTTP/1.1",

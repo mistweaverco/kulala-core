@@ -1,0 +1,5 @@
+query Film($id: ID) {
+  film(filmID: $id) {
+    title
+  }
+}

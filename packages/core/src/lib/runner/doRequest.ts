@@ -60,7 +60,7 @@ import {
   getRequestHeaderType,
   isBodyFromFileRef,
   isRawMultipartTemplateBody,
-  resolveBodyFromFile,
+  resolveEffectiveBodyFromFileRef,
   resolveInlineBodyFileRefs,
   stripHttpClientDoubleSlashLineComments,
 } from "./body";
@@ -323,9 +323,10 @@ export async function doRequestFromBlock(
   // Resolve body-from-file (JetBrains-style "< path") so we have effective body for substitution and send
   let effectiveBody: typeof block.request.body = block.request.body;
   if (isBodyFromFileRef(effectiveBody)) {
-    effectiveBody = await resolveBodyFromFile(
-      effectiveBody.__bodyFromFile,
+    effectiveBody = await resolveEffectiveBodyFromFileRef(
+      effectiveBody,
       startDir,
+      block.request.method,
     );
   }
 

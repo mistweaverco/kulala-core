@@ -27,3 +27,21 @@ query Planet($id: ID) {
 {
   "id": 1
 }
+
+#### GQL_STARWARS_QUERY_FILM
+
+GRAPHQL https://swapi-graphql.netlify.app/graphql HTTP/1.1
+Accept: application/json
+
+< ./graphql.graphql
+
+{
+  "id": 1
+}
+
+#### GQL_STARWARS_QUERY_FILM_INLINE
+
+GRAPHQL https://swapi-graphql.netlify.app/graphql HTTP/1.1
+Accept: application/json
+
+< ./graphql-inline-all.graphql

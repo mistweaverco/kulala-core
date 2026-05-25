@@ -25,6 +25,8 @@ export type KulalaRequestFileBody = {
 /** Body read from a file (JetBrains-style `< path` syntax). Stored under __bodyFromFile to avoid conflicting with JSON payloads. */
 export type KulalaRequestBodyFromFileContent = {
   __bodyFromFile: string;
+  /** GRAPHQL only: variables JSON in the .http file after the `< path` line. */
+  __graphqlVariablesSuffix?: string;
 };
 
 export type KulalaRequestRawBody = {

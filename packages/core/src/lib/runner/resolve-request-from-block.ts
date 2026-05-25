@@ -19,7 +19,7 @@ import {
   getRequestHeaderType,
   isBodyFromFileRef,
   isRawMultipartTemplateBody,
-  resolveBodyFromFile,
+  resolveEffectiveBodyFromFileRef,
   resolveInlineBodyFileRefs,
   stripHttpClientDoubleSlashLineComments,
 } from "./body";
@@ -102,9 +102,10 @@ export async function resolveRequestFromBlock(
 
   let effectiveBody: typeof block.request.body = block.request.body;
   if (isBodyFromFileRef(effectiveBody)) {
-    effectiveBody = await resolveBodyFromFile(
-      effectiveBody.__bodyFromFile,
+    effectiveBody = await resolveEffectiveBodyFromFileRef(
+      effectiveBody,
       startDir,
+      block.request.method,
     );
   }
 
