@@ -2,17 +2,7 @@ import { getVariables } from "../persistence";
 import { loadEnvVars } from "./env-files";
 import { findKubaYamlDir, getKubaEnv } from "./kuba";
 import { getMagicVariables } from "./magic";
-
-/**
- * Coerce a variable value to string for substitution.
- */
-function toString(v: unknown): string {
-  if (v == null) return "";
-  if (typeof v === "string") return v;
-  if (typeof v === "number" || typeof v === "boolean") return String(v);
-  if (typeof v === "object") return JSON.stringify(v);
-  return String(v);
-}
+import { mergeVariableIntoFlat } from "./variable-lookup";
 
 export type HttpFileVariableSources = {
   /** @name=value lines before the first ### in the .http file (or imported file). */
@@ -69,12 +59,12 @@ export async function resolveVariables(
 
   const globalVars = getVariables("global");
   for (const [k, v] of Object.entries(globalVars)) {
-    out[k] = toString(v);
+    mergeVariableIntoFlat(k, v, out);
   }
 
   const docVars = getVariables("document", { document: stableDocId });
   for (const [k, v] of Object.entries(docVars)) {
-    out[k] = toString(v);
+    mergeVariableIntoFlat(k, v, out);
   }
 
   const requestVars = getVariables("request", {
@@ -82,7 +72,7 @@ export async function resolveVariables(
     blockName,
   });
   for (const [k, v] of Object.entries(requestVars)) {
-    out[k] = toString(v);
+    mergeVariableIntoFlat(k, v, out);
   }
 
   const magic = getMagicVariables();

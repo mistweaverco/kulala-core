@@ -21,6 +21,7 @@ import type { KulalaOperator } from "../parser/types/operator";
 
 let server: ReturnType<typeof Bun.serve>;
 let baseUrl: string;
+let preScriptAbortProbeHits = 0;
 
 function makeBlock(overrides: Partial<KulalaBlock> = {}): KulalaBlock {
   return {
@@ -52,6 +53,10 @@ beforeAll(() => {
       const method = req.method;
       if (path === "/get" && method === "GET") {
         return Response.json({ json: { success: true, url: baseUrl } });
+      }
+      if (path === "/pre-script-abort-probe" && method === "GET") {
+        preScriptAbortProbeHits += 1;
+        return Response.json({ ok: true });
       }
       if (path === "/auth" && method === "GET") {
         return Response.json({
@@ -296,6 +301,200 @@ test("doRequestFromBlock: @kulala-prompt supports quoted label + var name (conti
     expect(result.promptType).toBe("custom");
     expect(result.inputs[0]?.id).toBe("NAME");
     expect(result.inputs[0]?.label).toBe("What is your name?");
+  }
+});
+
+test("doRequestFromBlock: pre-request script error aborts HTTP (JetBrains parity)", async () => {
+  preScriptAbortProbeHits = 0;
+  const block = makeBlock({
+    scripts: {
+      preRequest: [
+        {
+          type: "preRequest",
+          source: "inline",
+          lang: "js",
+          content: `throw new Error("pre-request failed");`,
+          lineNumber: 1,
+        },
+      ],
+      postRequest: [],
+    },
+    request: {
+      method: "GET",
+      url: `${baseUrl}/pre-script-abort-probe` as KulalaHttpURL,
+      headerSection: [],
+    },
+  });
+
+  const result = await doRequestFromBlock(
+    block,
+    "/tmp/example.http",
+    undefined,
+    "stable-doc",
+    undefined,
+    "default",
+    { globalHeaders: {} },
+  );
+
+  expect(result).toHaveProperty("success", false);
+  if (!result.success && "error" in result) {
+    expect(result.error).toContain("pre-request failed");
+    expect(result.httpCompleted).toBeUndefined();
+  }
+  expect(preScriptAbortProbeHits).toBe(0);
+});
+
+test("doRequestFromBlock: post-request script error keeps HTTP response (JetBrains parity)", async () => {
+  const block = makeBlock({
+    scripts: {
+      preRequest: [],
+      postRequest: [
+        {
+          type: "postRequest",
+          source: "inline",
+          lang: "js",
+          content: `client.assert(response.status === 999, "expected 999");`,
+          lineNumber: 1,
+        },
+      ],
+    },
+    request: {
+      method: "GET",
+      url: `${baseUrl}/get` as KulalaHttpURL,
+      headerSection: [],
+    },
+  });
+
+  const result = await doRequestFromBlock(
+    block,
+    "/tmp/example.http",
+    undefined,
+    "stable-doc",
+    undefined,
+    "default",
+    { globalHeaders: {} },
+  );
+
+  expect(result).toHaveProperty("success", false);
+  if (!result.success && "error" in result) {
+    expect(result.httpCompleted).toBe(true);
+    expect(result.status).toBe(200);
+    expect(result.body).toBeDefined();
+  }
+});
+
+test("doRequestFromBlock: $kulala.request.skip in pre-script skips HTTP", async () => {
+  const block = makeBlock({
+    scripts: {
+      preRequest: [
+        {
+          type: "preRequest",
+          source: "inline",
+          lang: "js",
+          content: `$kulala.request.skip();`,
+          lineNumber: 1,
+        },
+      ],
+      postRequest: [],
+    },
+  });
+
+  const result = await doRequestFromBlock(
+    block,
+    "/tmp/example.http",
+    undefined,
+    "stable-doc",
+    undefined,
+    "default",
+    { globalHeaders: {} },
+  );
+
+  expect(result.success).toBe(true);
+  if (result.success && "skipped" in result) {
+    expect(result.skipped).toBe(true);
+  }
+});
+
+test("doRequestFromBlock: $kulala.request.replay in pre-script re-runs with updated vars", async () => {
+  const block = makeBlock({
+    scripts: {
+      preRequest: [
+        {
+          type: "preRequest",
+          source: "inline",
+          lang: "js",
+          content: `
+            if (!client.global.get("REPLAYED")) {
+              client.global.set("REPLAYED", true);
+              request.variables.set("HIT", "second");
+              $kulala.request.replay();
+            }
+          `,
+          lineNumber: 1,
+        },
+      ],
+      postRequest: [],
+    },
+    request: {
+      method: "GET",
+      url: `${baseUrl}/get?n={{HIT}}` as KulalaHttpURL,
+      headerSection: [],
+    },
+  });
+
+  const result = await doRequestFromBlock(
+    block,
+    "/tmp/example.http",
+    { HIT: "first" },
+    "stable-doc",
+    undefined,
+    "default",
+    { globalHeaders: {} },
+  );
+
+  expect(result).toHaveProperty("success", true);
+  if (result.success && "url" in result) {
+    expect(result.url).toContain("n=second");
+  }
+});
+
+test("doRequestFromBlock: $kulala.prompt in pre-script returns prompt when variable missing", async () => {
+  const block = makeBlock({
+    scripts: {
+      preRequest: [
+        {
+          type: "preRequest",
+          source: "inline",
+          lang: "js",
+          content: `$kulala.prompt("Password?", "TOKEN", { type: "password" });`,
+          lineNumber: 1,
+        },
+      ],
+      postRequest: [],
+    },
+    request: {
+      method: "GET",
+      url: `${baseUrl}/get?token={{TOKEN}}` as KulalaHttpURL,
+      headerSection: [],
+    },
+  });
+
+  const result = await doRequestFromBlock(
+    block,
+    "/tmp/example.http",
+    undefined,
+    "stable-doc",
+    undefined,
+    "default",
+    { globalHeaders: {} },
+  );
+
+  expect(result.success).toBe(false);
+  if (!result.success && "prompt" in result) {
+    expect(result.prompt).toBe(true);
+    expect(result.inputs[0]?.id).toBe("TOKEN");
+    expect(result.inputs[0]?.type).toBe("password");
+    expect(result.inputs[0]?.label).toBe("Password?");
   }
 });
 
@@ -1028,6 +1227,56 @@ test("doRequestFromBlock: collection variable expands requests with 0-based requ
   });
   expect(urls[0]).toContain("id=1");
   expect(urls[1]).toContain("id=2");
+});
+
+test("doRequestFromBlock: JSONPath collection {{users[*].name}} expands requests", async () => {
+  const block = makeBlock({
+    request: {
+      method: "GET",
+      url: `${baseUrl}/path?user={{users[*].name}}` as KulalaHttpURL,
+      headerSection: [],
+    },
+    scripts: {
+      preRequest: [
+        {
+          type: "preRequest",
+          source: "inline",
+          lang: "js",
+          content: `request.variables.set("users", [
+            { name: "Alice" },
+            { name: "Bob" },
+          ]);`,
+          lineNumber: 1,
+        },
+      ],
+      postRequest: [],
+    },
+  });
+
+  const result = await doRequestFromBlock(
+    block,
+    "/tmp/example.http",
+    undefined,
+    undefined,
+    undefined,
+  );
+
+  expect(Array.isArray(result)).toBe(true);
+  const batch = result as Array<{
+    success: boolean;
+    body?: { type: string; content: unknown };
+  }>;
+  expect(batch).toHaveLength(2);
+  expect(batch.every((r) => r.success)).toBe(true);
+
+  const urls = batch.map((r) => {
+    if (r.success && r.body?.type === "json") {
+      return String((r.body.content as { url?: string }).url ?? "");
+    }
+    return "";
+  });
+  expect(urls[0]).toContain("user=Alice");
+  expect(urls[1]).toContain("user=Bob");
 });
 
 test("doRequestFromBlock: pre-request JS with await still substitutes {{NAME}} in URL", async () => {

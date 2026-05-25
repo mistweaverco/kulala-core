@@ -1,10 +1,16 @@
 import type { KulalaBlock } from "../parser/types/block";
 import { buildHeadersFromSection } from "./headers";
+import {
+  evaluateJsonPath,
+  expressionHasWildcard,
+  splitVariableExpression,
+} from "../variables/jsonpath";
+import { parseStoredVariable } from "../variables/variable-lookup";
 
 /** JetBrains: 0-based index of the current collection loop (0 = first request). */
 export type CollectionIterationPlan = {
   count: number;
-  /** Variable name → collection used for {{name}} expansion. */
+  /** Variable expression → values to iterate (e.g. id → [1,2,3] or users[*].name → names). */
   collections: Record<string, unknown[]>;
   /** First collection variable referenced in the request (for templateValue). */
   primaryCollection?: string;
@@ -27,6 +33,11 @@ function collectRefsFromBody(body: unknown): string[] {
   return extractVariableRefsFromText(JSON.stringify(body));
 }
 
+/** True for dynamic variables ($uuid, $random.*, …) — not collection-expanded. */
+function isDynamicVariableRef(name: string): boolean {
+  return name.startsWith("$") && !name.startsWith("$env.");
+}
+
 /** Parse a variable value as a JSON array collection (JetBrains collection variables). */
 export function parseVariableCollection(
   value: string | undefined,
@@ -43,6 +54,37 @@ export function parseVariableCollection(
   }
 }
 
+/**
+ * Resolve a collection for {{ expression }} iteration (JetBrains JSONPath + array roots).
+ */
+export function resolveCollectionForExpression(
+  expression: string,
+  vars: Record<string, string>,
+): unknown[] | null {
+  if (isDynamicVariableRef(expression)) return null;
+
+  const direct = parseVariableCollection(vars[expression]);
+  if (direct) return direct;
+
+  const { root, path } = splitVariableExpression(expression);
+  if (vars[root] === undefined) return null;
+
+  const data = parseStoredVariable(vars[root]);
+  if (data === undefined) return null;
+
+  if (!path) {
+    return parseVariableCollection(vars[root]);
+  }
+
+  if (expressionHasWildcard(path)) {
+    const values = evaluateJsonPath(data, path);
+    if (values.length === 0) return null;
+    return values;
+  }
+
+  return null;
+}
+
 function collectionElementToSubstitutionValue(el: unknown): string {
   if (el == null) return "";
   if (typeof el === "string") return el;
@@ -51,7 +93,7 @@ function collectionElementToSubstitutionValue(el: unknown): string {
 }
 
 /**
- * Build per-iteration vars: collection variables are replaced with the element at index.
+ * Build per-iteration vars: collection expressions are replaced with the element at index.
  */
 export function varsForCollectionIndex(
   base: Record<string, string>,
@@ -69,7 +111,7 @@ export function varsForCollectionIndex(
 
 /**
  * Detect how many HTTP sends JetBrains would perform for collection variables in this request.
- * Simple {{varName}} references only (not JSONPath $.… yet).
+ * Supports {{ id }} with a JSON array and JSONPath wildcards such as {{ users[*].name }}.
  */
 export function detectCollectionIterationPlan(
   block: KulalaBlock,
@@ -90,8 +132,8 @@ export function detectCollectionIterationPlan(
 
   const collections: Record<string, unknown[]> = {};
   for (const name of refNames) {
-    if (name.startsWith("$.")) continue;
-    const arr = parseVariableCollection(vars[name]);
+    if (isDynamicVariableRef(name)) continue;
+    const arr = resolveCollectionForExpression(name, vars);
     if (arr) collections[name] = arr;
   }
 

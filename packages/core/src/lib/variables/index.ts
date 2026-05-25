@@ -9,7 +9,8 @@
  * - Request variables (only with `# @kulala-vscode-restclient-compat` in the .http file):
  *   {{REQUEST_NAME.response.body.$.field}}, {{REQUEST_NAME.response.headers.Name}}.
  *   Latest responses are persisted per document so named requests work across separate runs.
- * - JSONPath-style in env/kuba: nested JSON flattened to dotted paths (client.host.url, client.['host.url']).
+ * - JSONPath in {{ }} and scripts (2024.2+): dotted paths, .['key'], [*], [n] — see jsonpath.ts.
+ * - Env/kuba nested JSON is also flattened to dotted paths for direct lookup.
  * - Substitution: {{variableName}} or compound paths; optional spaces {{ var }} in URL, headers, body.
  * - In-file @ variables: @name=value before the first ### or in a block preamble (JetBrains).
  */
@@ -42,6 +43,22 @@ export {
   substituteInString,
   substituteInStringAsync,
 } from "./substitute";
+export {
+  evaluateJsonPath,
+  expressionHasWildcard,
+  formatJsonPathResults,
+  parseJsonPathSegments,
+  splitVariableExpression,
+} from "./jsonpath";
+export {
+  formatVariableForSubstitution,
+  getByVariablePath,
+  mergeVariableIntoFlat,
+  parseStoredVariable,
+  parseVariablePath,
+  resolveVariableReference,
+  writeVariableToMaps,
+} from "./variable-lookup";
 export {
   isRequestVariableKey,
   type PreviousResponse,

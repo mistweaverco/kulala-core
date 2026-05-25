@@ -4,4 +4,19 @@ default:
   provider: local
   env:
     API_BEARER_TOKEN:
-      value: "SOME_SECRET_TOKEN"
+      value: "some secret token for local"
+staging:
+  provider: local
+  env:
+    API_BEARER_TOKEN:
+      value: "some secret token for staging"
+dev:
+  provider: local
+  env:
+    API_BEARER_TOKEN:
+      value: "some secret token for dev"
+prod:
+  provider: local
+  env:
+    API_BEARER_TOKEN:
+      value: "some secret token for prod"

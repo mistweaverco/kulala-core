@@ -22,6 +22,7 @@ import type {
   KulalaRequestErrorResponse,
   KulalaRequestSuccessResponse,
   KulalaPromptResponse,
+  KulalaSkippedResponse,
   KulalaWebSocketPlanResponse,
   KulalaRunOptions,
   KulalaResponseWrapper,
@@ -101,6 +102,7 @@ export async function runDocument(
     | KulalaRequestSuccessResponse
     | KulalaRequestErrorResponse
     | KulalaPromptResponse
+    | KulalaSkippedResponse
     | KulalaWebSocketPlanResponse
   )[] = [];
   const flow: ScriptFlowContext = {
@@ -162,6 +164,10 @@ export async function runDocument(
           data: results,
         };
         return responseWrapper;
+      }
+
+      if (item.success && "skipped" in item && item.skipped) {
+        continue;
       }
 
       if (item.success && "status" in item && "body" in item) {
