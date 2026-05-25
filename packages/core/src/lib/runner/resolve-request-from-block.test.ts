@@ -19,7 +19,12 @@ describe("resolveRequestFromBlock", () => {
     const block = findBlockAtCursor(doc, { line: 5, column: 1 });
     expect(block).not.toBeNull();
 
-    const result = await resolveRequestFromBlock(block!, undefined, {});
+    const result = await resolveRequestFromBlock(
+      block!,
+      undefined,
+      {},
+      undefined,
+    );
     expect(result).toMatchObject({ ok: true });
     if (!("ok" in result) || !result.ok) return;
 

@@ -8,7 +8,38 @@ import {
 } from "bun:test";
 import { writeFileSync, unlinkSync, mkdirSync, existsSync } from "fs";
 import { join } from "path";
-import { doRequestFromBlock } from "./doRequest";
+import { doRequestFromBlock, type DoRequestFromBlockResult } from "./doRequest";
+import type {
+  KulalaPromptResponse,
+  KulalaRequestErrorResponse,
+  KulalaRequestSuccessResponse,
+} from "./types";
+
+type HttpDoRequestResult =
+  | KulalaRequestSuccessResponse
+  | KulalaRequestErrorResponse;
+
+function unwrapHttpDoRequestResult(
+  result: DoRequestFromBlockResult | DoRequestFromBlockResult[],
+): HttpDoRequestResult {
+  const r = Array.isArray(result) ? result[0]! : result;
+  if ("protocol" in r) {
+    throw new Error("expected HTTP result, got websocket plan");
+  }
+  if ("prompt" in r) {
+    throw new Error("expected HTTP result, got prompt");
+  }
+  if ("skipped" in r) {
+    throw new Error("expected HTTP result, got skipped");
+  }
+  return r;
+}
+
+async function httpDoRequestFromBlock(
+  ...args: Parameters<typeof doRequestFromBlock>
+): Promise<HttpDoRequestResult> {
+  return unwrapHttpDoRequestResult(await doRequestFromBlock(...args));
+}
 import type { KulalaBlock } from "../parser/types/block";
 import type { KulalaHttpURL } from "../parser/types/request";
 import { setDbForTesting, getDbInMemory, closeDb } from "../persistence";
@@ -157,7 +188,7 @@ test("doRequestFromBlock: uses OAuth2 token from $auth.token()", async () => {
     position: { start: 1, end: 10 },
   };
 
-  const result = await doRequestFromBlock(
+  const result = await httpDoRequestFromBlock(
     block,
     join(testDir, "test.http"),
     undefined,
@@ -242,7 +273,7 @@ test("doRequestFromBlock: handles escaped braces in $auth.token() from JSON payl
     position: { start: 1, end: 10 },
   };
 
-  const result = await doRequestFromBlock(
+  const result = await httpDoRequestFromBlock(
     block,
     join(testDir, "oauth2.http"),
     undefined,
@@ -253,9 +284,10 @@ test("doRequestFromBlock: handles escaped braces in $auth.token() from JSON payl
 
   if (!result.success) {
     if ("prompt" in result && result.prompt) {
-      console.log("Got prompt response:", JSON.stringify(result, null, 2));
+      const prompt = result as unknown as KulalaPromptResponse;
+      console.log("Got prompt response:", JSON.stringify(prompt, null, 2));
       throw new Error(
-        `Unexpected prompt response: ${result.message}. This test should use Client Credentials which doesn't require prompts.`,
+        `Unexpected prompt response: ${prompt.message}. This test should use Client Credentials which doesn't require prompts.`,
       );
     } else if ("error" in result) {
       console.log("Request failed with error:", result.error);

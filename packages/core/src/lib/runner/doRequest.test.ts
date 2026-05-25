@@ -16,12 +16,50 @@ import {
   setDbForTesting,
   setVariable,
 } from "../persistence";
-import { doRequestFromBlock } from "./doRequest";
+import { doRequestFromBlock, type DoRequestFromBlockResult } from "./doRequest";
+import type {
+  KulalaRequestErrorResponse,
+  KulalaRequestSuccessResponse,
+} from "./types";
 import type { KulalaOperator } from "../parser/types/operator";
+
+type HttpDoRequestResult =
+  | KulalaRequestSuccessResponse
+  | KulalaRequestErrorResponse;
+
+function unwrapHttpDoRequestResult(
+  result: DoRequestFromBlockResult | DoRequestFromBlockResult[],
+): HttpDoRequestResult {
+  const r = Array.isArray(result) ? result[0]! : result;
+  if ("protocol" in r) {
+    throw new Error("expected HTTP result, got websocket plan");
+  }
+  if ("prompt" in r) {
+    throw new Error("expected HTTP result, got prompt");
+  }
+  if ("skipped" in r) {
+    throw new Error("expected HTTP result, got skipped");
+  }
+  return r;
+}
+
+async function httpDoRequestFromBlock(
+  ...args: Parameters<typeof doRequestFromBlock>
+): Promise<HttpDoRequestResult> {
+  return unwrapHttpDoRequestResult(await httpDoRequestFromBlock(...args));
+}
 
 let server: ReturnType<typeof Bun.serve>;
 let baseUrl: string;
 let preScriptAbortProbeHits = 0;
+
+function testOperator(
+  name: KulalaOperator["name"],
+  args?: string,
+  lineNumber = 1,
+): KulalaOperator {
+  return { name, args, lineNumber };
+}
 
 function makeBlock(overrides: Partial<KulalaBlock> = {}): KulalaBlock {
   return {
@@ -185,7 +223,7 @@ afterEach(() => {
 
 test("doRequestFromBlock: GET request returns success response (real got)", async () => {
   const block = makeBlock();
-  const result = await doRequestFromBlock(
+  const result = await httpDoRequestFromBlock(
     block,
     undefined,
     undefined,
@@ -226,7 +264,7 @@ test("doRequestFromBlock: substitutes URL and headers when vars provided", async
   });
   const vars = { host: `localhost:${server.port}`, token: "secret123" };
 
-  const result = await doRequestFromBlock(
+  const result = await httpDoRequestFromBlock(
     block,
     undefined,
     vars,
@@ -243,7 +281,7 @@ test("doRequestFromBlock: substitutes URL and headers when vars provided", async
 
 test("doRequestFromBlock: # @kulala-prompt returns a prompt response when variable missing", async () => {
   const block = makeBlock({
-    operators: [{ name: "kulala-prompt", args: "TOKEN", lineNumber: 1 } as any],
+    operators: [testOperator("kulala-prompt", "TOKEN")],
     request: {
       method: "GET",
       url: `${baseUrl}/get?token={{TOKEN}}` as KulalaHttpURL,
@@ -261,9 +299,8 @@ test("doRequestFromBlock: # @kulala-prompt returns a prompt response when variab
     { globalHeaders: {} },
   );
 
-  expect(result.success).toBe(false);
-  if (!result.success && "prompt" in result) {
-    expect(result.prompt).toBe(true);
+  expect(result).toHaveProperty("success", false);
+  if (!Array.isArray(result) && "prompt" in result && result.prompt) {
     expect(result.promptType).toBe("custom");
     expect(result.inputs[0]?.id).toBe("TOKEN");
   }
@@ -271,13 +308,7 @@ test("doRequestFromBlock: # @kulala-prompt returns a prompt response when variab
 
 test("doRequestFromBlock: @kulala-prompt supports quoted label + var name (continue id remains var)", async () => {
   const block = makeBlock({
-    operators: [
-      {
-        name: "kulala-prompt",
-        args: `"What is your name?" NAME`,
-        lineNumber: 1,
-      } as any,
-    ],
+    operators: [testOperator("kulala-prompt", `"What is your name?" NAME`)],
     request: {
       method: "GET",
       url: `${baseUrl}/get?name={{NAME}}` as KulalaHttpURL,
@@ -295,9 +326,8 @@ test("doRequestFromBlock: @kulala-prompt supports quoted label + var name (conti
     { globalHeaders: {} },
   );
 
-  expect(result.success).toBe(false);
-  if (!result.success && "prompt" in result) {
-    expect(result.prompt).toBe(true);
+  expect(result).toHaveProperty("success", false);
+  if (!Array.isArray(result) && "prompt" in result && result.prompt) {
     expect(result.promptType).toBe("custom");
     expect(result.inputs[0]?.id).toBe("NAME");
     expect(result.inputs[0]?.label).toBe("What is your name?");
@@ -326,7 +356,7 @@ test("doRequestFromBlock: pre-request script error aborts HTTP (JetBrains parity
     },
   });
 
-  const result = await doRequestFromBlock(
+  const result = await httpDoRequestFromBlock(
     block,
     "/tmp/example.http",
     undefined,
@@ -365,7 +395,7 @@ test("doRequestFromBlock: post-request script error keeps HTTP response (JetBrai
     },
   });
 
-  const result = await doRequestFromBlock(
+  const result = await httpDoRequestFromBlock(
     block,
     "/tmp/example.http",
     undefined,
@@ -399,7 +429,7 @@ test("doRequestFromBlock: $kulala.request.skip in pre-script skips HTTP", async 
     },
   });
 
-  const result = await doRequestFromBlock(
+  const result = await httpDoRequestFromBlock(
     block,
     "/tmp/example.http",
     undefined,
@@ -442,7 +472,7 @@ test("doRequestFromBlock: $kulala.request.replay in pre-script re-runs with upda
     },
   });
 
-  const result = await doRequestFromBlock(
+  const result = await httpDoRequestFromBlock(
     block,
     "/tmp/example.http",
     { HIT: "first" },
@@ -489,9 +519,8 @@ test("doRequestFromBlock: $kulala.prompt in pre-script returns prompt when varia
     { globalHeaders: {} },
   );
 
-  expect(result.success).toBe(false);
-  if (!result.success && "prompt" in result) {
-    expect(result.prompt).toBe(true);
+  expect(result).toHaveProperty("success", false);
+  if (!Array.isArray(result) && "prompt" in result && result.prompt) {
     expect(result.inputs[0]?.id).toBe("TOKEN");
     expect(result.inputs[0]?.type).toBe("password");
     expect(result.inputs[0]?.label).toBe("Password?");
@@ -512,13 +541,7 @@ test("doRequestFromBlock: prompt variable is single-use (deleted after next run 
   ).toBe("marco");
 
   const block = makeBlock({
-    operators: [
-      {
-        name: "kulala-prompt",
-        args: `"What is your name?" NAME`,
-        lineNumber: 1,
-      } as any,
-    ],
+    operators: [testOperator("kulala-prompt", `"What is your name?" NAME`)],
     request: {
       method: "GET",
       url: `${baseUrl}/get?name={{NAME}}` as KulalaHttpURL,
@@ -526,7 +549,7 @@ test("doRequestFromBlock: prompt variable is single-use (deleted after next run 
     },
   });
 
-  const result = await doRequestFromBlock(
+  const result = await httpDoRequestFromBlock(
     block,
     "/tmp/example.http",
     { NAME: "marco" }, // represents resolved vars for this run
@@ -555,13 +578,7 @@ test("doRequestFromBlock: # @kulala-file-contents-to-variable loads file content
   await fs.writeFile(join(dir, "v.txt"), "hello-world", "utf-8");
 
   const block = makeBlock({
-    operators: [
-      {
-        name: "kulala-file-contents-to-variable",
-        args: "FOO v.txt",
-        lineNumber: 1,
-      } as any,
-    ],
+    operators: [testOperator("kulala-file-contents-to-variable", "FOO v.txt")],
     request: {
       method: "GET",
       url: `${baseUrl}/path?name={{FOO}}` as KulalaHttpURL,
@@ -569,7 +586,7 @@ test("doRequestFromBlock: # @kulala-file-contents-to-variable loads file content
     },
   });
 
-  const result = await doRequestFromBlock(
+  const result = await httpDoRequestFromBlock(
     block,
     httpFilePath,
     undefined,
@@ -587,13 +604,7 @@ test("doRequestFromBlock: # @kulala-file-contents-to-variable loads file content
 
 test("doRequestFromBlock: # @kulala-expect-status-code returns error when status does not match", async () => {
   const block = makeBlock({
-    operators: [
-      {
-        name: "kulala-expect-status-code",
-        args: "201",
-        lineNumber: 1,
-      } as any,
-    ],
+    operators: [testOperator("kulala-expect-status-code", "201")],
     request: {
       method: "GET",
       url: `${baseUrl}/get` as KulalaHttpURL,
@@ -601,7 +612,7 @@ test("doRequestFromBlock: # @kulala-expect-status-code returns error when status
     },
   });
 
-  const result = await doRequestFromBlock(
+  const result = await httpDoRequestFromBlock(
     block,
     "/tmp/example.http",
     undefined,
@@ -659,7 +670,7 @@ test("doRequestFromBlock: # @timeout triggers a timeout against a slow endpoint"
     },
   });
 
-  const result = await doRequestFromBlock(
+  const result = await httpDoRequestFromBlock(
     slowBlock,
     "/tmp/example.http",
     undefined,
@@ -701,7 +712,7 @@ test("doRequestFromBlock: # @timeout 5 s uses seconds for curl (not milliseconds
     },
   });
 
-  const result = await doRequestFromBlock(
+  const result = await httpDoRequestFromBlock(
     block,
     "/tmp/example.http",
     undefined,
@@ -736,7 +747,7 @@ test("doRequestFromBlock: // @no-redirect does not follow redirects (keeps 302)"
   const base = `http://localhost:${redirectServer.port}`;
 
   const block = makeBlock({
-    operators: [{ name: "no-redirect", lineNumber: 1 } as any],
+    operators: [testOperator("no-redirect")],
     request: {
       method: "GET",
       url: `${base}/from` as KulalaHttpURL,
@@ -744,7 +755,7 @@ test("doRequestFromBlock: // @no-redirect does not follow redirects (keeps 302)"
     },
   });
 
-  const result = await doRequestFromBlock(
+  const result = await httpDoRequestFromBlock(
     block,
     "/tmp/example.http",
     undefined,
@@ -775,7 +786,7 @@ test("doRequestFromBlock: // @no-auto-encoding sends form-urlencoded body withou
   const base = `http://localhost:${formServer.port}`;
 
   const block = makeBlock({
-    operators: [{ name: "no-auto-encoding", lineNumber: 1 } as any],
+    operators: [testOperator("no-auto-encoding")],
     request: {
       method: "POST",
       url: `${base}/` as KulalaHttpURL,
@@ -790,7 +801,7 @@ test("doRequestFromBlock: // @no-auto-encoding sends form-urlencoded body withou
     },
   });
 
-  const result = await doRequestFromBlock(
+  const result = await httpDoRequestFromBlock(
     block,
     "/tmp/example.http",
     undefined,
@@ -844,7 +855,7 @@ test("doRequestFromBlock: cookie jar stores Set-Cookie and sends Cookie on subse
     },
   });
 
-  const r1 = await doRequestFromBlock(
+  const r1 = await httpDoRequestFromBlock(
     setBlock,
     "/tmp/example.http",
     undefined,
@@ -855,7 +866,7 @@ test("doRequestFromBlock: cookie jar stores Set-Cookie and sends Cookie on subse
   );
   expect(r1.success).toBe(true);
 
-  const r2 = await doRequestFromBlock(
+  const r2 = await httpDoRequestFromBlock(
     echoBlock,
     "/tmp/example.http",
     undefined,
@@ -870,14 +881,14 @@ test("doRequestFromBlock: cookie jar stores Set-Cookie and sends Cookie on subse
   }
 
   const noJarEcho = makeBlock({
-    operators: [{ name: "no-cookie-jar", lineNumber: 1 } as any],
+    operators: [testOperator("no-cookie-jar")],
     request: {
       method: "GET",
       url: `${base}/echo` as KulalaHttpURL,
       headerSection: [],
     },
   });
-  const r3 = await doRequestFromBlock(
+  const r3 = await httpDoRequestFromBlock(
     noJarEcho,
     "/tmp/example.http",
     undefined,
@@ -927,7 +938,7 @@ test("doRequestFromBlock: cookies set on redirect response are sent to the next 
     },
   });
 
-  const result = await doRequestFromBlock(
+  const result = await httpDoRequestFromBlock(
     block,
     "/tmp/example.http",
     undefined,
@@ -970,7 +981,7 @@ test("doRequestFromBlock: @no-cookie-jar prevents redirect cookie propagation (r
   const base = `http://localhost:${redirectCookieServer.port}`;
 
   const block = makeBlock({
-    operators: [{ name: "no-cookie-jar", lineNumber: 1 } as any],
+    operators: [testOperator("no-cookie-jar")],
     request: {
       method: "GET",
       url: `${base}/set` as KulalaHttpURL,
@@ -978,7 +989,7 @@ test("doRequestFromBlock: @no-cookie-jar prevents redirect cookie propagation (r
     },
   });
 
-  const result = await doRequestFromBlock(
+  const result = await httpDoRequestFromBlock(
     block,
     "/tmp/example.http",
     undefined,
@@ -1003,7 +1014,7 @@ test("doRequestFromBlock: request history records entries unless // @no-log", as
       headerSection: [],
     },
   });
-  const r1 = await doRequestFromBlock(
+  const r1 = await httpDoRequestFromBlock(
     block,
     "/tmp/example.http",
     undefined,
@@ -1017,7 +1028,7 @@ test("doRequestFromBlock: request history records entries unless // @no-log", as
   expect(hist1.length).toBeGreaterThan(0);
 
   const noLogBlock = makeBlock({
-    operators: [{ name: "no-log", lineNumber: 1 } as any],
+    operators: [testOperator("no-log")],
     request: {
       method: "GET",
       url: `${baseUrl}/get` as KulalaHttpURL,
@@ -1025,7 +1036,7 @@ test("doRequestFromBlock: request history records entries unless // @no-log", as
     },
   });
   const before = listHistoryEntries(100).length;
-  const r2 = await doRequestFromBlock(
+  const r2 = await httpDoRequestFromBlock(
     noLogBlock,
     "/tmp/example.http",
     undefined,
@@ -1061,7 +1072,7 @@ test("doRequestFromBlock: applies client.global.headers.set from pre-request scr
     },
   });
 
-  const result = await doRequestFromBlock(
+  const result = await httpDoRequestFromBlock(
     block,
     "/tmp/example.http",
     undefined,
@@ -1073,7 +1084,8 @@ test("doRequestFromBlock: applies client.global.headers.set from pre-request scr
 
   expect(result).toHaveProperty("success", true);
   if (result.success && result.body.type === "json") {
-    expect(result.body.content.headers["x-custom"]).toBe("from-flow");
+    const content = result.body.content as { headers: Record<string, string> };
+    expect(content.headers["x-custom"]).toBe("from-flow");
   }
 });
 
@@ -1108,7 +1120,7 @@ test("doRequestFromBlock: applies client.global.headers.set from post-request sc
     },
   });
 
-  const r1 = await doRequestFromBlock(
+  const r1 = await httpDoRequestFromBlock(
     first,
     "/tmp/example.http",
     undefined,
@@ -1119,7 +1131,7 @@ test("doRequestFromBlock: applies client.global.headers.set from post-request sc
   );
   expect(r1).toHaveProperty("success", true);
 
-  const r2 = await doRequestFromBlock(
+  const r2 = await httpDoRequestFromBlock(
     second,
     "/tmp/example.http",
     undefined,
@@ -1130,7 +1142,8 @@ test("doRequestFromBlock: applies client.global.headers.set from post-request sc
   );
   expect(r2).toHaveProperty("success", true);
   if (r2.success && r2.body.type === "json") {
-    expect(r2.body.content.headers["x-custom"]).toBe("from-post");
+    const content = r2.body.content as { headers: Record<string, string> };
+    expect(content.headers["x-custom"]).toBe("from-post");
   }
 });
 
@@ -1155,7 +1168,7 @@ test("doRequestFromBlock: pre-request Lua variables are available for substituti
     },
   });
 
-  const result = await doRequestFromBlock(
+  const result = await httpDoRequestFromBlock(
     block,
     "/tmp/example.http",
     undefined,
@@ -1211,10 +1224,7 @@ test("doRequestFromBlock: collection variable expands requests with 0-based requ
   );
 
   expect(Array.isArray(result)).toBe(true);
-  const batch = result as Array<{
-    success: boolean;
-    body?: { type: string; content: unknown };
-  }>;
+  const batch = result as KulalaRequestSuccessResponse[];
   expect(batch).toHaveLength(2);
   expect(batch.every((r) => r.success)).toBe(true);
   expect(getVariable("global", "LAST_ITER")).toBe("1");
@@ -1262,15 +1272,12 @@ test("doRequestFromBlock: JSONPath collection {{users[*].name}} expands requests
   );
 
   expect(Array.isArray(result)).toBe(true);
-  const batch = result as Array<{
-    success: boolean;
-    body?: { type: string; content: unknown };
-  }>;
+  const batch = result as KulalaRequestSuccessResponse[];
   expect(batch).toHaveLength(2);
   expect(batch.every((r) => r.success)).toBe(true);
 
   const urls = batch.map((r) => {
-    if (r.success && r.body?.type === "json") {
+    if (r.body.type === "json") {
       return String((r.body.content as { url?: string }).url ?? "");
     }
     return "";
@@ -1304,7 +1311,7 @@ request.variables.set("NAME", "kulala");`,
     },
   });
 
-  const result = await doRequestFromBlock(
+  const result = await httpDoRequestFromBlock(
     block,
     "/tmp/example.http",
     undefined,
@@ -1333,7 +1340,7 @@ test("doRequestFromBlock: encodes Authorization Basic username:password", async 
     },
   });
 
-  const result = await doRequestFromBlock(
+  const result = await httpDoRequestFromBlock(
     block,
     undefined,
     undefined,
@@ -1364,7 +1371,7 @@ test("doRequestFromBlock: keeps Authorization Basic base64 as-is", async () => {
     },
   });
 
-  const result = await doRequestFromBlock(
+  const result = await httpDoRequestFromBlock(
     block,
     undefined,
     undefined,
@@ -1396,7 +1403,7 @@ test("doRequestFromBlock: keeps Authorization Bearer as-is", async () => {
     },
   });
 
-  const result = await doRequestFromBlock(
+  const result = await httpDoRequestFromBlock(
     block,
     undefined,
     undefined,
@@ -1429,7 +1436,7 @@ test("doRequestFromBlock: sends JSON body for POST with Content-Type application
     },
   });
 
-  const result = await doRequestFromBlock(
+  const result = await httpDoRequestFromBlock(
     block,
     undefined,
     undefined,
@@ -1459,7 +1466,7 @@ test("doRequestFromBlock: GRAPHQL sends as POST with query and variables", async
     },
   });
 
-  const result = await doRequestFromBlock(
+  const result = await httpDoRequestFromBlock(
     block,
     undefined,
     undefined,
@@ -1488,7 +1495,7 @@ test("doRequestFromBlock: GRAPHQL sends as POST with query only", async () => {
     },
   });
 
-  const result = await doRequestFromBlock(
+  const result = await httpDoRequestFromBlock(
     block,
     undefined,
     undefined,
@@ -1514,7 +1521,7 @@ test("doRequestFromBlock: returns error response when got fails (connection refu
     },
   });
 
-  const result = await doRequestFromBlock(
+  const result = await httpDoRequestFromBlock(
     block,
     undefined,
     undefined,
@@ -1537,7 +1544,7 @@ test("doRequestFromBlock: maps text response body when Content-Type is not json"
     },
   });
 
-  const result = await doRequestFromBlock(
+  const result = await httpDoRequestFromBlock(
     block,
     undefined,
     undefined,
@@ -1580,7 +1587,7 @@ test("doRequestFromBlock: GRAPHQL with body from file and inline variables", asy
     },
   });
 
-  const result = await doRequestFromBlock(
+  const result = await httpDoRequestFromBlock(
     block,
     httpFilePath,
     undefined,
@@ -1615,7 +1622,7 @@ test("doRequestFromBlock: GRAPHQL with body from file sends JSON query payload",
     },
   });
 
-  const result = await doRequestFromBlock(
+  const result = await httpDoRequestFromBlock(
     block,
     httpFilePath,
     undefined,
@@ -1649,7 +1656,7 @@ test("doRequestFromBlock: reads request body from file (JetBrains < path syntax)
     },
   });
 
-  const result = await doRequestFromBlock(
+  const result = await httpDoRequestFromBlock(
     block,
     httpFilePath,
     undefined,
@@ -1686,7 +1693,7 @@ test("doRequestFromBlock: redirects response to file (>>! overwrite)", async () 
     },
   });
 
-  const result = await doRequestFromBlock(
+  const result = await httpDoRequestFromBlock(
     block,
     httpFilePath,
     undefined,
@@ -1720,7 +1727,7 @@ test("doRequestFromBlock: redirects response to file (>> create with suffix if e
     },
   });
 
-  const result = await doRequestFromBlock(
+  const result = await httpDoRequestFromBlock(
     block,
     httpFilePath,
     undefined,

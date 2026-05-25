@@ -1,6 +1,5 @@
 import { existsSync } from "fs";
 import { dirname, join } from "path";
-import { writeErrorToStderr } from "../parser/lib/helpers";
 import { flattenToDotPaths } from "./flatten-json";
 
 const KUBA_YAML = "kuba.yaml";

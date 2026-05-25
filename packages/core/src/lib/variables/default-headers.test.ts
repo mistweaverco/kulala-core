@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "fs";
+import { mkdirSync, rmSync, writeFileSync } from "fs";
 import { join } from "path";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { applyDefaultHeaders, loadDefaultHeaders } from "./default-headers";

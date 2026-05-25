@@ -1,5 +1,6 @@
 import { readFileSync } from "fs";
 import { join } from "path";
+import { expect, test } from "bun:test";
 import { getDocument } from "../parser/parser";
 import { runDocument } from "./index";
 

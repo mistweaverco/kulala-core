@@ -112,7 +112,7 @@ function parseInlineBodyFileRefTail(tail: string): {
   path: string;
   suffix: string;
 } {
-  let s = tail.trim().replace(/\r$/, "");
+  const s = tail.trim().replace(/\r$/, "");
   if (s.startsWith('"')) {
     const end = s.indexOf('"', 1);
     if (end === -1) return { path: stripQuotesPath(s), suffix: "" };

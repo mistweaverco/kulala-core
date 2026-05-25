@@ -338,6 +338,13 @@ export async function curlHttpRequest(
       const sec = Math.max(0, options.connectionTimeoutSec);
       args.push("--connect-timeout", String(sec));
     }
+    if (
+      options.insecure &&
+      !extra.includes("--insecure") &&
+      !extra.includes("-k")
+    ) {
+      args.push("--insecure");
+    }
     if (extra.length > 0) {
       args.push(...extra);
     }

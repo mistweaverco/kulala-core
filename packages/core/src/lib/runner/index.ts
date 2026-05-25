@@ -13,7 +13,7 @@ import {
   resolveBlocksToRun,
 } from "./block";
 import { doRequestFromBlock } from "./doRequest";
-import { collectSharedGrpcFlags, grpcFlagsFromOperators } from "../grpc";
+import { collectSharedGrpcFlags } from "../grpc";
 import {
   createRequestVarContext,
   recordRequestVarResult,
