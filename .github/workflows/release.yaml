@@ -114,7 +114,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload artifact for darwin-x86_64
-        if: matrix.platform == 'macos-arm64'
+        if: matrix.platform == 'macos-x86_64'
         uses: actions/upload-artifact@v7.0.0
         with:
           name: kulala-core-darwin-x86_64
