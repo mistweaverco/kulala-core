@@ -118,7 +118,7 @@ jobs:
         uses: actions/upload-artifact@v7.0.0
         with:
           name: kulala-core-darwin-x86_64
-          path: packages/core/dist/kulala-core-darwin-arm64
+          path: packages/core/dist/kulala-core-darwin-x86_64
           if-no-files-found: error
 
       - name: Upload artifact for darwin-arm64
