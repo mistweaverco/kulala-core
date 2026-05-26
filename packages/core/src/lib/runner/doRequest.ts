@@ -36,6 +36,12 @@ import {
 } from "./script-control-error";
 import { buildRunnerResponseBody } from "./http-response-body";
 import { runScripts, type ScriptFlowContext } from "./scripts";
+import {
+  isSharedBlockName,
+  isSharedEachBlockName,
+  sharedBlockHasHttpRequest,
+} from "../shared-blocks";
+import { recordRequestVarResult } from "./request-var-context";
 import type { KulalaScriptType } from "../parser/types/script";
 import {
   bodyPayloadToScriptString,
@@ -94,9 +100,11 @@ export type DoRequestFromBlockOptions = {
   scriptReplayIndex?: number;
   /** Parsed document (file-header operators merged into each request). */
   doc?: KulalaDocument;
+  /** Internal: skip shared pre/post hooks and nested shared HTTP (shared block HTTP hook). */
+  skipSharedHooks?: boolean;
 };
 
-/** JetBrains: `### Shared` pre/post scripts wrap each request in the file. */
+/** `### KULALA_SHARED` pre/post scripts wrap each request in the file. */
 async function runSharedScriptsForPhase(
   phase: KulalaScriptType,
   opts: {
@@ -154,6 +162,79 @@ async function runSharedScriptsForPhase(
       ctx,
       { stableDocId: opts.stableDocId },
     );
+  }
+}
+
+/** Run HTTP request(s) embedded in KULALA_SHARED* blocks before the target request. */
+async function runSharedBlockHttpRequests(opts: {
+  flow?: ScriptFlowContext;
+  requestBlock: KulalaBlock;
+  filePath: string | undefined;
+  env: string;
+  stableDocId: string;
+  doc?: KulalaDocument;
+  mutableVars: Record<string, string>;
+  resolver: VariableResolver | undefined;
+}): Promise<void> {
+  const flow = opts.flow;
+  if (!flow) return;
+  const sharedBlocks = flow.sharedBlocks;
+  if (!sharedBlocks?.length) return;
+  if (isSharedBlockName(opts.requestBlock.name)) return;
+
+  if (!flow.sharedHttpExecuted) {
+    flow.sharedHttpExecuted = new Set();
+  }
+  if (!flow.collectedSharedHttpResults) {
+    flow.collectedSharedHttpResults = [];
+  }
+
+  for (const shared of sharedBlocks) {
+    if (!sharedBlockHasHttpRequest(shared)) continue;
+
+    const each = isSharedEachBlockName(shared.name);
+    const key = shared.name;
+    if (!each && flow.sharedHttpExecuted.has(key)) continue;
+
+    const result = await doRequestFromBlock(
+      shared,
+      opts.filePath,
+      opts.mutableVars,
+      opts.stableDocId,
+      opts.resolver,
+      opts.env,
+      flow,
+      {
+        doc: opts.doc,
+        skipSharedHooks: true,
+      },
+    );
+
+    flow.sharedHttpExecuted.add(key);
+
+    const items = Array.isArray(result) ? result : [result];
+    for (const item of items) {
+      flow.collectedSharedHttpResults.push({ ...item, blockName: key });
+      if (
+        opts.doc &&
+        item.success &&
+        "status" in item &&
+        "body" in item &&
+        flow.requestVarResults
+      ) {
+        const nameOp = shared.operators.find((o) => o.name === "name");
+        const alias = nameOp?.args != null ? String(nameOp.args).trim() : "";
+        const resultKey = alias !== "" ? alias : shared.name;
+        recordRequestVarResult(
+          opts.doc,
+          shared,
+          opts.stableDocId,
+          resultKey,
+          { body: item.body, headers: item.headers },
+          flow.requestVarResults,
+        );
+      }
+    }
   }
 }
 
@@ -343,19 +424,32 @@ export async function doRequestFromBlock(
 
     if (!iterationOptions?.skipPreScripts || scriptReplayIndex > 0) {
       try {
-        await runSharedScriptsForPhase("preRequest", {
-          flow,
-          requestBlock: block,
-          filePath,
-          effectiveBody,
-          env,
-          startDir,
-          mutableVars,
-          resolver,
-          iteration: 0,
-          scriptConsole,
-          stableDocId,
-        });
+        if (!iterationOptions?.skipSharedHooks) {
+          await runSharedScriptsForPhase("preRequest", {
+            flow,
+            requestBlock: block,
+            filePath,
+            effectiveBody,
+            env,
+            startDir,
+            mutableVars,
+            resolver,
+            iteration: 0,
+            scriptConsole,
+            stableDocId,
+          });
+
+          await runSharedBlockHttpRequests({
+            flow,
+            requestBlock: block,
+            filePath,
+            env,
+            stableDocId,
+            doc: iterationOptions?.doc,
+            mutableVars,
+            resolver,
+          });
+        }
 
         const preScriptRequestCtx = buildScriptRequestContextFromBlock({
           block,
@@ -953,26 +1047,28 @@ export async function doRequestFromBlock(
           { stableDocId },
         );
 
-        await runSharedScriptsForPhase("postRequest", {
-          flow,
-          requestBlock: block,
-          filePath,
-          effectiveBody,
-          env,
-          startDir,
-          mutableVars,
-          resolver,
-          iteration: collectionIndex,
-          collectionPlan: scriptCollectionPlan,
-          scriptConsole,
-          response: responseLike,
-          urlSent: url,
-          headersSent: requestHeaders,
-          bodySent: bodyPayloadToScriptString(bodyPayload),
-          responseUrl: url,
-          responseHeaders: res.headers,
-          stableDocId,
-        });
+        if (!iterationOptions?.skipSharedHooks) {
+          await runSharedScriptsForPhase("postRequest", {
+            flow,
+            requestBlock: block,
+            filePath,
+            effectiveBody,
+            env,
+            startDir,
+            mutableVars,
+            resolver,
+            iteration: collectionIndex,
+            collectionPlan: scriptCollectionPlan,
+            scriptConsole,
+            response: responseLike,
+            urlSent: url,
+            headersSent: requestHeaders,
+            bodySent: bodyPayloadToScriptString(bodyPayload),
+            responseUrl: url,
+            responseHeaders: res.headers,
+            stableDocId,
+          });
+        }
       } catch (error) {
         if (error instanceof ScriptReplayError) {
           scriptReplayIndex += 1;
