@@ -34,6 +34,7 @@ export {
   DEFAULT_HEADERS_KEY,
   KULALA_SHARED_KEY,
   loadDefaultHeaders,
+  resolveUrlFromHostHeader,
 } from "./default-headers";
 export { getMagicVariables } from "./magic";
 export { type HttpFileVariableSources, resolveVariables } from "./resolve";

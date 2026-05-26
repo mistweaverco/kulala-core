@@ -92,6 +92,29 @@ export function loadDefaultHeaders(
 }
 
 /**
+ * JetBrains-style `Host` header: normalize to hostname and prefix relative request URLs.
+ * When `Host` is `https://api.example.com` and the request target is `/path`, the URL becomes
+ * `https://api.example.com/path` and `Host` is sent as `api.example.com`.
+ */
+export function resolveUrlFromHostHeader(opts: {
+  headers: Record<string, string>;
+  url: string;
+}): { headers: Record<string, string>; url: string } {
+  const headers = { ...opts.headers };
+  let url = opts.url;
+  const hostKey = Object.keys(headers).find((k) => k.toLowerCase() === "host");
+  if (!hostKey) return { headers, url };
+
+  const raw = String(headers[hostKey] ?? "");
+  const host = raw.replace(/^https?:\/\//i, "").replace(/\/.*$/, "");
+  headers[hostKey] = host;
+  if (url === "" || url.startsWith("/")) {
+    url = raw + url;
+  }
+  return { headers, url };
+}
+
+/**
  * Apply env default headers without overriding headers already set on the request.
  * Handles JetBrains-style default `Host` (sets host header and prefixes relative URLs).
  */
@@ -101,19 +124,16 @@ export function applyDefaultHeaders(opts: {
   defaultHeaders: Record<string, string>;
 }): { headers: Record<string, string>; url: string } {
   const headers = { ...opts.headers };
-  let url = opts.url;
+  const url = opts.url;
   const existingLc = new Set(Object.keys(headers).map((k) => k.toLowerCase()));
+  let addedDefaultHost = false;
 
   for (const [name, value] of Object.entries(opts.defaultHeaders)) {
     if (name === "Host") {
       if (existingLc.has("host")) continue;
-      const raw = String(value);
-      const host = raw.replace(/^https?:\/\//i, "").replace(/\/.*$/, "");
-      headers.Host = host;
-      if (url === "" || url.startsWith("/")) {
-        url = raw + url;
-      }
+      headers.Host = String(value);
       existingLc.add("host");
+      addedDefaultHost = true;
       continue;
     }
     if (!existingLc.has(name.toLowerCase())) {
@@ -122,5 +142,8 @@ export function applyDefaultHeaders(opts: {
     }
   }
 
+  if (addedDefaultHost) {
+    return resolveUrlFromHostHeader({ headers, url });
+  }
   return { headers, url };
 }
