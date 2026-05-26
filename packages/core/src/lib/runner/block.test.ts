@@ -275,6 +275,8 @@ run ${graphqlPath}
   );
   const matched = findBlocksAtCursor(doc, { line: 3, column: 1 });
   expect(matched.map((b) => b.name).sort()).toEqual([
+    "GQL_STARWARS_QUERY_FILM",
+    "GQL_STARWARS_QUERY_FILM_INLINE",
     "GQL_STARWARS_QUERY_PERSON",
     "GQL_STARWARS_QUERY_PLANET",
   ]);
@@ -289,6 +291,8 @@ test("findBlocksAtCursor expands top-level run ./file.http", async () => {
   );
   const matched = findBlocksAtCursor(doc, { line: 1, column: 1 });
   expect(matched.map((b) => b.name).sort()).toEqual([
+    "GQL_STARWARS_QUERY_FILM",
+    "GQL_STARWARS_QUERY_FILM_INLINE",
     "GQL_STARWARS_QUERY_PERSON",
     "GQL_STARWARS_QUERY_PLANET",
   ]);
