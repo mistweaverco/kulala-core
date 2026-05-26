@@ -14,6 +14,7 @@ import {
 } from "./block";
 import { doRequestFromBlock } from "./doRequest";
 import { collectSharedGrpcFlags } from "../grpc";
+import { isSharedBlockName } from "../shared-blocks";
 import {
   createRequestVarContext,
   recordRequestVarResult,
@@ -108,10 +109,16 @@ export async function runDocument(
   const flow: ScriptFlowContext = {
     globalHeaders: {},
     sharedGrpcFlags: collectSharedGrpcFlags(doc.blocks, startDir),
-    sharedBlocks: doc.blocks.filter(
-      (b) => b.name === "Shared" || b.name === "Shared each",
-    ),
+    sharedBlocks: doc.blocks.filter((b) => isSharedBlockName(b.name)),
+    sharedHttpExecuted: new Set(),
+    collectedSharedHttpResults: [],
   };
+  const { previousResults, resolver } = createRequestVarContext(
+    doc,
+    blocks[0] ?? doc.blocks[0]!,
+    stableDocId,
+  );
+  flow.requestVarResults = previousResults;
   for (const block of blocks) {
     const vars = await resolveVariables(
       env,
@@ -138,11 +145,6 @@ export async function runDocument(
       }
     }
 
-    const { previousResults, resolver } = createRequestVarContext(
-      doc,
-      block,
-      stableDocId,
-    );
     const result = await doRequestFromBlock(
       block,
       doc.filepath,
@@ -153,6 +155,19 @@ export async function runDocument(
       flow,
       { doc },
     );
+
+    if (flow.collectedSharedHttpResults?.length) {
+      for (const item of flow.collectedSharedHttpResults) {
+        const blockName =
+          typeof item.blockName === "string" ? item.blockName : undefined;
+        results.push({
+          ...(item as KulalaRequestSuccessResponse),
+          blockName,
+        });
+      }
+      flow.collectedSharedHttpResults = [];
+    }
+
     const resultItems = Array.isArray(result) ? result : [result];
     for (const item of resultItems) {
       results.push({ ...item, blockName: block.name });

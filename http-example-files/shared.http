@@ -1,0 +1,20 @@
+### KULALA_SHARED
+
+< {%
+  request.variables.set("users", [
+    { name: "Alice" },
+    { name: "Bob" },
+  ])
+%}
+
+GET https://httpbin.org/get?foobar=1 HTTP/1.1
+Content-Type: application/json
+
+### FOO1
+
+GET https://httpbin.org/get?user={{users[*].name}} HTTP/1.1
+Content-Type: application/json
+
+### FOO2
+
+GET https://httpbin.org/get?user={{users[*].name}} HTTP/1.1

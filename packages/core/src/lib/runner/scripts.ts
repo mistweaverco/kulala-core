@@ -52,10 +52,19 @@ export type ScriptRunScope = {
 export type ScriptFlowContext = {
   /** "Execution flow" local headers (not persisted). */
   globalHeaders: Record<string, string>;
-  /** `# @grpc-*` from Shared blocks in the document. */
+  /** `# @grpc-*` from KULALA_SHARED blocks in the document. */
   sharedGrpcFlags?: KulalaGrpcFlag[];
-  /** `### Shared` / `### Shared each` blocks (scripts run around each request). */
+  /** `### KULALA_SHARED` / `### KULALA_SHARED_EACH` blocks (scripts run around each request). */
   sharedBlocks?: KulalaBlock[];
+  /** Shared block HTTP requests already executed (`KULALA_SHARED` runs once per document run). */
+  sharedHttpExecuted?: Set<string>;
+  /** HTTP results from shared blocks in the current request, flushed by runDocument. */
+  collectedSharedHttpResults?: Record<string, unknown>[];
+  /** In-memory prior responses for {{BLOCK.response}} during a document run. */
+  requestVarResults?: Map<
+    string,
+    import("../variables/request-vars").PreviousResponse
+  >;
 };
 
 type ScriptHeaders = {

@@ -1,5 +1,6 @@
 import type { KulalaDocument } from "../parser/types";
 import type { KulalaBlock } from "../parser/types/block";
+import { isSharedBlockName } from "../shared-blocks";
 type BlockWithRunMeta = KulalaBlock & {
   __fileRunExpander?: boolean;
   __runParentBlock?: string;
@@ -8,7 +9,13 @@ type BlockWithRunMeta = KulalaBlock & {
 
 /** Skip wrapper blocks that only expand to `run ./file.http` targets. */
 export function filterExecutableBlocks(blocks: KulalaBlock[]): KulalaBlock[] {
-  return blocks.filter((b) => !(b as BlockWithRunMeta).__fileRunExpander);
+  return blocks.filter((b) => {
+    const meta = b as BlockWithRunMeta;
+    if (meta.__fileRunExpander) return false;
+    // KULALA_SHARED* HTTP runs via hooks before other blocks (see doRequest.ts).
+    if (isSharedBlockName(b.name)) return false;
+    return true;
+  });
 }
 
 /** Expand a file-run wrapper or top-level run selection into concrete request blocks. */

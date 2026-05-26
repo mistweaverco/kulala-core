@@ -1,4 +1,5 @@
 import type { KulalaBlock } from "../parser/types/block";
+import { isSharedBlockName } from "../shared-blocks";
 import type { KulalaOperator } from "../parser/types/operator";
 import type { KulalaGrpcFlag } from "./types";
 import { resolve } from "node:path";
@@ -30,14 +31,14 @@ export function grpcFlagsFromOperators(
   return flags;
 }
 
-/** Collect `# @grpc-*` flags from Shared blocks in the document. */
+/** Collect `# @grpc-*` flags from KULALA_SHARED blocks in the document. */
 export function collectSharedGrpcFlags(
   blocks: KulalaBlock[],
   cwd: string,
 ): KulalaGrpcFlag[] {
   const out: KulalaGrpcFlag[] = [];
   for (const block of blocks) {
-    if (block.name === "Shared" || block.name === "Shared each") {
+    if (isSharedBlockName(block.name)) {
       out.push(...grpcFlagsFromOperators(block.operators, cwd));
     }
   }
