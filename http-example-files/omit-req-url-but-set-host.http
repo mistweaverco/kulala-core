@@ -1,6 +1,6 @@
 ### Omit the request URL but set the host header
 
-@host = httpbin.org:443
+@host = httpbin.org
 
 GET /get HTTP/1.1
 Host: {{host}}

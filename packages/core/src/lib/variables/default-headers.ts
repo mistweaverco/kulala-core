@@ -91,10 +91,33 @@ export function loadDefaultHeaders(
   return { ...kulalaShared, ...perEnv };
 }
 
+/** Strip scheme/path from a Host header value for the wire-format `Host` field. */
+function hostHeaderAuthority(raw: string): string {
+  return raw.replace(/^https?:\/\//i, "").replace(/\/.*$/, "");
+}
+
+/**
+ * Build a URL origin from a Host header value (JetBrains HTTP Client).
+ * Full URLs keep their scheme; bare hostnames default to `http://`.
+ */
+function hostHeaderValueToUrlBase(raw: string): string {
+  const trimmed = raw.trim();
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      const parsed = new URL(trimmed);
+      return `${parsed.protocol}//${parsed.host}`;
+    } catch {
+      return trimmed.replace(/\/+$/, "");
+    }
+  }
+  return `http://${hostHeaderAuthority(trimmed)}`;
+}
+
 /**
  * JetBrains-style `Host` header: normalize to hostname and prefix relative request URLs.
  * When `Host` is `https://api.example.com` and the request target is `/path`, the URL becomes
  * `https://api.example.com/path` and `Host` is sent as `api.example.com`.
+ * Bare hostnames (`api.example.com`) use `http://` as the default scheme.
  */
 export function resolveUrlFromHostHeader(opts: {
   headers: Record<string, string>;
@@ -106,10 +129,10 @@ export function resolveUrlFromHostHeader(opts: {
   if (!hostKey) return { headers, url };
 
   const raw = String(headers[hostKey] ?? "");
-  const host = raw.replace(/^https?:\/\//i, "").replace(/\/.*$/, "");
-  headers[hostKey] = host;
+  headers[hostKey] = hostHeaderAuthority(raw);
   if (url === "" || url.startsWith("/")) {
-    url = raw + url;
+    const base = hostHeaderValueToUrlBase(raw);
+    url = url === "" ? `${base}/` : `${base}${url}`;
   }
   return { headers, url };
 }
