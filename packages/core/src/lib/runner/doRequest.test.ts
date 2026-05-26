@@ -46,7 +46,7 @@ function unwrapHttpDoRequestResult(
 async function httpDoRequestFromBlock(
   ...args: Parameters<typeof doRequestFromBlock>
 ): Promise<HttpDoRequestResult> {
-  return unwrapHttpDoRequestResult(await httpDoRequestFromBlock(...args));
+  return unwrapHttpDoRequestResult(await doRequestFromBlock(...args));
 }
 
 let server: ReturnType<typeof Bun.serve>;
@@ -429,7 +429,7 @@ test("doRequestFromBlock: $kulala.request.skip in pre-script skips HTTP", async 
     },
   });
 
-  const result = await httpDoRequestFromBlock(
+  const result = await doRequestFromBlock(
     block,
     "/tmp/example.http",
     undefined,
@@ -439,10 +439,8 @@ test("doRequestFromBlock: $kulala.request.skip in pre-script skips HTTP", async 
     { globalHeaders: {} },
   );
 
-  expect(result.success).toBe(true);
-  if (result.success && "skipped" in result) {
-    expect(result.skipped).toBe(true);
-  }
+  expect(result).toHaveProperty("success", true);
+  expect(result).toHaveProperty("skipped", true);
 });
 
 test("doRequestFromBlock: $kulala.request.replay in pre-script re-runs with updated vars", async () => {
