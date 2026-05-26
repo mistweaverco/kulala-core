@@ -1,7 +1,11 @@
 import { mkdirSync, rmSync, writeFileSync } from "fs";
 import { join } from "path";
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { applyDefaultHeaders, loadDefaultHeaders } from "./default-headers";
+import {
+  applyDefaultHeaders,
+  loadDefaultHeaders,
+  resolveUrlFromHostHeader,
+} from "./default-headers";
 import { mergeHttpClientEnvCatalog } from "./environments";
 
 const tmpRoot = join(import.meta.dir, ".tmp-default-headers-test");
@@ -139,4 +143,22 @@ test("applyDefaultHeaders: Host prefixes relative URL", () => {
   });
   expect(result.headers.Host).toBe("api.example.com");
   expect(result.url).toBe("https://api.example.com/api");
+});
+
+test("resolveUrlFromHostHeader: prefixes relative URL from request Host header", () => {
+  const result = resolveUrlFromHostHeader({
+    headers: { Host: "https://httpbin.org" },
+    url: "/",
+  });
+  expect(result.headers.Host).toBe("httpbin.org");
+  expect(result.url).toBe("https://httpbin.org/");
+});
+
+test("resolveUrlFromHostHeader: leaves absolute URL unchanged", () => {
+  const result = resolveUrlFromHostHeader({
+    headers: { Host: "https://httpbin.org" },
+    url: "https://example.com/api",
+  });
+  expect(result.headers.Host).toBe("httpbin.org");
+  expect(result.url).toBe("https://example.com/api");
 });

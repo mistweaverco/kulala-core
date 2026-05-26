@@ -38,6 +38,7 @@ import { buildScriptRequestContextFromBlock } from "./script-request-context";
 import {
   applyDefaultHeaders,
   loadDefaultHeaders,
+  resolveUrlFromHostHeader,
   substituteInObject,
   substituteInObjectAsync,
   substituteInString,
@@ -247,6 +248,7 @@ export async function resolveRequestFromBlock(
     }
   }
   headers = normalizeAuthorizationHeader(headers);
+  ({ headers, url } = resolveUrlFromHostHeader({ headers, url }));
 
   let body: typeof block.request.body;
   try {

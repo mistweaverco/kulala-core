@@ -10,6 +10,10 @@ const implicitFirstRequestPath = join(
   import.meta.dir,
   "../../../../../http-example-files/implicit-first-request.http",
 );
+const omitReqUrlHostPath = join(
+  import.meta.dir,
+  "../../../../../http-example-files/omit-req-url-but-set-host.http",
+);
 
 const graphqlContent = `### GQL_TEST
 
@@ -21,6 +25,25 @@ query { foo }
 `;
 
 describe("resolveRequestFromBlock", () => {
+  test("omit-req-url-but-set-host: resolves URL from Host header variable", async () => {
+    const content = readFileSync(omitReqUrlHostPath, "utf8");
+    const doc = await getDocument(content, omitReqUrlHostPath);
+    const block = doc.blocks[0];
+    expect(block).toBeDefined();
+
+    const result = await resolveRequestFromBlock(
+      block!,
+      omitReqUrlHostPath,
+      block!.preambleVariables,
+      undefined,
+    );
+    expect(result).toMatchObject({ ok: true });
+    if (!("ok" in result) || !result.ok) return;
+
+    expect(result.request.url).toBe("https://httpbin.org/");
+    expect(result.request.headers.Host).toBe("httpbin.org");
+  });
+
   test("adds Content-Type application/json for GRAPHQL", async () => {
     const doc = await getDocument(graphqlContent, "/test.http");
     const block = findBlockAtCursor(doc, { line: 5, column: 1 });

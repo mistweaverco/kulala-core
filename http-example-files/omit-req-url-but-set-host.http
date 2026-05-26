@@ -1,0 +1,13 @@
+### Omit the request URL but set the host header
+
+@host = httpbin.org:443
+
+GET /get HTTP/1.1
+Host: {{host}}
+
+### Patch wrong host-format
+
+@host = https://httpbin.org
+
+GET /get HTTP/1.1
+Host: {{host}}
