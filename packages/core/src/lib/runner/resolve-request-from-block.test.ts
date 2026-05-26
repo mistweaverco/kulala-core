@@ -25,7 +25,7 @@ query { foo }
 `;
 
 describe("resolveRequestFromBlock", () => {
-  test("omit-req-url-but-set-host: resolves URL from Host header variable", async () => {
+  test("omit-req-url-but-set-host: bare hostname in Host header", async () => {
     const content = readFileSync(omitReqUrlHostPath, "utf8");
     const doc = await getDocument(content, omitReqUrlHostPath);
     const block = doc.blocks[0];
@@ -40,7 +40,26 @@ describe("resolveRequestFromBlock", () => {
     expect(result).toMatchObject({ ok: true });
     if (!("ok" in result) || !result.ok) return;
 
-    expect(result.request.url).toBe("https://httpbin.org/");
+    expect(result.request.url).toBe("http://httpbin.org/get");
+    expect(result.request.headers.Host).toBe("httpbin.org");
+  });
+
+  test("omit-req-url-but-set-host: full URL in Host header keeps scheme", async () => {
+    const content = readFileSync(omitReqUrlHostPath, "utf8");
+    const doc = await getDocument(content, omitReqUrlHostPath);
+    const block = doc.blocks[1];
+    expect(block).toBeDefined();
+
+    const result = await resolveRequestFromBlock(
+      block!,
+      omitReqUrlHostPath,
+      block!.preambleVariables,
+      undefined,
+    );
+    expect(result).toMatchObject({ ok: true });
+    if (!("ok" in result) || !result.ok) return;
+
+    expect(result.request.url).toBe("https://httpbin.org/get");
     expect(result.request.headers.Host).toBe("httpbin.org");
   });
 

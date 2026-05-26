@@ -154,6 +154,24 @@ test("resolveUrlFromHostHeader: prefixes relative URL from request Host header",
   expect(result.url).toBe("https://httpbin.org/");
 });
 
+test("resolveUrlFromHostHeader: bare hostname defaults to http scheme", () => {
+  const result = resolveUrlFromHostHeader({
+    headers: { Host: "httpbin.org" },
+    url: "/get",
+  });
+  expect(result.headers.Host).toBe("httpbin.org");
+  expect(result.url).toBe("http://httpbin.org/get");
+});
+
+test("resolveUrlFromHostHeader: bare hostname with port", () => {
+  const result = resolveUrlFromHostHeader({
+    headers: { Host: "localhost:8080" },
+    url: "/api",
+  });
+  expect(result.headers.Host).toBe("localhost:8080");
+  expect(result.url).toBe("http://localhost:8080/api");
+});
+
 test("resolveUrlFromHostHeader: leaves absolute URL unchanged", () => {
   const result = resolveUrlFromHostHeader({
     headers: { Host: "https://httpbin.org" },
