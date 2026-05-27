@@ -109,7 +109,7 @@ const kulalaParser: KulalaParser = {
               },
             ],
           };
-          writeRequestResponseToStdout(successResponse);
+          await writeRequestResponseToStdout(successResponse);
         } catch (error) {
           const errorResponse: KulalaResponseWrapper = {
             type: "error",
@@ -121,7 +121,7 @@ const kulalaParser: KulalaParser = {
               } as KulalaRequestErrorResponse & { promptId: string },
             ],
           };
-          writeRequestResponseToStdout(errorResponse);
+          await writeRequestResponseToStdout(errorResponse);
         }
         break;
       }
@@ -131,13 +131,13 @@ const kulalaParser: KulalaParser = {
             stdIn.op,
             stdIn as Record<string, unknown>,
           );
-          writeRequestResponseToStdout({
+          await writeRequestResponseToStdout({
             type: "crypto",
             success: true,
             value,
           });
         } catch (error) {
-          writeRequestResponseToStdout({
+          await writeRequestResponseToStdout({
             type: "crypto",
             success: false,
             error: error instanceof Error ? error.message : String(error),
@@ -158,7 +158,7 @@ const kulalaParser: KulalaParser = {
           });
           const rawBody =
             typeof res.body === "string" ? res.body : res.body.toString("utf8");
-          writeRequestResponseToStdout({
+          await writeRequestResponseToStdout({
             type: "http_request",
             success: true,
             status: res.statusCode,
@@ -167,7 +167,7 @@ const kulalaParser: KulalaParser = {
             url: res.url,
           });
         } catch (error) {
-          writeRequestResponseToStdout({
+          await writeRequestResponseToStdout({
             type: "http_request",
             success: false,
             error: error instanceof Error ? error.message : String(error),
@@ -183,7 +183,10 @@ const kulalaParser: KulalaParser = {
         } else {
           for (const name of names) deleteVariable("global", name);
         }
-        writeRequestResponseToStdout({ type: "clear_globals", success: true });
+        await writeRequestResponseToStdout({
+          type: "clear_globals",
+          success: true,
+        });
         break;
       }
       case "environments": {
