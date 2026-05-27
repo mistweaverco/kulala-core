@@ -213,10 +213,10 @@ export const KulalaRunner = () => {
     ): Promise<void> => {
       const res = await runDocument(doc, limit, options);
       if (res.type === "error") {
-        writeRequestResponseToStderr(res);
+        await writeRequestResponseToStderr(res);
         return;
       }
-      writeRequestResponseToStdout(res);
+      await writeRequestResponseToStdout(res);
     },
   };
 };

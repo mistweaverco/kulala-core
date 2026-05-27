@@ -1,7 +1,9 @@
 import type { KulalaDocument, KulalaStdinParsed } from "../../types";
 
-export const writeRequestResponseToStderr = (res: unknown): void => {
-  Bun.stderr.write(JSON.stringify(res, null, 2));
+export const writeRequestResponseToStderr = async (
+  res: unknown,
+): Promise<void> => {
+  await Bun.write(Bun.stderr, JSON.stringify(res, null, 2));
   process.exit(1);
 };
 
@@ -10,8 +12,10 @@ export const writeErrorToStderr = (error: string): void => {
   Bun.stderr.write(JSON.stringify({ success: false, error }, null, 2) + "\n");
 };
 
-export const writeRequestResponseToStdout = (res: unknown): void => {
-  Bun.stdout.write(JSON.stringify(res, null, 2));
+export const writeRequestResponseToStdout = async (
+  res: unknown,
+): Promise<void> => {
+  await Bun.write(Bun.stdout, JSON.stringify(res, null, 2));
   process.exit(0);
 };
 
