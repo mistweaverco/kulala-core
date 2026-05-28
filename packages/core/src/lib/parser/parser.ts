@@ -765,6 +765,7 @@ export const getDocument = async (
     directives,
     blocks: allBlocks,
     hasErrors: allErrors.length > 0,
+    ...(allErrors.length > 0 ? { errors: allErrors } : {}),
     directiveLinesRemoved,
     nativeBlockCount,
     ...(Object.keys(fileHeaderVariables).length > 0

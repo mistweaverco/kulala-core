@@ -4,7 +4,7 @@
   request.variables.set("users", [
     { name: "Alice" },
     { name: "Bob" },
-  ])
+  ]);
 %}
 
 GET https://httpbin.org/get?foobar=1 HTTP/1.1
@@ -12,8 +12,16 @@ Content-Type: application/json
 
 ### FOO1
 
+< {%
+  request.variables.set("users", [
+    { name: "Alice" },
+    { name: "Bob" },
+  ]);
+%}
+
 GET https://httpbin.org/get?user={{users[*].name}} HTTP/1.1
 Content-Type: application/json
+X-Header: {{users[*].name}}
 
 ### FOO2
 

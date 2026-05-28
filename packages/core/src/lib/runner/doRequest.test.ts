@@ -1251,7 +1251,8 @@ test("doRequestFromBlock: JSONPath collection {{users[*].name}} expands requests
           type: "preRequest",
           source: "inline",
           lang: "js",
-          content: `request.variables.set("users", [
+          content: `client.log("pre-" + String(request.iteration()));
+          request.variables.set("users", [
             { name: "Alice" },
             { name: "Bob" },
           ]);`,
@@ -1283,6 +1284,11 @@ test("doRequestFromBlock: JSONPath collection {{users[*].name}} expands requests
   });
   expect(urls[0]).toContain("user=Alice");
   expect(urls[1]).toContain("user=Bob");
+
+  const msgs0 = (batch[0]!.scriptConsole ?? []).map((l) => l.message);
+  const msgs1 = (batch[1]!.scriptConsole ?? []).map((l) => l.message);
+  expect(msgs0).toContain("pre-0");
+  expect(msgs1).toContain("pre-1");
 });
 
 test("doRequestFromBlock: pre-request JS with await still substitutes {{NAME}} in URL", async () => {

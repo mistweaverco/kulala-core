@@ -513,30 +513,88 @@ async function executeLuaScript(
     client: ScriptClient;
     request: ScriptRequest;
     response: ScriptResponse;
+    kulala: ReturnType<typeof buildKulalaScriptApi>;
   },
 ): Promise<void> {
   const mod = await import("wasmoon-lua5.1");
-  const LuaCtor =
-    (mod as unknown as { Lua?: unknown }).Lua ??
-    (mod as unknown as { default?: { Lua?: unknown } }).default?.Lua ??
-    undefined;
-  if (
-    !LuaCtor ||
-    typeof (LuaCtor as { create?: unknown }).create !== "function"
-  ) {
-    throw new Error("Lua runtime is unavailable (Lua.create export not found)");
-  }
-  const lua = await (LuaCtor as { create: () => Promise<Lua> }).create();
+
+  // Bun `--compile` produces a single binary without `node_modules` on disk.
+  // `wasmoon-lua5.1` loads `dist/liblua5.1.wasm` via filesystem at runtime,
+  // so we force Bun to embed the WASM and pass a resolved location to the factory.
+  const createLuaEngine = async (): Promise<Lua> => {
+    type LuaFactoryInstance = {
+      createEngine: () => Promise<Lua>;
+    };
+    type LuaFactoryConstructor = new (
+      wasmLocationOrAsset?: unknown,
+    ) => LuaFactoryInstance;
+
+    const LuaFactoryCtor =
+      (mod as unknown as { LuaFactory?: unknown }).LuaFactory ??
+      (mod as unknown as { default?: { LuaFactory?: unknown } }).default
+        ?.LuaFactory ??
+      undefined;
+
+    if (LuaFactoryCtor && typeof LuaFactoryCtor === "function") {
+      const LuaFactory = LuaFactoryCtor as LuaFactoryConstructor;
+      let wasmAsset: unknown = undefined;
+      try {
+        const wasmMod = (await import(
+          "wasmoon-lua5.1/dist/liblua5.1.wasm"
+        )) as unknown as { default?: unknown };
+        wasmAsset = wasmMod.default;
+      } catch {
+        // If this import fails (older wasmoon package layout), fall back below.
+      }
+
+      try {
+        // Wasmoon supports passing a custom wasm location as the first argument
+        // in browser/web setups; in Bun it also forces the asset to be bundled.
+        const factory = new LuaFactory(wasmAsset);
+        return await factory.createEngine();
+      } catch {
+        // Some versions expect the wasm location argument to be omitted/optional.
+        const factory = new LuaFactory();
+        return await factory.createEngine();
+      }
+    }
+
+    const LuaCtor =
+      (mod as unknown as { Lua?: unknown }).Lua ??
+      (mod as unknown as { default?: { Lua?: unknown } }).default?.Lua ??
+      undefined;
+    if (
+      !LuaCtor ||
+      typeof (LuaCtor as { create?: unknown }).create !== "function"
+    ) {
+      throw new Error(
+        "Lua runtime is unavailable (Lua/LuaFactory export not found)",
+      );
+    }
+    return await (LuaCtor as { create: () => Promise<Lua> }).create();
+  };
+
+  const lua = await createLuaEngine();
   const luaCtx = lua.ctx as { [k: string]: unknown };
 
   // Bridge: mirror the JS shape closely.
   luaCtx.client = {
     log: (...args: unknown[]) => ctx.client.log(...args),
     test: (name: string, func: unknown) => {
-      // Lua cannot pass JS functions; keep API present for parity.
-      void name;
-      void func;
-      throw new Error("client.test is not supported in Lua scripts");
+      if (typeof name !== "string" || name.trim().length === 0) {
+        throw new Error("client.test: name must be a non-empty string");
+      }
+      if (typeof func !== "function") {
+        throw new Error("client.test: func must be a function");
+      }
+      try {
+        // wasmoon functions are callable from JS
+        (func as () => unknown)();
+        ctx.client.log(`✓ ${name}`);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        throw new Error(`✗ ${name}: ${msg}`);
+      }
     },
     assert: (cond: unknown, msg?: string) => ctx.client.assert(cond, msg),
     exit: () => ctx.client.exit(),
@@ -620,8 +678,101 @@ async function executeLuaScript(
     },
   };
 
+  // `$kulala` cannot be referenced as an identifier in Lua, but can be accessed via `_G["$kulala"]`.
+  // Also expose as `kulala` for convenience.
+  luaCtx.kulala = ctx.kulala;
+  luaCtx["$kulala"] = ctx.kulala;
+
+  // JetBrains parity helpers (Lua side).
+  luaCtx.sleep = (ms: number) =>
+    new Promise<void>((resolve) =>
+      setTimeout(resolve, Math.max(0, Number(ms) || 0)),
+    );
+  luaCtx.atob = (data: string) =>
+    Buffer.from(String(data), "base64").toString("binary");
+  luaCtx.btoa = (data: string) =>
+    Buffer.from(String(data), "binary").toString("base64");
+
+  // Child process helpers (same names as JS script globals).
+  luaCtx.exec = exec;
+  luaCtx.execFile = execFile;
+  luaCtx.execSync = execSync;
+  luaCtx.execFileSync = execFileSync;
+  luaCtx.spawn = spawn;
+  luaCtx.spawnSync = spawnSync;
+
   try {
-    await lua.doString(content);
+    const prelude = `
+-- kulala-core Lua helpers
+local function __kulala_is_array(t)
+  if type(t) ~= "table" then return false end
+  local n = #t
+  for k, _ in pairs(t) do
+    if type(k) ~= "number" or k < 1 or k > n or k % 1 ~= 0 then
+      return false
+    end
+  end
+  return true
+end
+
+local function __kulala_escape_str(s)
+  s = tostring(s)
+  s = s:gsub("\\\\", "\\\\\\\\")
+  s = s:gsub("\\n", "\\\\n")
+  s = s:gsub("\\r", "\\\\r")
+  s = s:gsub("\\t", "\\\\t")
+  s = s:gsub("\\"", "\\\\\\"")
+  return "\\"" .. s .. "\\""
+end
+
+local function __kulala_json_encode(v)
+  local tv = type(v)
+  if tv == "nil" then return "null" end
+  if tv == "string" then return __kulala_escape_str(v) end
+  if tv == "number" then return tostring(v) end
+  if tv == "boolean" then return v and "true" or "false" end
+  if tv ~= "table" then return __kulala_escape_str(v) end
+
+  if __kulala_is_array(v) then
+    local out = {}
+    for i = 1, #v do
+      out[#out + 1] = __kulala_json_encode(v[i])
+    end
+    return "[" .. table.concat(out, ",") .. "]"
+  end
+
+  local out = {}
+  for k, val in pairs(v) do
+    out[#out + 1] = __kulala_escape_str(k) .. ":" .. __kulala_json_encode(val)
+  end
+  return "{" .. table.concat(out, ",") .. "}"
+end
+
+-- Wrap setters so Lua tables are passed as JSON strings to JS.
+do
+  local __orig_req_set = request and request.variables and request.variables.set
+  if type(__orig_req_set) == "function" then
+    request.variables.set = function(name, value)
+      if type(value) == "table" then
+        return __orig_req_set(name, __kulala_json_encode(value))
+      end
+      return __orig_req_set(name, value)
+    end
+  end
+
+  local __orig_global_set = client and client.global and client.global.set
+  if type(__orig_global_set) == "function" then
+    client.global.set = function(name, value)
+      if type(value) == "table" then
+        return __orig_global_set(name, __kulala_json_encode(value))
+      end
+      return __orig_global_set(name, value)
+    end
+  end
+end
+`;
+
+    await lua.doString(`${prelude}\n${content}`);
   } finally {
     lua.global.close();
   }
@@ -784,6 +935,7 @@ export const runScripts = async (
           client: clientObj,
           request: requestObj,
           response: responseObj,
+          kulala: kulalaApi,
         });
       } else {
         const loader = script.lang === "ts" ? "ts" : "js";

@@ -2,6 +2,7 @@ import type { KulalaVariable } from "./variable";
 import type { KulalaBlock } from "./block";
 import type { KulalaDirective } from "./directive";
 import type { KulalaOperator } from "./operator";
+import type { KulalaError } from "./error";
 export type KulalaDocument = {
   filepath?: string;
   variables?: Record<string, KulalaVariable>;
@@ -14,6 +15,8 @@ export type KulalaDocument = {
   directives: KulalaDirective[];
   blocks: KulalaBlock[];
   hasErrors?: boolean;
+  /** All parse/import/run resolution errors with absolute (1-based) line numbers. */
+  errors?: KulalaError[];
   /** Number of directive lines removed from the top of the file. Used to adjust cursor positions. */
   directiveLinesRemoved?: number;
   /** Number of native blocks (blocks from the current file, excluding imported/run blocks). */

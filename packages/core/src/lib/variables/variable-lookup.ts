@@ -5,6 +5,34 @@ import {
   splitVariableExpression,
 } from "./jsonpath";
 
+function tryCoerceToPlainObject(value: unknown): unknown {
+  if (value === null || value === undefined) return value;
+  if (typeof value !== "object") return value;
+  // Some runtimes (e.g. Lua bridge values) return proxied objects that
+  // don't behave like plain JS under JSON.stringify/Object.entries.
+  try {
+    const maybe = value as { toObject?: unknown };
+    if (typeof maybe.toObject === "function") {
+      return (maybe.toObject as () => unknown)();
+    }
+  } catch {
+    // ignore
+  }
+  return value;
+}
+
+function safeJsonStringify(value: unknown): string | undefined {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    try {
+      return JSON.stringify(tryCoerceToPlainObject(value));
+    } catch {
+      return undefined;
+    }
+  }
+}
+
 /**
  * Parse a value stored in the flat variable map (JSON object/array or plain string).
  * JetBrains HTTP Client returns structured values from get/set, not only strings.
@@ -30,7 +58,11 @@ export function formatVariableForSubstitution(value: unknown): string {
   if (typeof value === "string") return value;
   if (typeof value === "number" || typeof value === "boolean")
     return String(value);
-  if (typeof value === "object") return JSON.stringify(value);
+  if (typeof value === "object") {
+    const json = safeJsonStringify(value);
+    if (json !== undefined) return json;
+    return String(value);
+  }
   return String(value);
 }
 
@@ -139,8 +171,13 @@ export function writeVariableToMaps(
   flat: Record<string, string>,
 ): void {
   if (value !== null && typeof value === "object") {
-    flattenToDotPaths(value, name, flat);
-    flat[name] = formatVariableForSubstitution(value);
+    const coerced = tryCoerceToPlainObject(value);
+    try {
+      flattenToDotPaths(coerced, name, flat);
+    } catch {
+      // best-effort only; keep root key usable for {{name}} and get()
+    }
+    flat[name] = formatVariableForSubstitution(coerced);
     return;
   }
   flat[name] = formatVariableForSubstitution(value);
