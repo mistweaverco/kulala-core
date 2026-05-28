@@ -3,6 +3,7 @@ import {
   afterEach,
   beforeAll,
   beforeEach,
+  describe,
   expect,
   test,
 } from "bun:test";
@@ -221,7 +222,7 @@ afterEach(() => {
   closeDb();
 });
 
-test("doRequestFromBlock: GET request returns success response (real got)", async () => {
+test("doRequestFromBlock: GET request returns success response (real response)", async () => {
   const block = makeBlock();
   const result = await httpDoRequestFromBlock(
     block,
@@ -1510,7 +1511,7 @@ test("doRequestFromBlock: GRAPHQL sends as POST with query only", async () => {
   }
 });
 
-test("doRequestFromBlock: returns error response when got fails (connection refused)", async () => {
+test("doRequestFromBlock: returns error response when request fails (connection refused)", async () => {
   const block = makeBlock({
     request: {
       method: "GET",
@@ -1632,6 +1633,155 @@ test("doRequestFromBlock: GRAPHQL with body from file sends JSON query payload",
   if (result.success && result.body.type === "json") {
     expect(result.body.content).toEqual({ data: {} });
   }
+});
+
+describe("body with or without content-type", () => {
+  test("without body, with content-type", async () => {
+    const { mkdtempSync } = await import("fs");
+    const { join } = await import("path");
+    const { tmpdir } = await import("os");
+    const dir = mkdtempSync(join(tmpdir(), "kulala-body-"));
+    const bodyFile = join(dir, "input.json");
+    await Bun.write(bodyFile, JSON.stringify({ from: "file", n: 42 }));
+    const httpFilePath = join(dir, "request.http");
+
+    const contentType = "application/json";
+
+    const block = makeBlock({
+      request: {
+        method: "POST",
+        url: `${baseUrl}/echo-body` as KulalaHttpURL,
+        headerSection: [
+          {
+            type: "header",
+            name: "Content-Type",
+            value: contentType,
+          },
+        ],
+      },
+    });
+
+    const result = await httpDoRequestFromBlock(
+      block,
+      httpFilePath,
+      undefined,
+      undefined,
+      undefined,
+    );
+
+    expect(result).toHaveProperty("success", true);
+    // Body should be undefined since no body was provided,
+    expect(block.request?.body).toBeUndefined();
+    // Content-Type should be present (case-insensitive)
+    // since it was provided in the block's headerSection,
+    // even if the underlying HTTP client normalizes or
+    // omits it in the final request object.
+    const headers: Record<string, string> = result.request?.headers ?? {};
+    const contentTypeValue = Object.keys(headers).find(
+      (k) => k.toLowerCase() === "content-type",
+    );
+    expect(contentTypeValue).toBeDefined();
+    expect(headers[contentTypeValue!]).toBe(contentType);
+  });
+  test("with body, with content-type", async () => {
+    const { mkdtempSync } = await import("fs");
+    const { join } = await import("path");
+    const { tmpdir } = await import("os");
+    const dir = mkdtempSync(join(tmpdir(), "kulala-body-"));
+    const bodyFile = join(dir, "input.json");
+    await Bun.write(bodyFile, JSON.stringify({ from: "file", n: 42 }));
+    const httpFilePath = join(dir, "request.http");
+
+    const contentType = "application/json";
+
+    const block = makeBlock({
+      request: {
+        method: "POST",
+        url: `${baseUrl}/echo-body` as KulalaHttpURL,
+        headerSection: [
+          {
+            type: "header",
+            name: "Content-Type",
+            value: contentType,
+          },
+        ],
+        body: { __bodyFromFile: "input.json" },
+      },
+    });
+
+    const result = await httpDoRequestFromBlock(
+      block,
+      httpFilePath,
+      undefined,
+      undefined,
+      undefined,
+    );
+
+    expect(result).toHaveProperty("success", true);
+    if (
+      result.success &&
+      result.body.type === "json" &&
+      "content" in result.body
+    ) {
+      const content = result.body.content as { echoed?: string };
+      expect(content.echoed).toBe(JSON.stringify({ from: "file", n: 42 }));
+    }
+    // Content-Type should be present (case-insensitive)
+    // since it was provided in the block's headerSection,
+    // even if the underlying HTTP client normalizes or
+    // omits it in the final request object.
+    const headers: Record<string, string> = result.request?.headers ?? {};
+    const contentTypeValue = Object.keys(headers).find(
+      (k) => k.toLowerCase() === "content-type",
+    );
+    expect(contentTypeValue).toBeDefined();
+    expect(headers[contentTypeValue!]).toBe(contentType);
+  });
+
+  test("with body, without content-type", async () => {
+    const { mkdtempSync } = await import("fs");
+    const { join } = await import("path");
+    const { tmpdir } = await import("os");
+    const dir = mkdtempSync(join(tmpdir(), "kulala-body-"));
+    const bodyFile = join(dir, "input.json");
+    await Bun.write(bodyFile, JSON.stringify({ from: "file", n: 42 }));
+    const httpFilePath = join(dir, "request.http");
+
+    const block = makeBlock({
+      request: {
+        method: "POST",
+        url: `${baseUrl}/echo-body` as KulalaHttpURL,
+        headerSection: [],
+        body: { __bodyFromFile: "input.json" },
+      },
+    });
+
+    const result = await httpDoRequestFromBlock(
+      block,
+      httpFilePath,
+      undefined,
+      undefined,
+      undefined,
+    );
+
+    expect(result).toHaveProperty("success", true);
+    if (
+      result.success &&
+      result.body.type === "json" &&
+      "content" in result.body
+    ) {
+      const content = result.body.content as { echoed?: string };
+      expect(content.echoed).toBe(JSON.stringify({ from: "file", n: 42 }));
+    }
+
+    // Content-Type should not be present since
+    // it was not provided in the block's headerSection,
+    const headers: Record<string, string> = result.request?.headers ?? {};
+    const contentTypeValue = Object.keys(headers).find(
+      (k) => k.toLowerCase() === "content-type",
+    );
+    expect(contentTypeValue).toBeUndefined();
+  });
 });
 
 test("doRequestFromBlock: reads request body from file (JetBrains < path syntax)", async () => {

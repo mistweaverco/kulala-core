@@ -40,6 +40,8 @@ between distributed systems.
 
 - HTTP RESTful (1.0, 1.1, 2, 3)
 - GraphQL (queries, mutations)
+- gRPC
+- WebSockets
 
 ### Variables
 
@@ -72,8 +74,15 @@ is compatible with the IntelliJ HTTP Client:
 
 ## Usage
 
+### Example .http files
+
+See the [http-example-files][http-example-files]
+directory for example .http files.
+
+### Example integrations
+
 See the [examples][examples]
-directory for usage examples.
+directory for integration examples.
 
 ### curl binary
 
@@ -86,4 +95,5 @@ You can override the data or cache root with `KULALA_CORE_DATA_DIR` / `KULALA_CO
 - **Published library** (`dist/`): the npm build sets `__KULALA_EMBED_CURL__=false`, so the package does **not** embed curl from the machine that ran `npm publish`.
 - **`bun build --compile`**: run `packages/core/scripts/generate-vendored-curl.ts` (optionally with `--target=bun-…` for cross-compiles) so the matching curl is present in the cache and embedded for that build, then compile with `--define __KULALA_EMBED_CURL__=true`.
 
-[examples]: https://github.com/mistweaverco/kulala-core/tree/main/examples
+[examples]: ./examples
+[http-example-files]: ./http-example-files

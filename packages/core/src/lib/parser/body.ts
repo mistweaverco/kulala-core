@@ -130,7 +130,7 @@ export const getBody = async (
         type: "json",
         content: JSON.parse(jsonStr),
       };
-    } catch (e /* eslint-disable-line @typescript-eslint/no-unused-vars */) {
+    } catch {
       // do nothing, we'll treat it as raw text body below
     }
   }

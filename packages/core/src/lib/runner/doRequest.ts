@@ -76,8 +76,8 @@ import type {
   KulalaRequestErrorResponse,
   KulalaRequestSent,
   KulalaRequestSuccessResponse,
-  KulalaSkippedResponse,
   KulalaScriptConsoleLine,
+  KulalaSkippedResponse,
   RunnerResponseLike,
   VariableResolver,
 } from "./types";
@@ -861,11 +861,34 @@ export async function doRequestFromBlock(
             form as Record<string, string>,
           ).toString();
         }
-      } else if (typeof body === "string" && body.length > 0) {
-        bodyPayload = body;
-      } else if (body != null) {
-        headers["content-type"] = "application/json";
-        bodyPayload = JSON.stringify(body);
+      } else if (body !== null && body !== undefined) {
+        // HACK:
+        // curl defaults to application/x-www-form-urlencoded,
+        // which can cause issues with some APIs that expect JSON.
+        // JetBrains seems to use some Java lib under the hood
+        // where they omit the Content-Type completely
+        // Setting the Content-Type like this,
+        // seems to cause curl to omit the Content-Type header in the request
+        if (
+          !Object.keys(requestHeaders).some(
+            (k) => k.toLowerCase() === "content-type",
+          )
+        ) {
+          headers["Content-Type;"] = "";
+        }
+        try {
+          // Since JSON.stringify("") yields '""' which is not intended,
+          // we only stringify if it's a non-empty string or non-string value.
+          if (typeof body === "string" && body.trim().length > 0) {
+            bodyPayload = body;
+          } else if (typeof body === "object") {
+            bodyPayload = JSON.stringify(body);
+          }
+        } catch {
+          // Non-stringifiable body (e.g. circular reference),
+          // fallback to raw string
+          bodyPayload = String(body);
+        }
       }
 
       // Cookie jar: apply stored cookies unless disabled or explicitly set by user.
