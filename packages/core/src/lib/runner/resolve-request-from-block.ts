@@ -5,6 +5,7 @@ import { getEffectiveOperators } from "./effective-operators";
 import { OAuth2Manager } from "../auth/oauth2/manager";
 import { OAuth2PromptError } from "../auth/oauth2/prompt-error";
 import { ScriptPromptError } from "./script-prompt-error";
+import { getVariable } from "../persistence";
 import {
   MAX_SCRIPT_REPLAYS,
   ScriptReplayError,
@@ -49,6 +50,18 @@ import type {
   KulalaRequestSent,
   VariableResolver,
 } from "./types";
+
+const CLIENT_GLOBAL_HEADERS_VAR = "__kulala_client_global_headers__";
+
+function readClientGlobalHeaders(): Record<string, string> {
+  const v = getVariable("global", CLIENT_GLOBAL_HEADERS_VAR);
+  if (!v || typeof v !== "object") return {};
+  const out: Record<string, string> = {};
+  for (const [k, raw] of Object.entries(v as Record<string, unknown>)) {
+    if (typeof raw === "string") out[k] = raw;
+  }
+  return out;
+}
 
 export type ResolvedRequestPreview = {
   method: string;
@@ -223,12 +236,21 @@ export async function resolveRequestFromBlock(
   ) {
     headers.Accept = accept;
   }
+  {
+    const explicitLc = new Set(
+      Object.keys(headers).map((k) => k.toLowerCase()),
+    );
+    const clientHeaders = readClientGlobalHeaders();
+    for (const [k, v] of Object.entries(clientHeaders)) {
+      if (!explicitLc.has(k.toLowerCase())) headers[k] = v;
+    }
+  }
   if (flow?.globalHeaders) {
-    const existingLc = new Set(
+    const explicitLc = new Set(
       Object.keys(headers).map((k) => k.toLowerCase()),
     );
     for (const [k, v] of Object.entries(flow.globalHeaders)) {
-      if (!existingLc.has(k.toLowerCase())) headers[k] = v;
+      if (!explicitLc.has(k.toLowerCase())) headers[k] = v;
     }
   }
   if (needsAsyncSubstitution || Object.keys(activeVars).length > 0) {
