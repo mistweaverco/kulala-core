@@ -142,6 +142,9 @@ export async function resolveRequestFromBlock(
       iteration: 0,
     });
     try {
+      // Important: capture script console output so the caller can safely serialize
+      // JSON responses (e.g. stdin actions like inspect_request).
+      const scriptConsole: import("./types").KulalaScriptConsoleLine[] = [];
       await runScripts(
         block.scripts.preRequest,
         "preRequest",
@@ -150,7 +153,7 @@ export async function resolveRequestFromBlock(
         undefined,
         mutableVars,
         flow,
-        undefined,
+        scriptConsole,
         preScriptRequestCtx,
         { stableDocId },
       );

@@ -18,6 +18,12 @@ import {
   toCurlAtCursor,
 } from "../runner/request-cursor";
 import {
+  lspCompletion,
+  lspDiagnostics,
+  lspDocumentSymbols,
+  lspHover,
+} from "../lsp";
+import {
   deleteVariable,
   getPrompt,
   deletePrompt,
@@ -227,6 +233,45 @@ const kulalaParser: KulalaParser = {
       }
       case "from_curl": {
         const result = fromCurlCommand(stdIn.curl);
+        writeToStdout(result);
+        break;
+      }
+      case "lsp_completion": {
+        const result = await lspCompletion({
+          content: stdIn.content,
+          filepath: stdIn.filepath,
+          env: stdIn.env ?? "default",
+          line: stdIn.line,
+          column: stdIn.column,
+          filetype: "http",
+        });
+        writeToStdout(result);
+        break;
+      }
+      case "lsp_hover": {
+        const result = await lspHover({
+          content: stdIn.content,
+          filepath: stdIn.filepath,
+          env: stdIn.env ?? "default",
+          line: stdIn.line,
+          column: stdIn.column,
+        });
+        writeToStdout(result);
+        break;
+      }
+      case "lsp_symbols": {
+        const result = await lspDocumentSymbols({
+          content: stdIn.content,
+          filepath: stdIn.filepath,
+        });
+        writeToStdout(result);
+        break;
+      }
+      case "lsp_diagnostics": {
+        const result = await lspDiagnostics({
+          content: stdIn.content,
+          filepath: stdIn.filepath,
+        });
         writeToStdout(result);
         break;
       }

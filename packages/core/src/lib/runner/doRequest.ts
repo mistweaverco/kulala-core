@@ -110,6 +110,8 @@ export type DoRequestFromBlockOptions = {
   collectionPlan?: CollectionIterationPlan;
   /** Internal: child call when expanding a collection variable. */
   skipPreScripts?: boolean;
+  /** Internal: prevent recursive collection expansion in child runs. */
+  skipCollectionExpansion?: boolean;
   /** Internal: `$kulala.request.replay()` counter for this block run. */
   scriptReplayIndex?: number;
   /** Parsed document (file-header operators merged into each request). */
@@ -439,6 +441,7 @@ export async function doRequestFromBlock(
     if (!iterationOptions?.skipPreScripts || scriptReplayIndex > 0) {
       try {
         if (!iterationOptions?.skipSharedHooks) {
+          const iter = iterationOptions?.collectionIndex ?? 0;
           await runSharedScriptsForPhase("preRequest", {
             flow,
             requestBlock: block,
@@ -448,7 +451,8 @@ export async function doRequestFromBlock(
             startDir,
             mutableVars,
             resolver,
-            iteration: 0,
+            iteration: iter,
+            collectionPlan: iterationOptions?.collectionPlan,
             scriptConsole,
             stableDocId,
           });
@@ -473,7 +477,8 @@ export async function doRequestFromBlock(
           startDir,
           mutableVars,
           resolver,
-          iteration: 0,
+          iteration: iterationOptions?.collectionIndex ?? 0,
+          collectionPlan: iterationOptions?.collectionPlan,
         });
 
         // Pre-request scripts run before substitution so they can set request/global vars.
@@ -489,6 +494,25 @@ export async function doRequestFromBlock(
           preScriptRequestCtx,
           { stableDocId },
         );
+
+        // When running a single expanded collection request, force the per-iteration
+        // collection values after pre-request scripts have run. This ensures pre scripts
+        // can still mutate other variables while iteration-sensitive templates ({{id}},
+        // {{users[*].name}}, etc.) resolve to the correct element for this request.
+        if (
+          iterationOptions?.skipCollectionExpansion &&
+          iterationOptions.collectionPlan &&
+          typeof iterationOptions.collectionIndex === "number"
+        ) {
+          Object.assign(
+            mutableVars,
+            varsForCollectionIndex(
+              mutableVars,
+              iterationOptions.collectionPlan.collections,
+              iterationOptions.collectionIndex,
+            ),
+          );
+        }
       } catch (error) {
         if (error instanceof ScriptPromptError) {
           return error.promptResponse;
@@ -517,7 +541,10 @@ export async function doRequestFromBlock(
           effectiveBody,
           mutableVars,
         );
-        if (collectionPlan.count > 1) {
+        if (
+          collectionPlan.count > 1 &&
+          !iterationOptions?.skipCollectionExpansion
+        ) {
           const batch: DoRequestFromBlockResult[] = [];
           for (let i = 0; i < collectionPlan.count; i++) {
             const iterVars = varsForCollectionIndex(
@@ -536,7 +563,8 @@ export async function doRequestFromBlock(
               {
                 collectionIndex: i,
                 collectionPlan,
-                skipPreScripts: true,
+                // Pre-request scripts should run per expanded request.
+                skipCollectionExpansion: true,
                 doc: iterationOptions?.doc,
               },
             );

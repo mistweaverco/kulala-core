@@ -19,6 +19,20 @@ export type {
 export type { KulalaDocument } from "./lib/parser/types";
 export type { KulalaStdinParsed } from "./lib/parser/types/stdinparsed";
 
+export {
+  lspCompletion,
+  lspDiagnostics,
+  lspDocumentSymbols,
+  lspHover,
+} from "./lib/lsp";
+export type {
+  LspCompletionItem,
+  LspCompletionList,
+  LspDiagnostic,
+  LspDocumentSymbol,
+  LspHover,
+} from "./lib/lsp";
+
 export type { KulalaRunOptions } from "./lib/runner";
 export {
   parseCurlCommand,

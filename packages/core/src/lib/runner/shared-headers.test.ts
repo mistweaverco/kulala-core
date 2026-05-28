@@ -129,3 +129,40 @@ GET ${baseUrl}/get HTTP/1.1
   expect(res.data).toHaveLength(1);
   expect(res.data[0]).toHaveProperty("success", true);
 });
+
+test("Lua: _G['$kulala'] client.global.headers.set persists across runs", async () => {
+  const content1 = `### First
+
+< {% lang=lua
+  _G["$kulala"].client.global.headers.set("X-Kulala", "Family")
+%}
+
+GET ${baseUrl}/get HTTP/1.1
+`;
+  const content2 = `### Second
+
+GET ${baseUrl}/get HTTP/1.1
+`;
+
+  const doc1 = await getDocument(
+    content1,
+    "/tmp/persisted-shared-headers-lua-1.http",
+  );
+  const res1 = await runDocument(doc1);
+  expect(res1.type).toBe("responses");
+  expect(res1.data).toHaveLength(1);
+
+  const doc2 = await getDocument(
+    content2,
+    "/tmp/persisted-shared-headers-lua-2.http",
+  );
+  const res2 = await runDocument(doc2);
+  expect(res2.type).toBe("responses");
+  expect(res2.data).toHaveLength(1);
+
+  const item = res2.data[0]!;
+  expect(item).toHaveProperty("success", true);
+  if (!item.success || !("body" in item) || item.body.type !== "json") return;
+  const headers = item.body.content.headers as Record<string, string>;
+  expect(headers["x-kulala"] ?? headers["X-Kulala"]).toBe("Family");
+});

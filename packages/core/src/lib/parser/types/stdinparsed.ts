@@ -111,6 +111,39 @@ export type KulalaStdinActionFromCurl = {
   curl: string;
 };
 
+export type KulalaLspPosition = {
+  /** 1-based line number (vim-style). */
+  line: number;
+  /** 1-based column number (vim-style). */
+  column: number;
+};
+
+export type KulalaStdinActionLspCompletion = {
+  action: "lsp_completion";
+  content: string;
+  filepath?: string;
+  env?: string;
+} & KulalaLspPosition;
+
+export type KulalaStdinActionLspHover = {
+  action: "lsp_hover";
+  content: string;
+  filepath?: string;
+  env?: string;
+} & KulalaLspPosition;
+
+export type KulalaStdinActionLspDocumentSymbols = {
+  action: "lsp_symbols";
+  content: string;
+  filepath?: string;
+};
+
+export type KulalaStdinActionLspDiagnostics = {
+  action: "lsp_diagnostics";
+  content: string;
+  filepath?: string;
+};
+
 export type KulalaStdinParsed =
   | KulalaStdinActionParse
   | KulalaStdinActionRun
@@ -121,4 +154,8 @@ export type KulalaStdinParsed =
   | KulalaStdinActionEnvironments
   | KulalaStdinActionInspectRequest
   | KulalaStdinActionToCurl
-  | KulalaStdinActionFromCurl;
+  | KulalaStdinActionFromCurl
+  | KulalaStdinActionLspCompletion
+  | KulalaStdinActionLspHover
+  | KulalaStdinActionLspDocumentSymbols
+  | KulalaStdinActionLspDiagnostics;

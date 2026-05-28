@@ -403,6 +403,34 @@ client.global.set("DATE", response.headers.valueOf("Date") || "");`,
     expect(getVariable("global", "GLOB")).toBe("baz");
   });
 
+  test("pre-request Lua can set a table variable for JSONPath substitution", async () => {
+    const vars: Record<string, string> = {};
+    await runScripts(
+      [
+        {
+          type: "preRequest",
+          source: "inline",
+          lang: "lua",
+          content: `
+            request.variables.set("users", {
+              { name = "Alice" },
+              { name = "Bob" },
+            })
+          `,
+          lineNumber: 1,
+        },
+      ],
+      "preRequest",
+      dummyBlock,
+      "/tmp/example.http",
+      undefined,
+      vars,
+    );
+
+    const { substituteInString } = await import("../variables/substitute");
+    expect(substituteInString("{{users[*].name}}", vars)).toBe("Alice");
+  });
+
   test("post-request Lua can read response status/headers/body", async () => {
     const vars: Record<string, string> = {};
     await runScripts(
@@ -694,5 +722,34 @@ client.global.set("DATE", response.headers.valueOf("Date") || "");`,
       dummyBlock.position.start,
     );
     expect(scriptConsole[0]?.origin.file).toContain("example.http");
+  });
+
+  test("client.log works for file scripts in pre-request phase", async () => {
+    const scriptConsole: import("./types").KulalaScriptConsoleLine[] = [];
+    await runScripts(
+      [
+        {
+          type: "preRequest",
+          source: "file",
+          lang: "js",
+          content: `client.log("from-file");`,
+          lineNumber: 0,
+          filepath: "scripts/pre.js",
+        },
+      ],
+      "preRequest",
+      dummyBlock,
+      "/tmp/example.http",
+      undefined,
+      {},
+      undefined,
+      scriptConsole,
+    );
+
+    expect(scriptConsole).toHaveLength(1);
+    expect(scriptConsole[0]?.message).toBe("from-file");
+    expect(scriptConsole[0]?.origin.phase).toBe("preRequest");
+    expect(scriptConsole[0]?.origin.source).toBe("file");
+    expect(scriptConsole[0]?.origin.file).toContain("scripts/pre.js");
   });
 });
