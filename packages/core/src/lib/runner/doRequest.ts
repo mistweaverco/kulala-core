@@ -24,6 +24,7 @@ import {
   saveHistoryEntry,
   setVariable,
   storeCookiesFromResponse,
+  getVariable,
 } from "../persistence";
 import {
   buildCustomPromptResponse,
@@ -90,6 +91,18 @@ export type DoRequestFromBlockResult =
   | KulalaPromptResponse
   | KulalaSkippedResponse
   | KulalaWebSocketPlanResponse;
+
+const CLIENT_GLOBAL_HEADERS_VAR = "__kulala_client_global_headers__";
+
+function readClientGlobalHeaders(): Record<string, string> {
+  const v = getVariable("global", CLIENT_GLOBAL_HEADERS_VAR);
+  if (!v || typeof v !== "object") return {};
+  const out: Record<string, string> = {};
+  for (const [k, raw] of Object.entries(v as Record<string, unknown>)) {
+    if (typeof raw === "string") out[k] = raw;
+  }
+  return out;
+}
 
 export type DoRequestFromBlockOptions = {
   /** 0-based collection loop index (JetBrains request.iteration()). */
@@ -611,14 +624,26 @@ export async function doRequestFromBlock(
     ) {
       headers.Accept = accept;
     }
+    // Persisted client global headers are applied to all outgoing requests,
+    // but must not override explicit request headers.
+    {
+      const explicitLc = new Set(
+        Object.keys(headers).map((k) => k.toLowerCase()),
+      );
+      const clientHeaders = readClientGlobalHeaders();
+      for (const [k, v] of Object.entries(clientHeaders)) {
+        if (!explicitLc.has(k.toLowerCase())) headers[k] = v;
+      }
+    }
     // JetBrains parity: global headers are applied implicitly to outgoing requests
     // within the same execution flow, but should not override explicit request headers.
     if (flow?.globalHeaders) {
-      const existingLc = new Set(
+      const explicitLc = new Set(
         Object.keys(headers).map((k) => k.toLowerCase()),
       );
+      // Allow flow-local headers to override persisted client headers (but not explicit request headers).
       for (const [k, v] of Object.entries(flow.globalHeaders)) {
-        if (!existingLc.has(k.toLowerCase())) headers[k] = v;
+        if (!explicitLc.has(k.toLowerCase())) headers[k] = v;
       }
     }
     if (needsAsyncSubstitution || Object.keys(mutableVars).length > 0) {

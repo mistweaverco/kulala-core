@@ -1,11 +1,22 @@
 ### First
 
-# If you run all requests (not one by one),
-# this is considered as a shared header,
-# and the header will be sent in all requests.
+# WARN:
+# Jetbrains client.global.headers.set("X-Kulala", "Family");
+# Only works for all requests in one flow, not for each request separately.
+# One flow is when you run all requests in the file at once.
+
+# INFO:
+# Kulala supports client.global.headers.set() with the same limitation,
+# but also has $kulala.client.global.headers.set()
+# which works for all requests in the same file,
+# even if you run them one by one.
+
+# In this example,
+# we set the header "X-Kulala" with the value "Family" for all requests in
+# the file using $kulala.client.global.headers.set().
 
 < {%
-  client.global.headers.set("X-Kulala", "Family");
+  $kulala.client.global.headers.set("X-Kulala", "Family");
 %}
 
 GET https://echo.getkulala.net/get HTTP/1.1
