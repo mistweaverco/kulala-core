@@ -243,7 +243,7 @@ const kulalaParser: KulalaParser = {
           env: stdIn.env ?? "default",
           line: stdIn.line,
           column: stdIn.column,
-          filetype: "http",
+          filetype: stdIn.filetype ?? "http",
         });
         writeToStdout(result);
         break;
@@ -255,6 +255,7 @@ const kulalaParser: KulalaParser = {
           env: stdIn.env ?? "default",
           line: stdIn.line,
           column: stdIn.column,
+          filetype: stdIn.filetype ?? "http",
         });
         writeToStdout(result);
         break;

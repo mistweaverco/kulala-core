@@ -3,16 +3,25 @@ import { findBlocksAtCursor } from "../runner/block";
 import { inspectRequestAtCursor } from "../runner/request-cursor";
 import type { KulalaDocument } from "../parser/types";
 import { getStableDocumentId, resolveVariables } from "../variables";
+import {
+  completionPrefixAtCursor,
+  completionTextEdit,
+  resolveScriptApiLabel,
+  scriptApiHoverForLabel,
+  scriptSymbolAtCursor,
+} from "./script-api-docs";
 import { staticCompletionItems } from "./sources";
 import {
-  LspCompletionItemKind,
-  LspSymbolKind,
   type LspCompletionItem,
+  LspCompletionItemKind,
   type LspCompletionList,
   type LspDiagnostic,
   type LspDocumentSymbol,
   type LspHover,
   type LspRange,
+  LspSupportedExternalScriptFiletypes,
+  type LspSupportedFiletypeAll,
+  LspSymbolKind,
 } from "./types";
 
 export * from "./types";
@@ -132,7 +141,7 @@ function completionSourceTypes(opts: {
   content: string;
   lineToCursor: string;
   line1: number;
-  filetype?: "http" | "rest" | "javascript";
+  filetype?: LspSupportedFiletypeAll;
 }): string[] {
   // Mirrors kulala.nvim `source_type` matching order, simplified.
   const matches: Array<[RegExp, string | string[]]> = [
@@ -152,7 +161,9 @@ function completionSourceTypes(opts: {
     [/>/, "snippets_out"],
   ];
 
-  if (opts.filetype === "javascript") return ["scripts"];
+  if (opts.filetype && opts.filetype in LspSupportedExternalScriptFiletypes) {
+    return ["scripts"];
+  }
 
   // Critical: scripts are multi-line; once inside `{% ... %}` we still want script API completions.
   if (isInsideScriptRegion(opts.content, opts.line1)) return ["scripts"];
@@ -243,7 +254,7 @@ export async function lspCompletion(input: {
   env?: string;
   line: number;
   column: number;
-  filetype?: "http" | "rest" | "javascript";
+  filetype?: LspSupportedFiletypeAll;
 }): Promise<LspCompletionList> {
   const doc = await getDocument(input.content, input.filepath);
 
@@ -289,9 +300,14 @@ export async function lspCompletion(input: {
     if (ctx) {
       const keys = Object.keys(vars).sort((a, b) => a.localeCompare(b));
       for (const k of keys) {
-        if (k.startsWith("__kulala_")) continue;
-        if (ctx.prefix && !k.toLowerCase().startsWith(ctx.prefix.toLowerCase()))
+        // Exclude "private" variables that start with "_"
+        if (k.startsWith("_")) continue;
+        if (
+          ctx.prefix &&
+          !k.toLowerCase().startsWith(ctx.prefix.toLowerCase())
+        ) {
           continue;
+        }
         out.push(
           mkItem({
             label: k,
@@ -361,7 +377,16 @@ export async function lspCompletion(input: {
     }
   }
 
-  return { isIncomplete: false, items: uniqueByLabel(out) };
+  const { startCol0, endCol0 } = completionPrefixAtCursor(line, input.column);
+  const items = uniqueByLabel(out).map((item) => {
+    const newText = item.insertText ?? item.label;
+    return {
+      ...item,
+      textEdit: completionTextEdit(input.line, startCol0, endCol0, newText),
+    };
+  });
+
+  return { isIncomplete: false, items };
 }
 
 export async function lspHover(input: {
@@ -370,7 +395,22 @@ export async function lspHover(input: {
   env?: string;
   line: number;
   column: number;
+  filetype?: LspSupportedFiletypeAll;
 }): Promise<LspHover> {
+  const line = lineAt(input.content, input.line);
+  const symbol = scriptSymbolAtCursor(line, input.column);
+  const inScript =
+    (input.filetype && input.filetype in LspSupportedExternalScriptFiletypes) ||
+    isInsideScriptRegion(input.content, input.line);
+
+  if (inScript && symbol) {
+    const label = resolveScriptApiLabel(symbol);
+    if (label) {
+      const hover = scriptApiHoverForLabel(label);
+      if (hover) return hover;
+    }
+  }
+
   const res = await inspectRequestAtCursor({
     content: input.content,
     filepath: input.filepath,
@@ -403,7 +443,6 @@ export async function lspHover(input: {
 }
 
 function rangeForBlock(
-  doc: KulalaDocument,
   block: NonNullable<KulalaDocument["blocks"][number]>,
 ): LspRange {
   const startLine1 = block.position?.start ?? 1;
@@ -422,7 +461,7 @@ export async function lspDocumentSymbols(input: {
   const doc = await getDocument(input.content, input.filepath);
   const out: LspDocumentSymbol[] = [];
   for (const block of doc.blocks) {
-    const r = rangeForBlock(doc, block);
+    const r = rangeForBlock(block);
     out.push({
       name: block.name,
       kind: LspSymbolKind.Function,
