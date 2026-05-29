@@ -3,6 +3,25 @@ export type LspMarkupContent = {
   value: string;
 };
 
+export const LspSupportedExternalScriptFiletypes = {
+  javascript: "javascript",
+  typescript: "typescript",
+  lua: "lua",
+};
+
+export const LspSupportedHttpFiletypes = {
+  http: "http",
+  rest: "rest",
+};
+
+export const LspSupportedFiletypesAll = {
+  ...LspSupportedExternalScriptFiletypes,
+  ...LspSupportedHttpFiletypes,
+} as const;
+
+export type LspSupportedFiletypeAll =
+  (typeof LspSupportedFiletypesAll)[keyof typeof LspSupportedFiletypesAll];
+
 // LSP spec enums (numeric). We only use the ones we emit.
 export const LspCompletionItemKind = {
   Text: 1,
@@ -69,6 +88,11 @@ export const LspSymbolKind = {
 export type LspPosition = { line: number; character: number }; // 0-based
 export type LspRange = { start: LspPosition; end: LspPosition };
 
+export type LspTextEdit = {
+  range: LspRange;
+  newText: string;
+};
+
 export type LspCompletionItem = {
   label: string;
   labelDetails?: { description?: string };
@@ -78,6 +102,8 @@ export type LspCompletionItem = {
   insertText?: string;
   insertTextFormat?: number;
   sortText?: string;
+  /** Explicit replace range; required for `$kulala` (Neovim excludes `$` from keyword chars). */
+  textEdit?: LspTextEdit;
 };
 
 export type LspCompletionList = {

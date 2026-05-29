@@ -123,6 +123,7 @@ export type KulalaStdinActionLspCompletion = {
   content: string;
   filepath?: string;
   env?: string;
+  filetype?: string;
 } & KulalaLspPosition;
 
 export type KulalaStdinActionLspHover = {
@@ -130,6 +131,7 @@ export type KulalaStdinActionLspHover = {
   content: string;
   filepath?: string;
   env?: string;
+  filetype?: string;
 } & KulalaLspPosition;
 
 export type KulalaStdinActionLspDocumentSymbols = {

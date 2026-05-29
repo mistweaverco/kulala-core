@@ -1,7 +1,12 @@
 import {
+  scriptApiCompletionDetail,
+  scriptApiDocumentationMarkdown,
+  snippetToSignature,
+} from "./script-api-docs";
+import {
+  type LspCompletionItem,
   LspCompletionItemKind,
   LspInsertTextFormat,
-  type LspCompletionItem,
 } from "./types";
 
 type SourceItem = {
@@ -16,15 +21,24 @@ function makeItem(opts: {
   kind?: number;
   insertTextFormat?: number;
   sortText?: string;
+  detail?: string;
+  documentation?: string;
 }): LspCompletionItem {
   const { item, description, kind, insertTextFormat, sortText } = opts;
+  const detail = opts.detail ?? item.insertText ?? item.label;
+  const documentation =
+    opts.documentation ??
+    (item.documentation
+      ? (scriptApiDocumentationMarkdown(item.label, item.documentation) ??
+        item.documentation)
+      : undefined);
   return {
     label: item.label,
     labelDetails: description ? { description } : undefined,
     kind,
-    detail: item.insertText ?? item.label,
-    documentation: item.documentation
-      ? { kind: "markdown", value: item.documentation }
+    detail,
+    documentation: documentation
+      ? { kind: "markdown", value: documentation }
       : undefined,
     insertText: item.insertText ?? item.label,
     insertTextFormat,
@@ -288,33 +302,60 @@ export function staticCompletionItems(sourceName: string): LspCompletionItem[] {
 
   const scriptApi: SourceItem[] = [
     {
+      label: "$kulala.prompt",
+      insertText:
+        '$kulala.prompt(${1:"label"}, ${2:"varName"}, { type: "${3|text,password,url|}" })$0',
+      documentation: "Prompt for a request-scoped variable",
+    },
+    {
+      label: "$kulala.request.skip",
+      insertText: "$kulala.request.skip()$0",
+      documentation: "Skip sending this request (pre-request only)",
+    },
+    {
+      label: "$kulala.request.replay",
+      insertText: "$kulala.request.replay()$0",
+      documentation: "Re-run the current request",
+    },
+    {
+      label: "$kulala.client.global.headers.set",
+      insertText:
+        '$kulala.client.global.headers.set(${1:"headerName"}, ${2:"headerValue"})$0',
+      documentation: "Set a persisted default HTTP header",
+    },
+    {
+      label: "$kulala.client.global.headers.get",
+      insertText: '$kulala.client.global.headers.get(${1:"headerName"})$0',
+      documentation: "Get a persisted default HTTP header",
+    },
+    {
+      label: "$kulala.client.global.headers.clear",
+      insertText: '$kulala.client.global.headers.clear(${1:"headerName"})$0',
+      documentation: "Clear a persisted default HTTP header",
+    },
+    {
       label: "client.global.get",
-      insertText: "client.global.get(${1:varName})$0",
+      insertText: 'client.global.get(${1:"varName"})$0',
       documentation: "Get a global variable",
     },
     {
       label: "client.global.set",
-      insertText: "client.global.set(${1:varName}, ${2:value})$0",
+      insertText: 'client.global.set(${1:"varName"}, ${2:"value"})$0',
       documentation: "Set a global variable",
     },
     {
-      label: "client.responses",
-      insertText: 'client.responses["${1:name}"]$0',
-      documentation: "Previous responses",
-    },
-    {
       label: "client.log",
-      insertText: "client.log(${1:message})$0",
+      insertText: 'client.log(${1:"message"})$0',
       documentation: "Log message",
     },
     {
       label: "client.test",
-      insertText: "client.test(${1:name}, ${2:fn})$0",
+      insertText: 'client.test(${1:"name"}, ${2:fn})$0',
       documentation: "Define a test suite",
     },
     {
       label: "client.assert",
-      insertText: "client.assert(${1:value}, ${2:message?})$0",
+      insertText: 'client.assert(${1:value}, ${2:"message"?})$0',
       documentation: "Checks if value is truthy",
     },
     {
@@ -324,7 +365,7 @@ export function staticCompletionItems(sourceName: string): LspCompletionItem[] {
     },
     {
       label: "client.clear",
-      insertText: "client.clear(${1:varName})$0",
+      insertText: 'client.clear(${1:"varName"})$0',
       documentation: "Clear a global variable",
     },
     {
@@ -337,15 +378,14 @@ export function staticCompletionItems(sourceName: string): LspCompletionItem[] {
       insertText: "client.exit()$0",
       documentation: "Exit script",
     },
-
     {
       label: "request.variables.set",
-      insertText: "request.variables.set(${1:varName}, ${2:value})$0",
+      insertText: 'request.variables.set(${1:"varName"}, ${2:"value"})$0',
       documentation: "Set a request variable",
     },
     {
       label: "request.variables.get",
-      insertText: "request.variables.get(${1:varName})$0",
+      insertText: 'request.variables.get(${1:"varName"})$0',
       documentation: "Get a request variable",
     },
     {
@@ -355,7 +395,7 @@ export function staticCompletionItems(sourceName: string): LspCompletionItem[] {
     },
     {
       label: "request.headers.findByName",
-      insertText: "request.headers.findByName(${1:name})$0",
+      insertText: 'request.headers.findByName(${1:"name"})$0',
       documentation: "Find request header by name",
     },
     {
@@ -375,12 +415,12 @@ export function staticCompletionItems(sourceName: string): LspCompletionItem[] {
     },
     {
       label: "request.environment.get",
-      insertText: "request.environment.get(${1:varName})$0",
+      insertText: 'request.environment.get(${1:"varName"})$0',
       documentation: "Get environment variable",
     },
     {
       label: "request.method",
-      insertText: "request.method()$0",
+      insertText: "request.method$0",
       documentation: "Get request method",
     },
     {
@@ -394,40 +434,14 @@ export function staticCompletionItems(sourceName: string): LspCompletionItem[] {
       documentation: "Get substituted request URL",
     },
     {
-      label: "request.skip",
-      insertText: "request.skip()$0",
-      documentation: "Skip request",
-    },
-    {
-      label: "request.replay",
-      insertText: "request.replay()$0",
-      documentation: "Replay request",
-    },
-    {
       label: "request.iteration",
       insertText: "request.iteration()$0",
       documentation: "Current replay count",
     },
-
-    {
-      label: "response.responseCode",
-      insertText: "response.responseCode()$0",
-      documentation: "Get response code",
-    },
     {
       label: "response.status",
-      insertText: "response.status()$0",
-      documentation: "Get response status",
-    },
-    {
-      label: "response.code",
-      insertText: "response.code()$0",
-      documentation: "Get request code",
-    },
-    {
-      label: "response.url",
-      insertText: "response.url()$0",
-      documentation: "Get response URL",
+      insertText: "response.status$0",
+      documentation: "Get response status code, e.g. 200",
     },
     {
       label: "response.body",
@@ -435,82 +449,16 @@ export function staticCompletionItems(sourceName: string): LspCompletionItem[] {
       documentation: "Get response body",
     },
     {
-      label: "response.json",
-      insertText: "response.json()$0",
-      documentation: "Get response json",
+      label: "response.headers.valueOf",
+      insertText: 'response.headers.valueOf(${1:"headerName"})$0',
+      documentation:
+        "Retrieves the first value of the headerName response header or null if the headerName response header does not exist.",
     },
     {
-      label: "response.errors",
-      insertText: "response.errors()$0",
-      documentation: "Get response errors",
-    },
-    {
-      label: "response.headers.all",
-      insertText: "response.headers.all()$0",
-      documentation: "Get all response headers",
-    },
-    {
-      label: "response.cookies",
-      insertText: "response.cookies()$0",
-      documentation: "Get response cookies",
-    },
-    {
-      label: "response.headers",
-      insertText: "response.headers()$0",
-      documentation: "Get response headers",
-    },
-    {
-      label: "response.headers_tbl",
-      insertText: "response.headers_tbl()$0",
-      documentation: "Get response headers table",
-    },
-
-    {
-      label: "assert",
-      insertText: "assert(${1:value}, ${2:message?})$0",
-      documentation: "Checks if value is truthy",
-    },
-    {
-      label: "assert.true",
-      insertText: "assert.true(${1:value}, ${2:message?})$0",
-      documentation: "Checks if value is true",
-    },
-    {
-      label: "assert.false",
-      insertText: "assert.false(${1:value}, ${2:message?})$0",
-      documentation: "Checks if value is false",
-    },
-    {
-      label: "assert.same",
-      insertText: "assert.same(${1:value}, ${2:expected}, ${3:message?})$0",
-      documentation: "Checks value equals expected",
-    },
-    {
-      label: "assert.hasString",
-      insertText:
-        "assert.hasString(${1:value}, ${2:expected}, ${3:message?})$0",
-      documentation: "Checks string contains substring",
-    },
-    {
-      label: "assert.responseHas",
-      insertText:
-        "assert.responseHas(${1:key}, ${2:expected}, ${3:message?})$0",
-      documentation: "Response has key with expected value",
-    },
-    {
-      label: "assert.headersHas",
-      insertText: "assert.headersHas(${1:key}, ${2:expected}, ${3:message?})$0",
-      documentation: "Headers have key with expected value",
-    },
-    {
-      label: "assert.bodyHas",
-      insertText: "assert.bodyHas(${1:expected}, ${2:message?})$0",
-      documentation: "Body contains expected string",
-    },
-    {
-      label: "assert.jsonHas",
-      insertText: "assert.jsonHas(${1:key}, ${2:expected}, ${3:message?})$0",
-      documentation: "JSON has key with expected value",
+      label: "response.headers.valuesOf",
+      insertText: 'response.headers.valuesOf(${1:"headerName"})$0',
+      documentation:
+        "Retrieves the array containing all values of the headerName response header. Returns an empty array if the headerName response header does not exist.",
     },
   ];
 
@@ -560,15 +508,28 @@ export function staticCompletionItems(sourceName: string): LspCompletionItem[] {
         }),
       );
     case "scripts":
-      return scriptApi.map((item) =>
-        makeItem({
-          item,
+      return scriptApi.map((item) => {
+        const isKulalaApi = item.label.startsWith("$kulala");
+        const itemForInsert =
+          isKulalaApi && item.insertText
+            ? { ...item, insertText: snippetToSignature(item.insertText) }
+            : item;
+        return makeItem({
+          item: itemForInsert,
           description: "API",
           kind: kindSnippet,
-          insertTextFormat: formatSnippet,
+          // blink.cmp treats `$` as non-keyword and `vim.snippet.expand` strips a shared
+          // prefix from Snippet items — use PlainText for `$kulala.*` completions.
+          insertTextFormat: isKulalaApi
+            ? LspInsertTextFormat.PlainText
+            : formatSnippet,
           sortText: "1.02",
-        }),
-      );
+          detail: scriptApiCompletionDetail(item.label, item.insertText),
+          documentation:
+            scriptApiDocumentationMarkdown(item.label, item.documentation) ??
+            undefined,
+        });
+      });
     default:
       return [];
   }
