@@ -256,6 +256,8 @@ export async function resolveInlineBodyFileRefs(
     if (nl === -1) break;
     pos = nl + 1;
   }
+  // Support legacy servers that enforce CRLF after the closing boundary.
+  chunks.push(Buffer.from("\r\n", "utf8"));
   return Buffer.concat(chunks);
 }
 

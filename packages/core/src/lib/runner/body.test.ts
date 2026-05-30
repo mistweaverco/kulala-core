@@ -278,7 +278,7 @@ test("resolveInlineBodyFileRefs keeps same-line suffix after path", async () => 
 
   const template = `< ./f.txt --end--\n`;
   const out = await resolveInlineBodyFileRefs(template, dir);
-  expect(out.toString("utf8")).toBe("Z\r\n--end--");
+  expect(out.toString("utf8")).toBe("Z\r\n--end--\r\n");
 });
 
 test("resolveInlineBodyFileRefs: blank line after file ref yields single LF before next boundary", async () => {
@@ -297,8 +297,8 @@ test("resolveInlineBodyFileRefs: blank line after file ref yields single LF befo
     "--b--",
   ].join("\n");
   const out = (await resolveInlineBodyFileRefs(template, dir)).toString("utf8");
-  expect(out).toContain("BODY\r\n--b--");
-  expect(out).not.toContain("BODY\r\n\r\n--b--");
+  expect(out).toContain("BODY\r\n--b--\r\n");
+  expect(out).not.toContain("BODY\r\n\r\n--b--\r\n");
 });
 
 test("resolveInlineBodyFileRefs: file with trailing LF then boundary line — one LF before --", async () => {
@@ -333,7 +333,7 @@ test("resolveInlineBodyFileRefs: same-line closing boundary without template new
 
   const template = "< ./f.txt --boundary--";
   const out = (await resolveInlineBodyFileRefs(template, dir)).toString("utf8");
-  expect(out).toBe("kulala familiy\n\r\n--boundary--");
+  expect(out).toBe("kulala familiy\n\r\n--boundary--\r\n");
 });
 
 test("resolveInlineBodyFileRefs: IntelliJ-style multi-part template is busboy-parseable", async () => {
@@ -390,6 +390,6 @@ test("resolveInlineBodyFileRefs: trailing LF in file + blank before boundary —
     "--b--",
   ].join("\n");
   const out = (await resolveInlineBodyFileRefs(template, dir)).toString("utf8");
-  expect(out).toContain("BODY\n\r\n--b--");
-  expect(out).not.toContain("BODY\n\n--b--");
+  expect(out).toContain("BODY\n\r\n--b--\r\n");
+  expect(out).not.toContain("BODY\n\n--b--\r\n");
 });
