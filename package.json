@@ -6,6 +6,7 @@
     "format": "prettier --write .",
     "lint": "tsc --noEmit && prettier --check . && eslint .",
     "test": "bun test",
+    "db:migrate": "bun run packages/core/scripts/db-migrate.ts",
     "check": "bun run --parallel check:*",
     "check:lint": "bun run lint",
     "check:test": "bun run test",
