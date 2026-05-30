@@ -5,6 +5,8 @@
  * - Request runs: replay count per request block.
  * - Variables: global, per-document, or per-request.
  *
+ * Schema changes use versioned SQL migrations (see migrations/versions/) applied on DB open.
+ *
  * Data directory:
  * - Linux: $XDG_DATA_HOME/kulala-core (~/.local/share/kulala-core)
  * - macOS: ~/Library/Application Support/kulala-core
@@ -27,6 +29,8 @@ export {
   isUnlockedWithKeychain,
   isKeychainAvailable,
 } from "./db";
+export { getAppliedMigrations, runMigrations } from "./migrations/runner";
+export { MIGRATIONS, type Migration } from "./migrations";
 export {
   saveDocument,
   loadDocument,
