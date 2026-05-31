@@ -18,8 +18,9 @@ export default ts.config(
   {
     ignores: [
       "build/",
-      "dist/",
+      "**/dist/**",
       "http-example-files/**/*.js",
+      "packages/core/.test-import-run/**",
       "packages/core/src/lib/runner/vendored-curl.embed.generated.ts",
     ],
   },

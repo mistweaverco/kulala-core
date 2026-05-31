@@ -1,0 +1,4 @@
+**/dist/**
+packages/core/.test-import-run/**
+packages/core/src/lib/runner/vendored-curl.embed.generated.ts
+packages/core/version.json

@@ -10,6 +10,7 @@ import {
   scriptApiHoverForLabel,
   scriptSymbolAtCursor,
 } from "./script-api-docs";
+import { graphQLLspCompletionItems, graphQLLspHover } from "../graphql";
 import { staticCompletionItems } from "./sources";
 import {
   type LspCompletionItem,
@@ -377,16 +378,30 @@ export async function lspCompletion(input: {
     }
   }
 
-  const { startCol0, endCol0 } = completionPrefixAtCursor(line, input.column);
-  const items = uniqueByLabel(out).map((item) => {
-    const newText = item.insertText ?? item.label;
-    return {
-      ...item,
-      textEdit: completionTextEdit(input.line, startCol0, endCol0, newText),
-    };
+  const gql = await graphQLLspCompletionItems({
+    content: input.content,
+    filepath: input.filepath,
+    line: input.line,
+    column: input.column,
+    env: input.env,
   });
 
-  return { isIncomplete: false, items };
+  const { startCol0, endCol0 } = completionPrefixAtCursor(line, input.column);
+  const applyEdits = (items: LspCompletionItem[]) =>
+    uniqueByLabel(items).map((item) => {
+      const newText = item.insertText ?? item.label;
+      return {
+        ...item,
+        textEdit: completionTextEdit(input.line, startCol0, endCol0, newText),
+      };
+    });
+
+  // Inside a GraphQL query body: only schema field/arg suggestions (no HTTP noise).
+  if (gql.active) {
+    return { isIncomplete: false, items: applyEdits(gql.items) };
+  }
+
+  return { isIncomplete: false, items: applyEdits(out) };
 }
 
 export async function lspHover(input: {
@@ -410,6 +425,15 @@ export async function lspHover(input: {
       if (hover) return hover;
     }
   }
+
+  const gqlHover = await graphQLLspHover({
+    content: input.content,
+    filepath: input.filepath,
+    line: input.line,
+    column: input.column,
+    env: input.env,
+  });
+  if (gqlHover) return gqlHover;
 
   const res = await inspectRequestAtCursor({
     content: input.content,

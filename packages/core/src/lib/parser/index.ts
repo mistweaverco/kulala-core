@@ -23,6 +23,7 @@ import {
   lspDocumentSymbols,
   lspHover,
 } from "../lsp";
+import { clearGraphQLSchemaCache, introspectGraphQLAtCursor } from "../graphql";
 import {
   deleteVariable,
   getPrompt,
@@ -192,6 +193,30 @@ const kulalaParser: KulalaParser = {
         await writeRequestResponseToStdout({
           type: "clear_globals",
           success: true,
+        });
+        break;
+      }
+      case "clear_graphql_schema": {
+        const result = clearGraphQLSchemaCache(stdIn.host);
+        writeToStdout({
+          type: "clear_graphql_schema",
+          success: true,
+          cleared: result.cleared,
+          hosts: result.hosts,
+        });
+        break;
+      }
+      case "graphql_introspect": {
+        const result = await introspectGraphQLAtCursor({
+          content: stdIn.content,
+          filepath: stdIn.filepath,
+          line: stdIn.line,
+          column: stdIn.column,
+          env: stdIn.env,
+        });
+        writeToStdout({
+          type: "graphql_introspect",
+          ...result,
         });
         break;
       }

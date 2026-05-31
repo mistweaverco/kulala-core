@@ -81,3 +81,12 @@ export {
   type CookieRecord,
   type NormalizedSetCookie,
 } from "./cookie-store";
+
+export {
+  loadGraphQLSchema,
+  saveGraphQLSchema,
+  deleteGraphQLSchema,
+  clearGraphQLSchemas,
+  listGraphQLSchemaHosts,
+  type GraphQLSchemaRecord,
+} from "./graphql-schema-store";

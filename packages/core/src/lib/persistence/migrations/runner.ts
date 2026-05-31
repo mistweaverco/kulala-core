@@ -32,6 +32,7 @@ function getAppliedVersions(db: Database): Set<number> {
 }
 
 function applyMigration(db: Database, migration: Migration): void {
+  migration.apply?.(db);
   for (const stmt of migration.statements) {
     db.run(stmt);
   }
