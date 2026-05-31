@@ -85,6 +85,6 @@ export const migration000001Initial = {
     UNIQUE(stable_doc_id, result_key)
   )`,
     `CREATE INDEX IF NOT EXISTS idx_request_var_results_doc ON request_var_results(stable_doc_id)`,
-    `CREATE INDEX IF NOT EXISTS idx_cookie_jar_domain_path ON cookie_jar(domain, port, path)`,
+    // cookie_jar index is created in 000003 after legacy DBs gain the `port` column
   ],
 } as const;

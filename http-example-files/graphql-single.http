@@ -1,0 +1,14 @@
+### GQL_STARWARS_QUERY_PERSON
+
+GRAPHQL https://swapi-graphql.netlify.app/graphql HTTP/1.1
+Accept: application/json
+
+query Person($id: ID) {
+  person(personID: $id) {
+    name
+  }
+}
+
+{
+  "id": 1
+}

@@ -76,6 +76,23 @@ export type KulalaStdinActionClearGlobals = {
   names?: string[];
 };
 
+/** Clear cached GraphQL introspection schema(s) by host. */
+export type KulalaStdinActionClearGraphqlSchema = {
+  action: "clear_graphql_schema";
+  /** Host cache key (from URL). When omitted, clears all cached schemas. */
+  host?: string;
+};
+
+/** Fetch and cache GraphQL introspection for the request at cursor. */
+export type KulalaStdinActionGraphqlIntrospect = {
+  action: "graphql_introspect";
+  content: string;
+  filepath?: string;
+  line: number;
+  column: number;
+  env?: string;
+};
+
 /** Discover http-client.env.json / kuba.yaml environments for UI pickers. */
 export type KulalaStdinActionEnvironments = {
   action: "environments";
@@ -153,6 +170,8 @@ export type KulalaStdinParsed =
   | KulalaStdinActionCrypto
   | KulalaStdinActionHttpRequest
   | KulalaStdinActionClearGlobals
+  | KulalaStdinActionClearGraphqlSchema
+  | KulalaStdinActionGraphqlIntrospect
   | KulalaStdinActionEnvironments
   | KulalaStdinActionInspectRequest
   | KulalaStdinActionToCurl

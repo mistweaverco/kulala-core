@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { join } from "path";
+import { httpExamplesDir } from "../../test/http-examples";
 import { findBlockAtCursor, findBlocksAtCursor } from "./block";
 import type { KulalaDocument } from "../parser/types";
 import type { KulalaBlock } from "../parser/types/block";
@@ -242,7 +243,7 @@ query Planet($id: ID) {
   "id": 1
 }`;
 
-  const doc = await getDocument(content, "http-example-files/graphql.http");
+  const doc = await getDocument(content, join(httpExamplesDir, "graphql.http"));
 
   // Cursor at line 8 (inside first block) should find first block, not second
   const block = findBlockAtCursor(doc, { line: 8, column: 1 });
@@ -264,14 +265,14 @@ test("findBlockAtCursor cursor on last line of block (no trailing newline)", asy
 });
 
 test("findBlocksAtCursor expands block-level run ./file.http", async () => {
-  const graphqlPath = join(process.cwd(), "http-example-files/graphql.http");
+  const graphqlPath = join(httpExamplesDir, "graphql.http");
   const content = `### RUN_ALL_GRAPHQL_REQUESTS
 
 run ${graphqlPath}
 `;
   const doc = await getDocument(
     content,
-    join(process.cwd(), "http-example-files/import-all.http"),
+    join(httpExamplesDir, "import-all.http"),
   );
   const matched = findBlocksAtCursor(doc, { line: 3, column: 1 });
   expect(matched.map((b) => b.name).sort()).toEqual([
@@ -283,11 +284,11 @@ run ${graphqlPath}
 });
 
 test("findBlocksAtCursor expands top-level run ./file.http", async () => {
-  const graphqlPath = join(process.cwd(), "http-example-files/graphql.http");
+  const graphqlPath = join(httpExamplesDir, "graphql.http");
   const content = `run ${graphqlPath}\n`;
   const doc = await getDocument(
     content,
-    join(process.cwd(), "http-example-files/import-all.http"),
+    join(httpExamplesDir, "import-all.http"),
   );
   const matched = findBlocksAtCursor(doc, { line: 1, column: 1 });
   expect(matched.map((b) => b.name).sort()).toEqual([

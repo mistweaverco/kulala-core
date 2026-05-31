@@ -25,6 +25,20 @@ export {
   lspDocumentSymbols,
   lspHover,
 } from "./lib/lsp";
+
+export {
+  clearGraphQLSchemaCache,
+  introspectGraphQLAtCursor,
+  graphQLLspCompletionItems,
+  graphQLLspHover,
+  type GraphQLLspCompletionResult,
+  fetchGraphQLIntrospection,
+  graphqlSchemaHostFromUrl,
+  parseIntrospectionSchema,
+  type ClearGraphQLSchemaCacheResult,
+  type GraphQLIntrospectionResult,
+  type GraphQLSchemaIndex,
+} from "./lib/graphql";
 export type {
   LspCompletionItem,
   LspCompletionList,
