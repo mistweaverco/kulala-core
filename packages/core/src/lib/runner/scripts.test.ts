@@ -1,6 +1,6 @@
-import { describe, expect, test, beforeEach } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import { runScripts } from "./scripts";
-import { getDbInMemory, setDbForTesting, getVariable } from "../persistence";
+import { getDbInMemory, getVariable, setDbForTesting } from "../persistence";
 import { ScriptPromptError } from "./script-prompt-error";
 import { ScriptReplayError, ScriptSkipError } from "./script-control-error";
 import type { KulalaBlock } from "../parser/types/block";
@@ -24,6 +24,16 @@ const dummyBlock: KulalaBlock = {
 describe("scripts", () => {
   beforeEach(() => {
     setDbForTesting(getDbInMemory());
+    // stub console.error to avoid noisy output during tests that trigger script errors
+    const originalConsoleError = console.error;
+    console.error = () => {};
+    // restore original console.error after each test
+    // in Bun's test environment,
+    // there's no built-in afterEach,
+    // so we return a cleanup function from beforeEach
+    return () => {
+      console.error = originalConsoleError;
+    };
   });
 
   test("pre-request JS can inject request variables", async () => {
@@ -180,7 +190,7 @@ client.global.set("DATE", response.headers.valueOf("Date") || "");`,
 
   test("post-request JS cannot call request.variables.set (JetBrains parity)", async () => {
     const vars: Record<string, string> = {};
-    await expect(
+    expect(
       runScripts(
         [
           {
@@ -207,7 +217,7 @@ client.global.set("DATE", response.headers.valueOf("Date") || "");`,
   });
 
   test("client.assert aborts script execution when condition is false", async () => {
-    await expect(
+    expect(
       runScripts(
         [
           {
@@ -233,7 +243,7 @@ client.global.set("DATE", response.headers.valueOf("Date") || "");`,
   });
 
   test("client.test runs the test function and aborts the script on failure", async () => {
-    await expect(
+    expect(
       runScripts(
         [
           {
@@ -261,7 +271,7 @@ client.global.set("DATE", response.headers.valueOf("Date") || "");`,
   });
 
   test("pre-request script errors propagate and abort the request", async () => {
-    await expect(
+    expect(
       runScripts(
         [
           {
