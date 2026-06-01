@@ -7,4 +7,4 @@ if [ -z "$CI" ]; then
   exit $?
 fi
 
-bun test --only-failures --randomize --dots
+bun test --randomize
