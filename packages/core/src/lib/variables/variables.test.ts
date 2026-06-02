@@ -602,3 +602,113 @@ test("substituteInObjectAsync: resolves $auth.token() in arrays", async () => {
     items: ["Bearer token-123", "other", "Bearer token-123"],
   });
 });
+
+test("substituteInString: re-expands a value that references another var", () => {
+  // Real-world case: an env var whose value composes other env vars,
+  // e.g. http-client.env.json with
+  //   "API": "{{SCHEME}}service.dev.{{API_BASE}}"
+  expect(
+    substituteInString("{{API}}/health", {
+      SCHEME: "https://",
+      API_BASE: "example.com/api",
+      API: "{{SCHEME}}service.dev.{{API_BASE}}",
+    }),
+  ).toBe("https://service.dev.example.com/api/health");
+});
+
+test("substituteInString: chains across multiple levels of indirection", () => {
+  expect(
+    substituteInString("{{A}}", {
+      A: "{{B}}",
+      B: "{{C}}",
+      C: "value",
+    }),
+  ).toBe("value");
+});
+
+test("substituteInString: self-referencing var terminates without infinite loop", () => {
+  // A = "{{A}}" reaches a fixed point on the first pass (the value is
+  // identical to the placeholder), so the loop exits via no-change detection.
+  expect(substituteInString("{{A}}", { A: "{{A}}" })).toBe("{{A}}");
+});
+
+test("substituteInString: mutually-referencing vars terminate via depth cap", () => {
+  // A → B → A → B ... never converges; the depth cap bounds runtime.
+  // The result is one of the two states; the contract is "terminates with
+  // a placeholder", not a specific final string.
+  const result = substituteInString("{{A}}", {
+    A: "{{B}}",
+    B: "{{A}}",
+  });
+  expect(result === "{{A}}" || result === "{{B}}").toBe(true);
+});
+
+test("substituteInString: missing var inside a chained value resolves to empty", () => {
+  expect(
+    substituteInString("[{{A}}]", {
+      A: "x{{MISSING}}y",
+    }),
+  ).toBe("[xy]");
+});
+
+test("substituteInString: chained substitution preserves resolver fallback", () => {
+  const resolver = (name: string) => (name === "PORT" ? "8080" : undefined);
+  expect(
+    substituteInString(
+      "{{URL}}",
+      {
+        URL: "http://localhost:{{PORT}}/api",
+      },
+      resolver,
+    ),
+  ).toBe("http://localhost:8080/api");
+});
+
+test("substituteInStringAsync: re-expands a value that references another var", async () => {
+  const result = await substituteInStringAsync("{{API}}/health", {
+    SCHEME: "https://",
+    API_BASE: "example.com/api",
+    API: "{{SCHEME}}service.dev.{{API_BASE}}",
+  });
+  expect(result).toBe("https://service.dev.example.com/api/health");
+});
+
+test("substituteInStringAsync: chained value mixed with $auth.token()", async () => {
+  const authResolver = async (
+    func: "token" | "idToken",
+    authId: string,
+  ): Promise<string | undefined> => {
+    if (func === "token" && authId === "my-auth") return "tok";
+    return undefined;
+  };
+  const result = await substituteInStringAsync(
+    "{{AUTHED_URL}}",
+    {
+      BASE: "https://api.example.com",
+      AUTHED_URL: '{{BASE}}?token={{$auth.token("my-auth")}}',
+    },
+    undefined,
+    authResolver,
+  );
+  expect(result).toBe("https://api.example.com?token=tok");
+});
+
+test("substituteInStringAsync: self-referencing var terminates without infinite loop", async () => {
+  const result = await substituteInStringAsync("{{A}}", { A: "{{A}}" });
+  expect(result).toBe("{{A}}");
+});
+
+test("substituteInObject: chained env vars expand inside nested object values", () => {
+  const out = substituteInObject(
+    { url: "{{API}}/x", body: { ref: "{{API}}" } },
+    {
+      SCHEME: "https://",
+      HOST: "example.com",
+      API: "{{SCHEME}}{{HOST}}",
+    },
+  );
+  expect(out).toEqual({
+    url: "https://example.com/x",
+    body: { ref: "https://example.com" },
+  });
+});

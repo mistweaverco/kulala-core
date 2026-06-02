@@ -1,27 +1,31 @@
 import { resolveVariableReference } from "./variable-lookup";
 
 /**
- * Replace {{variableName}} or {{ variableName }} in a string with values from vars.
- * Supports simple names (e.g. API_KEY), JetBrains JSONPath (e.g. CREDENTIALS.password, users[*].name),
- * and compound request vars (e.g. REQUEST_ONE.response.body.$.token).
- * Optional whitespace around the variable name is allowed.
- * Unknown variables are replaced with empty string.
- * If resolver is provided, it is used for missing keys (e.g. request variables).
- *
- * Note: For $auth.token() and $auth.idToken() calls, use substituteInStringAsync instead.
+ * Max iterations for chained-variable expansion (e.g. one env var that
+ * references another). Bounds runtime if values reference each other in a
+ * cycle (`A = "{{B}}"`, `B = "{{A}}"`) or grow without converging
+ * (`A = "x{{A}}"`).
  */
-export function substituteInString(
+const MAX_SUBSTITUTION_DEPTH = 8;
+
+const VAR_RE = /\{\{\s*([^}]+)\s*\}\}/g;
+
+/**
+ * One regex pass: replace every `{{ name }}` in `template` using `vars` and
+ * the optional fallback `resolver`. Auth placeholders are preserved verbatim
+ * so the async path can resolve them.
+ */
+function substituteInStringOnce(
   template: string,
   vars: Record<string, string>,
   resolver?: (name: string) => string | undefined,
 ): string {
-  return template.replace(/\{\{\s*([^}]+)\s*\}\}/g, (_, name) => {
+  return template.replace(VAR_RE, (_, name) => {
     const key = name.trim();
 
-    // Check for $auth.token() or $auth.idToken() syntax - these require async resolution
+    // $auth.token() / $auth.idToken() require async resolution.
     const authMatch = key.match(/^\$auth\.(token|idToken)\s*\(/);
     if (authMatch) {
-      // Keep as-is - caller should use substituteInStringAsync for auth calls
       return `{{${key}}}`;
     }
 
@@ -36,12 +40,41 @@ export function substituteInString(
 }
 
 /**
- * Async version that handles $auth.token() and $auth.idToken() calls.
- * Also supports all regular variable substitution.
+ * Replace {{variableName}} or {{ variableName }} in a string with values from vars.
+ * Supports simple names (e.g. API_KEY), JetBrains JSONPath (e.g. CREDENTIALS.password, users[*].name),
+ * and compound request vars (e.g. REQUEST_ONE.response.body.$.token).
+ * Optional whitespace around the variable name is allowed.
+ * Unknown variables are replaced with empty string.
+ * If resolver is provided, it is used for missing keys (e.g. request variables).
  *
- * This function properly handles multiple occurrences of the same variable.
+ * Values may themselves contain `{{...}}` references; substitution is applied
+ * iteratively until the result stabilises or {@link MAX_SUBSTITUTION_DEPTH}
+ * iterations have run, whichever comes first.
+ *
+ * Note: For $auth.token() and $auth.idToken() calls, use substituteInStringAsync instead.
  */
-export async function substituteInStringAsync(
+export function substituteInString(
+  template: string,
+  vars: Record<string, string>,
+  resolver?: (name: string) => string | undefined,
+): string {
+  let result = template;
+  for (let depth = 0; depth < MAX_SUBSTITUTION_DEPTH; depth++) {
+    const next = substituteInStringOnce(result, vars, resolver);
+    if (next === result) return next;
+    result = next;
+    if (!result.includes("{{")) return result;
+  }
+  return result;
+}
+
+/**
+ * One async pass: regex-walk `template` and produce the next string.
+ * Handles regular vars, fallback resolver, and `$auth.token()`/`$auth.idToken()`
+ * via the optional `authResolver`. Auth placeholders are preserved verbatim
+ * when no `authResolver` is provided.
+ */
+async function substituteInStringOnceAsync(
   template: string,
   vars: Record<string, string>,
   resolver?: (name: string) => string | undefined,
@@ -50,7 +83,7 @@ export async function substituteInStringAsync(
     authId: string,
   ) => Promise<string | undefined>,
 ): Promise<string> {
-  const matches = Array.from(template.matchAll(/\{\{\s*([^}]+)\s*\}\}/g));
+  const matches = Array.from(template.matchAll(VAR_RE));
   let result = template;
 
   // Process matches in reverse order to maintain correct indices when replacing
@@ -93,6 +126,38 @@ export async function substituteInStringAsync(
       result.slice(match.index! + match[0]!.length);
   }
 
+  return result;
+}
+
+/**
+ * Async version that handles $auth.token() and $auth.idToken() calls.
+ * Also supports all regular variable substitution.
+ *
+ * This function properly handles multiple occurrences of the same variable,
+ * and re-expands values that themselves contain `{{...}}` references up to
+ * {@link MAX_SUBSTITUTION_DEPTH} iterations.
+ */
+export async function substituteInStringAsync(
+  template: string,
+  vars: Record<string, string>,
+  resolver?: (name: string) => string | undefined,
+  authResolver?: (
+    func: "token" | "idToken",
+    authId: string,
+  ) => Promise<string | undefined>,
+): Promise<string> {
+  let result = template;
+  for (let depth = 0; depth < MAX_SUBSTITUTION_DEPTH; depth++) {
+    const next = await substituteInStringOnceAsync(
+      result,
+      vars,
+      resolver,
+      authResolver,
+    );
+    if (next === result) return next;
+    result = next;
+    if (!result.includes("{{")) return result;
+  }
   return result;
 }
 
