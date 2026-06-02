@@ -1,5 +1,7 @@
 export { KulalaParser, writeErrorToStderr } from "./lib/parser";
 export { KulalaRunner } from "./lib/runner";
+export { deserializeHttp, serializeHttp } from "./lib/parser";
+export type { KulalaHttpSerdeSerializeOptions } from "./lib/parser";
 
 export {
   CURL_TOOL,

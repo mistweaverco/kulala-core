@@ -3,6 +3,8 @@ export type KulalaScriptType = "preRequest" | "postRequest";
 export type KulalaScript = {
   type: KulalaScriptType;
   lang: "ts" | "js" | "lua";
+  /** True when the opening line included `lang=ts|js|lua` (omit on serialize when false). */
+  langExplicit?: boolean;
   /** Inline `{% %} block in HTTP vs external `< path` / `> path`. */
   source: "inline" | "file";
   /** For `file`, path to script relative to cwd; for inline, the enclosing HTTP document path. */

@@ -64,7 +64,8 @@ export const getScript = async (
         line.indexOf(`{%${removeLang}`) + removeLang.length + 2,
         closingTag,
       )
-      .trim()
+      .replace(/^\n+/, "")
+      .replace(/\n+$/, "")
       .replaceAll("\\{", "{")
       .replaceAll("\\}", "}");
   } else {
@@ -92,6 +93,7 @@ export const getScript = async (
   return {
     type,
     lang,
+    ...(langTest ? { langExplicit: true } : {}),
     source,
     content,
     filepath,

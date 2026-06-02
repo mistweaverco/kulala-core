@@ -52,4 +52,6 @@ export type KulalaOperator = {
   name: KulalaOperatorName;
   args?: KulalaOperatorArgs;
   lineNumber: number;
+  /** Comment marker used in the source file (`#` or `//`). */
+  commentStyle?: "#" | "//";
 };
