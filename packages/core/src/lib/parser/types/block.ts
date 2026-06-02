@@ -24,6 +24,8 @@ export type KulalaBlock = {
   contentStartLine?: number;
   /** @name=value lines in this block before the request (JetBrains in-file variables). */
   preambleVariables?: Record<string, string>;
+  /** Empty line between preamble and request line in the source file. */
+  blankLineBeforeRequest?: boolean;
   /** @ variables from the start of the .http file this block was parsed from (imports / run file). */
   sourceFileHeaderVariables?: Record<string, string>;
   /** `# @kulala-vscode-restclient-compat` from the source .http file (imports / run file). */

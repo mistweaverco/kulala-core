@@ -210,6 +210,16 @@ const getParsedBlock = async (
       }
     }
 
+    if (
+      line.trim() === "" &&
+      !seenBlockTypes.has("request") &&
+      (result.preamble.length > 0 || result.preambleVariables)
+    ) {
+      result.blankLineBeforeRequest = true;
+      lineIdx++;
+      continue;
+    }
+
     switch (lineType.name) {
       case "name":
         break;
@@ -751,6 +761,9 @@ export const getDocument = async (
           }
           block.runExpander = true;
           (block as BlockWithRunDirective).__fileRunExpander = true;
+          // Preserve the original directive for serializer/round-trip.
+          // The block itself does not represent an executable request when it expands to run-target blocks.
+          (block as BlockWithRunDirective).__runDirective = blockRunDirective;
           delete (block as BlockWithRunDirective).__blockRunDirective;
         }
       }

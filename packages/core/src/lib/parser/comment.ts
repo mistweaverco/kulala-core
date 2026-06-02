@@ -1,9 +1,11 @@
 import type { KulalaComment } from "./types/comment";
 
 export const getComment = (line: string, lineIdx: number): KulalaComment => {
-  // replace all leading comment markers (# or //) and whitespace to get the content
+  const leadingWhitespace = line.match(/^(\s*)/)?.[1] ?? "";
+  const content = line.replace(/^\s*(?:#|\/\/)\s?/, "");
   return {
-    content: line.replace(/^(?:#|\/\/)\s?/, ""),
+    content,
     lineNumber: lineIdx,
+    ...(leadingWhitespace ? { leadingWhitespace } : {}),
   };
 };

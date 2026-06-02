@@ -22,7 +22,8 @@ export const getOperator = (
   line: string,
   lineIdx: number,
 ): KulalaOperator | KulalaError => {
-  const match = line.match(/^(?:#|\/\/)\s*@([A-z0-9_-]+)(?:\s+(.*))?$/);
+  const match = line.match(/^(?:#|\/\/)\s*@([A-Za-z0-9_-]+)(?:\s+(.*))?$/);
+  const commentStyle = line.trimStart().startsWith("//") ? "//" : "#";
   if (!match) {
     return {
       errorMessage: `Invalid operator syntax at line ${lineIdx + 1}`,
@@ -61,6 +62,7 @@ export const getOperator = (
     name: operatorName as KulalaOperator["name"],
     args: match[2] || undefined,
     lineNumber: lineIdx,
+    commentStyle,
   };
 };
 

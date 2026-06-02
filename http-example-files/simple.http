@@ -47,20 +47,19 @@ Cookie: _ga=GA1.2.1903065019.1615319519
 Cookie: NAME2=VALUE2
 
 {
-    "date": "2023-05-10",
-    "temperatureC": 30,
-    "summary": "Warm"
+  "date": "2023-05-10",
+  "temperatureC": 30,
+  "summary": "Warm"
 }
 
 ### GRAPHQL_REQUEST
 
-GRAPHQL  https://httpbin.org/post HTTP/1.1
+GRAPHQL https://httpbin.org/post HTTP/1.1
 
 {
   "username": "user123",
   "password": "pass123"
 }
-
 
 ### NAMED_SIMPLE
 

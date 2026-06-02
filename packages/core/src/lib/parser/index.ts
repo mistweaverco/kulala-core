@@ -7,6 +7,8 @@ import {
   writeToStdout,
 } from "./lib/helpers";
 import { getDocument } from "./parser";
+export { deserializeHttp, serializeHttp } from "./serde";
+export type { KulalaHttpSerdeSerializeOptions } from "./serde";
 import { loadEnvironmentCatalog } from "../variables/environments";
 import { dirname } from "path";
 import { continueOAuth2Flow } from "../auth/oauth2/continuation";
