@@ -95,7 +95,7 @@ X-Custom-Header: Kulala-Insecure
   "token": "some-insecure-token"
 }
 
-> ./simple.js
+> ./simple.post.http.js
 
 > {%
   const fs = require('fs');
