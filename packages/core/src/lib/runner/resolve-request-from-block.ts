@@ -105,7 +105,7 @@ export async function resolveRequestFromBlock(
       .map((o) => String(o.args ?? ""))
       .find((s) => s.trim() !== "");
   const hasOp = (names: string[]): boolean => getOps(names).length > 0;
-  const oauth2Manager = new OAuth2Manager(env, startDir);
+  const oauth2Manager = new OAuth2Manager(env, startDir, mutableVars);
   const authResolver = async (
     func: "token" | "idToken",
     authId: string,

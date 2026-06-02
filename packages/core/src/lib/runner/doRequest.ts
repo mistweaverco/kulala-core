@@ -339,11 +339,15 @@ export async function doRequestFromBlock(
     return { varName, label };
   };
 
+  // Pre-request scripts may set variables that affect substitution.
+  // Keep `vars` mutable within this block.
+  const mutableVars = vars ?? {};
+
   // Initialize OAuth2 manager if needed
   const startDir = filePath
     ? (await import("path")).dirname(filePath)
     : process.cwd();
-  const oauth2Manager = new OAuth2Manager(env, startDir);
+  const oauth2Manager = new OAuth2Manager(env, startDir, mutableVars);
   const authResolver = async (
     func: "token" | "idToken",
     authId: string,
@@ -354,10 +358,6 @@ export async function doRequestFromBlock(
       return await oauth2Manager.getIdToken(authId);
     }
   };
-
-  // Pre-request scripts may set variables that affect substitution.
-  // Keep `vars` mutable within this block.
-  const mutableVars = vars ?? {};
 
   const stableDocId = stableDocIdForReplay ?? filePath ?? "";
   const effectiveOperators = getEffectiveOperators(
