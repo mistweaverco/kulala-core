@@ -153,7 +153,7 @@ test("OAuth2: Manager loads config and acquires token", async () => {
     ),
   );
 
-  const manager = new OAuth2Manager("default", testDir);
+  const manager = new OAuth2Manager("default", testDir, {});
   const token = await manager.getAccessToken("test-auth");
   expect(token).toBe("test-access-token-123");
 
@@ -166,6 +166,44 @@ test("OAuth2: Manager loads config and acquires token", async () => {
   expect(privateData.default.auth_data["test-auth"].access_token).toBe(
     "test-access-token-123",
   );
+});
+
+test("OAuth2: Manager substitutes variables in loaded config", async () => {
+  const envFile = join(testDir, "http-client.env.json");
+  writeFileSync(
+    envFile,
+    JSON.stringify(
+      {
+        default: {
+          OAUTH_TOKEN_URL: tokenUrl,
+          OAUTH_CLIENT_ID: "test-client-id",
+          OAUTH_CLIENT_SECRET: "test-client-secret",
+          Security: {
+            Auth: {
+              "test-auth-vars": {
+                Type: "OAuth2",
+                "Grant Type": "Client Credentials",
+                "Token URL": "{{OAUTH_TOKEN_URL}}",
+                "Client ID": "{{OAUTH_CLIENT_ID}}",
+                "Client Secret": "{{OAUTH_CLIENT_SECRET}}",
+                "Client Credentials": "basic",
+              },
+            },
+          },
+        },
+      },
+      null,
+      2,
+    ),
+  );
+
+  const manager = new OAuth2Manager("default", testDir, {
+    OAUTH_TOKEN_URL: tokenUrl,
+    OAUTH_CLIENT_ID: "test-client-id",
+    OAUTH_CLIENT_SECRET: "test-client-secret",
+  });
+  const token = await manager.getAccessToken("test-auth-vars");
+  expect(token).toBe("test-access-token-123");
 });
 
 test("OAuth2: Manager reuses valid token", async () => {
@@ -216,7 +254,7 @@ test("OAuth2: Manager reuses valid token", async () => {
     ),
   );
 
-  const manager = new OAuth2Manager("default", testDir);
+  const manager = new OAuth2Manager("default", testDir, {});
   const token = await manager.getAccessToken("test-auth-2");
   // Should use cached token, not make a new request
   expect(token).toBe("cached-token-456");
@@ -278,7 +316,7 @@ test("OAuth2: Manager handles Password grant type", async () => {
     ),
   );
 
-  const manager = new OAuth2Manager("default", testDir);
+  const manager = new OAuth2Manager("default", testDir, {});
   const token = await manager.getAccessToken("test-password-auth");
   expect(token).toBe("password-token-789");
 
@@ -309,7 +347,7 @@ test("OAuth2: Manager throws error for unsupported grant type", async () => {
     ),
   );
 
-  const manager = new OAuth2Manager("default", testDir);
+  const manager = new OAuth2Manager("default", testDir, {});
   await expect(manager.getAccessToken("test-device-auth")).rejects.toThrow(
     "Device Authorization",
   );

@@ -3,6 +3,7 @@ import {
   loadOAuth2AuthData,
   saveOAuth2AuthData,
 } from "./config";
+import { substituteInString } from "../../variables/substitute";
 import {
   acquireAuthorizationCodeToken,
   acquireClientCredentialsToken,
@@ -14,6 +15,26 @@ import {
 import type { OAuth2Config, OAuth2TokenData } from "./types";
 import { OAuth2PromptError } from "./prompt-error";
 
+function substituteConfigValue(
+  value: unknown,
+  vars: Record<string, string>,
+): unknown {
+  if (typeof value === "string") {
+    return substituteInString(value, vars);
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => substituteConfigValue(item, vars));
+  }
+  if (typeof value === "object" && value !== null) {
+    const out: Record<string, unknown> = {};
+    for (const [key, item] of Object.entries(value)) {
+      out[key] = substituteConfigValue(item, vars);
+    }
+    return out;
+  }
+  return value;
+}
+
 /**
  * OAuth2 token manager. Handles token acquisition, refresh, and storage.
  */
@@ -22,16 +43,30 @@ export class OAuth2Manager {
   private tokens: Map<string, OAuth2TokenData> = new Map();
   private env: string;
   private startDir: string;
+  private substitutionVars: Record<string, string>;
 
-  constructor(env: string, startDir: string) {
+  constructor(
+    env: string,
+    startDir: string,
+    substitutionVars: Record<string, string>,
+  ) {
     this.env = env;
     this.startDir = startDir;
+    this.substitutionVars = substitutionVars;
     this.loadConfigs();
     this.loadTokens();
   }
 
   private loadConfigs(): void {
-    this.configs = loadOAuth2Configs(this.env, this.startDir);
+    this.configs = new Map(
+      Array.from(
+        loadOAuth2Configs(this.env, this.startDir),
+        ([authId, config]) => [
+          authId,
+          substituteConfigValue(config, this.substitutionVars) as OAuth2Config,
+        ],
+      ),
+    );
   }
 
   private loadTokens(): void {
