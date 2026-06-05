@@ -286,6 +286,9 @@ const getParsedBlock = async (
           break;
         }
         result.request.body = body.content;
+        if (body.sourceText !== undefined) {
+          result.request.sourceBodyText = body.sourceText;
+        }
         break;
       case "responseRedirect": {
         const overwrite = line.startsWith(">>!");

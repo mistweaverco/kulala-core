@@ -106,6 +106,7 @@ export const getBody = async (
     return {
       type: "bodyFromFile",
       content: bodyFromFile,
+      sourceText: content,
     };
   }
 
@@ -115,6 +116,7 @@ export const getBody = async (
     return {
       type: "graphql",
       content: parseGraphQLContent(content),
+      sourceText: content,
     };
   }
 
@@ -129,6 +131,7 @@ export const getBody = async (
       return {
         type: "json",
         content: JSON.parse(jsonStr),
+        sourceText: content,
       };
     } catch {
       // do nothing, we'll treat it as raw text body below
@@ -138,5 +141,6 @@ export const getBody = async (
   return {
     type: "raw",
     content: content,
+    sourceText: content,
   };
 };

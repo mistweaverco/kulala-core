@@ -7,8 +7,16 @@ import {
   writeToStdout,
 } from "./lib/helpers";
 import { getDocument } from "./parser";
+import { formatHttp } from "./format";
 export { deserializeHttp, serializeHttp } from "./serde";
 export type { KulalaHttpSerdeSerializeOptions } from "./serde";
+export { formatHttp } from "./format";
+export type {
+  KulalaHttpFormatOptions,
+  KulalaHttpBodyFormatOptions,
+  KulalaHttpFormatDefaults,
+  KulalaHttpFormatResult,
+} from "./format";
 import { loadEnvironmentCatalog } from "../variables/environments";
 import { dirname } from "path";
 import { continueOAuth2Flow } from "../auth/oauth2/continuation";
@@ -57,6 +65,15 @@ const kulalaParser: KulalaParser = {
         doc = await getDocument(stdIn.content, stdIn.filepath);
         writeToStdout(doc);
         break;
+      case "format": {
+        const result = await formatHttp(stdIn.content, stdIn.filepath, {
+          formatBody: stdIn.formatBody,
+          bodyFormat: stdIn.bodyFormat,
+          defaults: stdIn.defaults,
+        });
+        writeToStdout(result);
+        break;
+      }
       case "run": {
         doc = await getDocument(stdIn.content, stdIn.filepath);
         await kulalaRunner.run(doc, stdIn.limit, {

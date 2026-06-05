@@ -97,4 +97,6 @@ export type KulalaRequest = {
   body?: KulalaRequestBody;
   /** When set, save response body to this file (>> = create/suffix, >>! = overwrite). */
   responseRedirect?: KulalaResponseRedirect;
+  /** Original body text from the source file (used when body formatting is disabled). */
+  sourceBodyText?: string;
 };

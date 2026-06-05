@@ -1,7 +1,13 @@
 export { KulalaParser, writeErrorToStderr } from "./lib/parser";
 export { KulalaRunner } from "./lib/runner";
-export { deserializeHttp, serializeHttp } from "./lib/parser";
-export type { KulalaHttpSerdeSerializeOptions } from "./lib/parser";
+export { deserializeHttp, serializeHttp, formatHttp } from "./lib/parser";
+export type {
+  KulalaHttpSerdeSerializeOptions,
+  KulalaHttpFormatOptions,
+  KulalaHttpBodyFormatOptions,
+  KulalaHttpFormatDefaults,
+  KulalaHttpFormatResult,
+} from "./lib/parser";
 
 export {
   CURL_TOOL,
@@ -65,7 +71,7 @@ export type {
   KulalaScriptConsoleOrigin,
 } from "./lib/runner";
 
-import { KulalaParser } from "./lib/parser";
+import { KulalaParser, formatHttp } from "./lib/parser";
 import { KulalaRunner } from "./lib/runner";
 import { getDocument } from "./lib/parser/parser";
 import type { KulalaStdinActionRunLimit } from "./lib/parser/types/stdinparsed";
@@ -85,6 +91,7 @@ export const kulalaCore = {
   runner: KulalaRunner(),
   parse,
   validate: parse,
+  format: formatHttp,
   run: async (input: {
     content: string;
     filepath?: string;
