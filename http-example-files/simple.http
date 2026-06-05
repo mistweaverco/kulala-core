@@ -23,8 +23,7 @@ POST https://httpbin.org/post
   # &someKey4=someValue4
   &someKey5=someValue5
   # &someKey6=someValue6
-  &someKey7=someValue7
-  HTTP/1.1
+  &someKey7=someValue7 HTTP/1.1
 # X-My-Custom-Header1: MyValue1
 Content-Type: application/json
 X-My-Custom-Header2: MyValue2

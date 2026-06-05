@@ -555,3 +555,23 @@ WS wss://echo.websocket.org
   expect(block!.request.method).toBe("WS");
   expect(block!.request.url).toBe("wss://echo.websocket.org");
 });
+
+test("parser: multi-line URL with HTTP version on same continuation line", async () => {
+  const content = `GET https://httpbin.org/get?foo=httpbin.org/get?foo=1
+  &bar=1 HTTP/1.1
+Accept: application/json
+`;
+  const doc = await getDocument(content);
+  const block = doc.blocks[0];
+
+  expect(doc.blocks).toHaveLength(1);
+  expect(block.errors).toEqual([]);
+  expect(block.request.method).toBe("GET");
+  expect(block.request.url).toBe(
+    "https://httpbin.org/get?foo=httpbin.org/get?foo=1&bar=1",
+  );
+  expect(block.request.httpVersion).toBe("HTTP/1.1");
+  expect(block.request.headerSection).toEqual([
+    { type: "header", name: "Accept", value: "application/json" },
+  ]);
+});

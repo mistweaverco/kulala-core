@@ -90,6 +90,8 @@ export type KulalaRequest = {
   grpcCommand?: KulalaGrpcCommand;
   /** HTTP version from the request line (e.g. HTTP/1.1, HTTP/2). Omitted if not present. */
   httpVersion?: KulalaHttpVersion;
+  /** When true, httpVersion was on the same line as the last URL continuation (serde round-trip). */
+  httpVersionInline?: boolean;
   // Ordered list of headers and comments so comments are preserved in place.
   headerSection: KulalaHeaderSectionEntry[];
   // Optional: when request line spans multiple lines or has comments, for round-trip.

@@ -180,6 +180,7 @@ export const getRequest = (
   const urlParts: string[] = [firstUrlPart];
   requestLineParts.push({ type: "url", line: firstUrlPart });
   let httpVersion: KulalaHttpVersion | undefined;
+  let httpVersionInline = false;
 
   // Consume continuation lines (URL parts, comments, or final HTTP version line)
   while (startLineIdx + consumed < lines.length) {
@@ -196,6 +197,16 @@ export const getRequest = (
     }
     if (HTTP_VERSION.test(trimmed)) {
       httpVersion = parseHttpVersion(trimmed);
+      break;
+    }
+    const contSplit = splitRequestTargetAndVersion(trimmed);
+    if (contSplit.versionStr !== undefined) {
+      if (contSplit.target.length > 0) {
+        requestLineParts.push({ type: "url", line: contSplit.target });
+        urlParts.push(contSplit.target);
+        httpVersionInline = true;
+      }
+      httpVersion = parseHttpVersion(contSplit.versionStr);
       break;
     }
     requestLineParts.push({ type: "url", line: trimmed });
@@ -218,6 +229,7 @@ export const getRequest = (
       method,
       url: urlResolved,
       ...(httpVersion !== undefined ? { httpVersion } : {}),
+      ...(httpVersionInline ? { httpVersionInline } : {}),
       headerSection: [],
       requestLineParts:
         requestLineParts.length > 0 ? requestLineParts : undefined,
