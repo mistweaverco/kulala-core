@@ -34,9 +34,13 @@ export type KulalaRequestRawBody = {
 };
 
 export type KulalaRequestBody =
-  | { type: "json"; content: string }
-  | { type: "form"; content: KulalaRequestFormBody }
-  | { type: "file"; content: KulalaRequestFileBody }
-  | { type: "raw"; content: string }
-  | { type: "graphql"; content: KulalaRequestGraphQLBody }
-  | { type: "bodyFromFile"; content: KulalaRequestBodyFromFileContent };
+  | { type: "json"; content: string; sourceText?: string }
+  | { type: "form"; content: KulalaRequestFormBody; sourceText?: string }
+  | { type: "file"; content: KulalaRequestFileBody; sourceText?: string }
+  | { type: "raw"; content: string; sourceText?: string }
+  | { type: "graphql"; content: KulalaRequestGraphQLBody; sourceText?: string }
+  | {
+      type: "bodyFromFile";
+      content: KulalaRequestBodyFromFileContent;
+      sourceText?: string;
+    };

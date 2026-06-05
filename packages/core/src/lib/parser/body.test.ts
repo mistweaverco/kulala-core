@@ -6,6 +6,11 @@ function parsedJsonContent(content: unknown): unknown {
   return typeof content === "string" ? JSON.parse(content) : content;
 }
 
+/** Raw body text as stored in `sourceText` (slice from body start through trim). */
+function expectedSourceText(lines: string[], lineIdx: number): string {
+  return lines.slice(lineIdx).join("\n").trim();
+}
+
 test("getBody: GraphQL without variables", async () => {
   const lines = [
     "GRAPHQL https://api.example.com/graphql HTTP/1.1",
@@ -25,6 +30,7 @@ test("getBody: GraphQL without variables", async () => {
       query:
         "query Query {\n  allFilms {\n    films {\n      title\n    }\n  }\n}",
     },
+    sourceText: expectedSourceText(lines, 2),
   });
 });
 
@@ -48,6 +54,7 @@ test("getBody: GraphQL with variables", async () => {
         "query Person($id: ID) {\n  person(personID: $id) {\n    name\n  }\n}",
       variables: { id: 1 },
     },
+    sourceText: expectedSourceText(lines, 2),
   });
 });
 
@@ -71,6 +78,7 @@ test("getBody: GraphQL with variables and trailing comma", async () => {
         "query Person($id: ID) {\n  person(personID: $id) {\n    name\n  }\n}",
       variables: { id: 1 },
     },
+    sourceText: expectedSourceText(lines, 2),
   });
 });
 
@@ -92,6 +100,7 @@ test("getBody: GraphQL with multiple blank lines", async () => {
       query: "query Query {\n  allFilms { films { title } }\n}",
       variables: { id: 1 },
     },
+    sourceText: expectedSourceText(lines, 2),
   });
 });
 
@@ -107,6 +116,7 @@ test("getBody: GraphQL query only (no variables)", async () => {
     content: {
       query: "query { user { name } }",
     },
+    sourceText: expectedSourceText(lines, 2),
   });
 });
 
@@ -120,6 +130,7 @@ test("getBody: GRAPHQL with body from file (< path) uses bodyFromFile", async ()
   expect(result).toEqual({
     type: "bodyFromFile",
     content: { __bodyFromFile: "./query.graphql" },
+    sourceText: expectedSourceText(lines, 2),
   });
 });
 
@@ -138,6 +149,7 @@ test("getBody: GRAPHQL with body from file and inline variables", async () => {
       __bodyFromFile: "./query.graphql",
       __graphqlVariablesSuffix: '{ "id": 1 }',
     },
+    sourceText: expectedSourceText(lines, 2),
   });
 });
 
@@ -152,6 +164,7 @@ test("getBody: body from file (< path) JetBrains syntax", async () => {
   expect(result).toEqual({
     type: "bodyFromFile",
     content: { __bodyFromFile: "./input.json" },
+    sourceText: expectedSourceText(lines, 3),
   });
 });
 
@@ -165,6 +178,7 @@ test("getBody: body from file with path without leading ./", async () => {
   expect(result).toEqual({
     type: "bodyFromFile",
     content: { __bodyFromFile: "path/to/file.json" },
+    sourceText: expectedSourceText(lines, 2),
   });
 });
 
@@ -178,6 +192,7 @@ test("getBody: body from file with quoted path", async () => {
   expect(result).toEqual({
     type: "bodyFromFile",
     content: { __bodyFromFile: "fixtures/input.json" },
+    sourceText: expectedSourceText(lines, 2),
   });
 });
 
@@ -264,6 +279,7 @@ test("getBody: GraphQL with variables containing variable placeholders", async (
         "query Person($id: ID) {\n  person(personID: $id) {\n    name\n  }\n}",
       variables: { id: "{{userId}}" },
     },
+    sourceText: expectedSourceText(lines, 2),
   });
   // Note: Variable substitution happens later in the runner via substituteInObject
 });
@@ -288,6 +304,7 @@ test("getBody: GraphQL unescapes \\{ and \\} in query", async () => {
         "query Person($id: ID) {\n  person(personID: $id) {\n    name\n  }\n}",
       variables: { id: 1 },
     },
+    sourceText: expectedSourceText(lines, 2),
   });
 });
 
@@ -328,6 +345,7 @@ test("getBody: GraphQL with multi-line indented variables JSON", async () => {
         },
       },
     },
+    sourceText: expectedSourceText(lines, 2),
   });
 });
 
@@ -357,5 +375,6 @@ test("getBody: GraphQL with multi-line variables JSON with trailing comma", asyn
         filter: "active",
       },
     },
+    sourceText: expectedSourceText(lines, 2),
   });
 });

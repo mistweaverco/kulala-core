@@ -16,6 +16,8 @@ export type KulalaHttpSerdeSerializeOptions = {
    * to the current file). When true, serializes all blocks in `doc.blocks` (including imported/run-expanded).
    */
   includeExpandedBlocks?: boolean;
+  /** When true, emit the original source body text instead of re-serializing parsed bodies. */
+  preserveBodyText?: boolean;
 };
 
 export async function deserializeHttp(
@@ -149,7 +151,15 @@ function isGraphQLBody(
   );
 }
 
-function serializeBody(method: string, body: unknown): string[] {
+function serializeBody(
+  method: string,
+  body: unknown,
+  sourceBodyText?: string,
+  preserveBodyText?: boolean,
+): string[] {
+  if (preserveBodyText && sourceBodyText !== undefined) {
+    return sourceBodyText.length ? sourceBodyText.split("\n") : [];
+  }
   if (body === undefined || body === null) return [];
   if (typeof body === "string") return body.length ? body.split("\n") : [];
 
@@ -179,7 +189,11 @@ function serializeBody(method: string, body: unknown): string[] {
   return [JSON.stringify(body, null, 2)];
 }
 
-function serializeBlock(block: KulalaBlock, docFilepath?: string): string[] {
+function serializeBlock(
+  block: KulalaBlock,
+  docFilepath?: string,
+  options: KulalaHttpSerdeSerializeOptions = {},
+): string[] {
   const lines: string[] = [];
   lines.push(`### ${block.name}`.trimEnd());
   // One blank line after each block separator.
@@ -296,7 +310,12 @@ function serializeBlock(block: KulalaBlock, docFilepath?: string): string[] {
   lines.push(...serializeHeaderSection(block.request.headerSection ?? []));
 
   // Body
-  const bodyLines = serializeBody(block.request.method, block.request.body);
+  const bodyLines = serializeBody(
+    block.request.method,
+    block.request.body,
+    block.request.sourceBodyText,
+    options.preserveBodyText,
+  );
   const postScripts = [...(block.scripts?.postRequest ?? [])].sort(
     (a, b) => a.lineNumber - b.lineNumber,
   );
@@ -370,7 +389,7 @@ export function serializeHttp(
   for (const [i, b] of blocks.entries()) {
     // One blank line between blocks.
     if (i > 0) lines.push("");
-    lines.push(...serializeBlock(b, doc.filepath));
+    lines.push(...serializeBlock(b, doc.filepath, options));
   }
 
   const out = lines.join("\n").replace(/\s+$/g, "");

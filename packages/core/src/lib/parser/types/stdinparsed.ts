@@ -6,6 +6,22 @@ export type KulalaStdinActionParse = {
   content: string;
 };
 
+export type KulalaStdinActionFormat = {
+  action: "format";
+  content: string;
+  filepath?: string;
+  formatBody?: boolean;
+  bodyFormat?: {
+    indent?: number;
+    line_width?: number;
+    expand_tabs?: boolean;
+  };
+  defaults?: {
+    http_method?: string;
+    http_version?: string | false;
+  };
+};
+
 export type KulalaStdinActionRunLimit =
   | {
       /* The cursor position is 1-based index
@@ -165,6 +181,7 @@ export type KulalaStdinActionLspDiagnostics = {
 
 export type KulalaStdinParsed =
   | KulalaStdinActionParse
+  | KulalaStdinActionFormat
   | KulalaStdinActionRun
   | KulalaStdinActionContinue
   | KulalaStdinActionCrypto
