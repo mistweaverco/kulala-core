@@ -88,6 +88,7 @@ function serializeRequestLineParts(
   method: string,
   parts: KulalaRequestLinePart[],
   httpVersion?: string,
+  httpVersionInline?: boolean,
 ): string[] {
   const lines: string[] = [];
   const firstUrl = parts.find((p) => p.type === "url");
@@ -110,7 +111,11 @@ function serializeRequestLineParts(
     }
   }
   if (httpVersion) {
-    lines.push(`  ${httpVersion}`);
+    if (httpVersionInline && lines.length > 1) {
+      lines[lines.length - 1] = `${lines[lines.length - 1]} ${httpVersion}`;
+    } else {
+      lines.push(`  ${httpVersion}`);
+    }
   }
   return lines;
 }
@@ -296,6 +301,7 @@ function serializeBlock(
         block.request.method,
         block.request.requestLineParts,
         block.request.httpVersion,
+        block.request.httpVersionInline,
       ),
     );
   } else {

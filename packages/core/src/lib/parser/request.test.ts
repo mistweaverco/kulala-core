@@ -41,6 +41,30 @@ test("getRequest: multi-line request with HTTP/1.1 on continuation line sets htt
   }
 });
 
+test("getRequest: multi-line request with URL part and HTTP/1.1 on same continuation line", () => {
+  const lines = [
+    "GET https://httpbin.org/get?foo=httpbin.org/get?foo=1",
+    "  &bar=1 HTTP/1.1",
+  ];
+  const [result, consumed] = getRequest(lines, 0);
+  expect(result).not.toHaveProperty("errorMessage");
+  expect(consumed).toBe(2);
+  if (!("errorMessage" in result!)) {
+    expect(result.url).toBe(
+      "https://httpbin.org/get?foo=httpbin.org/get?foo=1&bar=1",
+    );
+    expect(result.httpVersion).toBe("HTTP/1.1");
+    expect(result.httpVersionInline).toBe(true);
+    expect(result.requestLineParts).toEqual([
+      {
+        type: "url",
+        line: "https://httpbin.org/get?foo=httpbin.org/get?foo=1",
+      },
+      { type: "url", line: "&bar=1" },
+    ]);
+  }
+});
+
 test("getRequest: invalid HTTP version (HTTP/3) is omitted from httpVersion", () => {
   const lines = ["GET https://example.com/ HTTP/3"];
   const [result] = getRequest(lines, 0);
