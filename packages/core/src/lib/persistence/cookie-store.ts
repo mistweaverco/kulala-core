@@ -212,7 +212,88 @@ export function storeCookiesFromResponse(
   }
 }
 
-export function getCookieHeaderForRequest(urlStr: string): string | undefined {
+export type CookiePairForRequest = {
+  name: string;
+  value: string;
+  path: string;
+};
+
+/** Parse a request `Cookie` header value into name/value pairs (last duplicate name wins). */
+export function parseCookieHeaderValue(raw: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const part of raw.split(";")) {
+    const p = part.trim();
+    if (!p) continue;
+    const eq = p.indexOf("=");
+    if (eq === -1) continue;
+    const k = p.slice(0, eq).trim();
+    const v = p.slice(eq + 1).trim();
+    if (k) out[k] = v;
+  }
+  return out;
+}
+
+/** Format name/value pairs as a single RFC 6265 Cookie header value. */
+export function formatCookieHeaderValue(
+  pairs: Record<string, string>,
+): string | undefined {
+  const names = Object.keys(pairs).sort((a, b) => a.localeCompare(b));
+  if (names.length === 0) return undefined;
+  return names.map((k) => `${k}=${pairs[k]}`).join("; ");
+}
+
+/**
+ * Merge multiple Cookie header values left-to-right; later values win for the same name.
+ */
+export function mergeCookieHeaderValues(
+  ...values: (string | undefined)[]
+): string | undefined {
+  const merged: Record<string, string> = {};
+  for (const raw of values) {
+    if (!raw?.trim()) continue;
+    Object.assign(merged, parseCookieHeaderValue(raw));
+  }
+  return formatCookieHeaderValue(merged);
+}
+
+export type CookieHeaderCandidate = {
+  name: string;
+  value: string;
+  path: string;
+  /** Higher tier wins (jar < explicit request header < redirect Set-Cookie). */
+  tier: number;
+  /** Later within the same tier wins when path length is equal. */
+  seq: number;
+};
+
+function compareCookieHeaderCandidates(
+  a: CookieHeaderCandidate,
+  b: CookieHeaderCandidate,
+): number {
+  if (a.tier !== b.tier) return a.tier - b.tier;
+  if (a.path.length !== b.path.length) return a.path.length - b.path.length;
+  return a.seq - b.seq;
+}
+
+/** Pick one value per cookie name for an outgoing request. */
+export function selectCookieHeaderCandidates(
+  candidates: CookieHeaderCandidate[],
+): string | undefined {
+  const byName = new Map<string, CookieHeaderCandidate>();
+  for (const c of candidates) {
+    const cur = byName.get(c.name);
+    if (!cur || compareCookieHeaderCandidates(c, cur) > 0) {
+      byName.set(c.name, c);
+    }
+  }
+  const pairs: Record<string, string> = {};
+  for (const c of byName.values()) pairs[c.name] = c.value;
+  return formatCookieHeaderValue(pairs);
+}
+
+export function getCookiePairsForRequest(
+  urlStr: string,
+): CookiePairForRequest[] {
   const url = new URL(urlStr);
   const hostname = url.hostname.toLowerCase();
   const port = url.port ? Number(url.port) : null;
@@ -221,7 +302,6 @@ export function getCookieHeaderForRequest(urlStr: string): string | undefined {
   const now = nowIso();
   const db = getDb();
 
-  // Fetch all candidates by domain; filter in JS for suffix match + path match.
   const rows = db
     .query<
       {
@@ -240,17 +320,25 @@ export function getCookieHeaderForRequest(urlStr: string): string | undefined {
     )
     .all();
 
-  const out: Array<{ name: string; value: string }> = [];
+  const byName = new Map<string, CookiePairForRequest>();
   for (const r of rows) {
     if (!domainMatches(hostname, r.domain)) continue;
     if (!portMatches(port, r.port)) continue;
     if (!pathMatches(reqPath, r.path)) continue;
     if (r.secure === 1 && !isHttps && r.domain !== "localhost") continue;
     if (r.expires_at && r.expires_at <= now) continue;
-    out.push({ name: r.name, value: r.value });
+    const existing = byName.get(r.name);
+    if (!existing || r.path.length > existing.path.length) {
+      byName.set(r.name, { name: r.name, value: r.value, path: r.path });
+    }
   }
-  if (out.length === 0) return undefined;
-  // deterministic order
-  out.sort((a, b) => a.name.localeCompare(b.name));
-  return out.map((c) => `${c.name}=${c.value}`).join("; ");
+  return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export function getCookieHeaderForRequest(urlStr: string): string | undefined {
+  const pairs = getCookiePairsForRequest(urlStr);
+  if (pairs.length === 0) return undefined;
+  return formatCookieHeaderValue(
+    Object.fromEntries(pairs.map((c) => [c.name, c.value])),
+  );
 }

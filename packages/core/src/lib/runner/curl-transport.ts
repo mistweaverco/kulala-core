@@ -14,7 +14,10 @@ import { constants as fsConstants } from "node:fs";
 import { dirname, join } from "node:path";
 import {
   cookieAppliesToRequest,
-  getCookieHeaderForRequest,
+  getCookiePairsForRequest,
+  parseCookieHeaderValue,
+  selectCookieHeaderCandidates,
+  type CookieHeaderCandidate,
   type NormalizedSetCookie,
   normalizeSetCookieFromLine,
 } from "../persistence";
@@ -67,21 +70,6 @@ function secondsToMs(sec: number): number {
   return sec * 1000;
 }
 
-/** Parse a request `Cookie` header value into name/value pairs (first `=` separates name from value). */
-function parseRequestCookieHeader(raw: string): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const part of raw.split(";")) {
-    const p = part.trim();
-    if (!p) continue;
-    const eq = p.indexOf("=");
-    if (eq === -1) continue;
-    const k = p.slice(0, eq).trim();
-    const v = p.slice(eq + 1).trim();
-    if (k) out[k] = v;
-  }
-  return out;
-}
-
 function buildCookieHeaderForRedirect(
   nextUrl: string,
   opts: {
@@ -91,24 +79,50 @@ function buildCookieHeaderForRedirect(
     absorbedCookies: NormalizedSetCookie[];
   },
 ): string | undefined {
-  const pairs: Record<string, string> = {};
+  const candidates: CookieHeaderCandidate[] = [];
+  let seq = 0;
+
   if (opts.cookieJarEnabled) {
-    const jar = getCookieHeaderForRequest(nextUrl);
-    if (jar) Object.assign(pairs, parseRequestCookieHeader(jar));
+    for (const c of getCookiePairsForRequest(nextUrl)) {
+      candidates.push({
+        name: c.name,
+        value: c.value,
+        path: c.path,
+        tier: 0,
+        seq: seq++,
+      });
+    }
   }
+
   const nextHost = new URL(nextUrl).hostname.toLowerCase();
   const initialHost = new URL(opts.initialRequestUrl).hostname.toLowerCase();
   if (nextHost === initialHost && opts.initialCookieHeader) {
-    Object.assign(pairs, parseRequestCookieHeader(opts.initialCookieHeader));
-  }
-  for (const c of opts.absorbedCookies) {
-    if (cookieAppliesToRequest(c, nextUrl)) {
-      pairs[c.name] = c.value;
+    for (const [name, value] of Object.entries(
+      parseCookieHeaderValue(opts.initialCookieHeader),
+    )) {
+      candidates.push({
+        name,
+        value,
+        path: "",
+        tier: 1,
+        seq: seq++,
+      });
     }
   }
-  const names = Object.keys(pairs).sort((a, b) => a.localeCompare(b));
-  if (names.length === 0) return undefined;
-  return names.map((k) => `${k}=${pairs[k]}`).join("; ");
+
+  for (const c of opts.absorbedCookies) {
+    if (cookieAppliesToRequest(c, nextUrl)) {
+      candidates.push({
+        name: c.name,
+        value: c.value,
+        path: c.path,
+        tier: 2,
+        seq: seq++,
+      });
+    }
+  }
+
+  return selectCookieHeaderCandidates(candidates);
 }
 
 function stripCookieHeader(headers: Record<string, string>): void {

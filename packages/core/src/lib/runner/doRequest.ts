@@ -20,6 +20,7 @@ import { OAuth2Manager } from "../auth/oauth2/manager";
 import { OAuth2PromptError } from "../auth/oauth2/prompt-error";
 import {
   getCookieHeaderForRequest,
+  mergeCookieHeaderValues,
   incrementReplayCount,
   saveHistoryEntry,
   setVariable,
@@ -944,13 +945,19 @@ export async function doRequestFromBlock(
         }
       }
 
-      // Cookie jar: apply stored cookies unless disabled or explicitly set by user.
-      if (
-        cookieJarEnabled &&
-        !Object.keys(requestHeaders).some((k) => k.toLowerCase() === "cookie")
-      ) {
-        const cookie = getCookieHeaderForRequest(url);
-        if (cookie) requestHeaders.Cookie = cookie;
+      // Cookie jar: merge stored cookies with any explicit Cookie header (explicit wins per name).
+      if (cookieJarEnabled) {
+        const cookieKey = Object.keys(requestHeaders).find(
+          (k) => k.toLowerCase() === "cookie",
+        );
+        const explicit = cookieKey ? requestHeaders[cookieKey] : undefined;
+        const jar = getCookieHeaderForRequest(url);
+        const merged = mergeCookieHeaderValues(jar, explicit);
+        if (merged) {
+          if (cookieKey && cookieKey !== "Cookie")
+            delete requestHeaders[cookieKey];
+          requestHeaders.Cookie = merged;
+        }
       }
 
       const res = await httpRequest({
