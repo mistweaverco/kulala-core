@@ -1,4 +1,5 @@
 import type { KulalaRequest } from "../parser/types/request";
+import { mergeCookieHeaderValues } from "../persistence/cookie-store";
 import { version } from "./../../../version.json";
 
 export function buildHeadersFromSection(
@@ -16,7 +17,10 @@ export function buildHeadersFromSection(
         v = v.replace(/\\+{/g, "{").replace(/\\+}/g, "}");
       }
       if (!out[entry.name]) out[entry.name] = v;
-      else out[entry.name] = out[entry.name] + "; " + v;
+      else if (entry.name.toLowerCase() === "cookie") {
+        out[entry.name] =
+          mergeCookieHeaderValues(out[entry.name], v) ?? out[entry.name];
+      } else out[entry.name] = out[entry.name] + "; " + v;
     }
   }
   return out;

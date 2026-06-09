@@ -35,6 +35,15 @@ test("buildHeadersFromSection merges duplicate header names with ; ", () => {
   expect(out).toEqual({ Cookie: "a=1; b=2" });
 });
 
+test("buildHeadersFromSection merges duplicate Cookie names (later wins)", () => {
+  const section = [
+    { type: "header" as const, name: "Cookie", value: "a=1" },
+    { type: "header" as const, name: "Cookie", value: "a=2; b=2" },
+  ];
+  const out = buildHeadersFromSection(section);
+  expect(out).toEqual({ Cookie: "a=2; b=2" });
+});
+
 test("setUserAgentHeaderIfNotPresent adds User-Agent when missing", () => {
   const headers = { "Content-Type": "application/json" };
   const out = setUserAgentHeaderIfNotPresent(headers);

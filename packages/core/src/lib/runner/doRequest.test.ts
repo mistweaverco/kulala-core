@@ -904,6 +904,76 @@ test("doRequestFromBlock: cookie jar stores Set-Cookie and sends Cookie on subse
   cookieServer.stop();
 });
 
+test("doRequestFromBlock: merges jar cookies with explicit Cookie header (explicit wins per name)", async () => {
+  const cookieServer = Bun.serve({
+    port: 0,
+    fetch(req) {
+      const u = new URL(req.url);
+      if (u.pathname === "/set") {
+        const headers = new Headers();
+        headers.append("Set-Cookie", "sid=from-jar; Path=/");
+        headers.append("Set-Cookie", "other=jar-only; Path=/");
+        return new Response("ok", { status: 200, headers });
+      }
+      if (u.pathname === "/echo") {
+        return Response.json({ cookie: req.headers.get("cookie") ?? "" });
+      }
+      return new Response("not found", { status: 404 });
+    },
+  });
+  if (cookieServer.port === undefined) {
+    throw new Error("Cookie server did not expose a listening port");
+  }
+  const base = `http://localhost:${cookieServer.port}`;
+
+  const setBlock = makeBlock({
+    request: {
+      method: "GET",
+      url: `${base}/set` as KulalaHttpURL,
+      headerSection: [],
+    },
+  });
+  const echoBlock = makeBlock({
+    request: {
+      method: "GET",
+      url: `${base}/echo` as KulalaHttpURL,
+      headerSection: [
+        { type: "header", name: "Cookie", value: "sid=from-request; extra=1" },
+      ],
+    },
+  });
+
+  await httpDoRequestFromBlock(
+    setBlock,
+    "/tmp/example.http",
+    undefined,
+    "stable-doc",
+    undefined,
+    "default",
+    { globalHeaders: {} },
+  );
+
+  const result = await httpDoRequestFromBlock(
+    echoBlock,
+    "/tmp/example.http",
+    undefined,
+    "stable-doc",
+    undefined,
+    "default",
+    { globalHeaders: {} },
+  );
+  cookieServer.stop();
+
+  expect(result.success).toBe(true);
+  if (result.success && result.body.type === "json") {
+    const cookie = String(result.body.content.cookie ?? "");
+    expect(cookie).toContain("sid=from-request");
+    expect(cookie).not.toContain("sid=from-jar");
+    expect(cookie).toContain("other=jar-only");
+    expect(cookie).toContain("extra=1");
+  }
+});
+
 test("doRequestFromBlock: cookies set on redirect response are sent to the next hop (regression)", async () => {
   const redirectCookieServer = Bun.serve({
     port: 0,
