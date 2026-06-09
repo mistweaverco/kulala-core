@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { closeDb, getDbInMemory, setDbForTesting } from "./db";
+import { Database } from "bun:sqlite";
+import { closeDb, getDb, getDbInMemory, setDbForTesting } from "./db";
+import { runMigrations } from "./migrations/runner";
 import {
   getCookieHeaderForRequest,
   mergeCookieHeaderValues,
@@ -22,6 +24,41 @@ test("parseCookieHeaderValue: last duplicate name wins", () => {
 
 test("mergeCookieHeaderValues: later header wins for same name", () => {
   expect(mergeCookieHeaderValues("a=1; b=1", "a=2; c=3")).toBe("a=2; b=1; c=3");
+});
+
+test("storeCookiesFromResponse: upserts with released schema (migrations 1-3 only)", () => {
+  const db = new Database(":memory:", { create: true });
+  runMigrations(db);
+  db.run("DELETE FROM schema_migrations WHERE version = 4");
+  db.run("DROP INDEX IF EXISTS uq_cookie_jar_identity");
+  setDbForTesting(db);
+
+  storeCookiesFromResponse("http://httpbin.org/", ["kulala=a; Path=/"]);
+  storeCookiesFromResponse("http://httpbin.org/", ["kulala=b; Path=/"]);
+
+  const rows = db
+    .query<
+      { port: number; value: string },
+      []
+    >("SELECT port, value FROM cookie_jar WHERE domain = 'httpbin.org'")
+    .all();
+  expect(rows).toHaveLength(1);
+  expect(rows[0]).toEqual({ port: 0, value: "b" });
+});
+
+test("storeCookiesFromResponse: upserts default-port cookies instead of duplicating", () => {
+  storeCookiesFromResponse("http://httpbin.org/", ["kulala=test; Path=/"]);
+  storeCookiesFromResponse("http://httpbin.org/", ["kulala=test1; Path=/"]);
+
+  const rows = getDb()
+    .query<
+      { name: string; port: number; value: string },
+      []
+    >("SELECT name, port, value FROM cookie_jar WHERE domain = 'httpbin.org'")
+    .all();
+  expect(rows).toHaveLength(1);
+  expect(rows[0]).toEqual({ name: "kulala", port: 0, value: "test1" });
+  expect(getCookieHeaderForRequest("http://httpbin.org/")).toBe("kulala=test1");
 });
 
 test("getCookieHeaderForRequest: same name at different paths keeps most specific", () => {

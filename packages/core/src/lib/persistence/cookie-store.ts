@@ -86,13 +86,26 @@ function defaultPathForUrl(url: URL): string {
   return idx <= 0 ? "/" : p.slice(0, idx);
 }
 
+/**
+ * Port stored in the jar for a response URL.
+ * `0` means the URL had no explicit port (http/https default) and is used instead
+ * of NULL so SQLite UNIQUE(domain, port, path, name) upserts work.
+ */
+export function cookieStoragePort(url: URL): number {
+  if (url.port) return Number(url.port);
+  return 0;
+}
+
 export function portMatches(
-  port: number | null,
+  requestUrl: URL,
   cookiePort: number | null,
 ): boolean {
-  if (cookiePort === null) return true;
-  if (port === null) return false;
-  return port === cookiePort;
+  const cp = cookiePort ?? 0;
+  if (cp === 0) return true;
+  const explicit = requestUrl.port ? Number(requestUrl.port) : 0;
+  if (explicit !== 0) return explicit === cp;
+  const canonical = requestUrl.protocol === "https:" ? 443 : 80;
+  return cp === canonical;
 }
 
 export function domainMatches(host: string, cookieDomain: string): boolean {
@@ -170,7 +183,7 @@ export function storeCookiesFromResponse(
     if (!parsed) continue;
 
     const domain = (parsed.domain ?? hostname).toLowerCase();
-    const port = url.port ? Number(url.port) : null;
+    const port = cookieStoragePort(url);
     const path = parsed.path ?? defaultPathForUrl(url);
     const expiresAt = parsed.expiresAt ?? null;
     const secure = parsed.secure ? 1 : 0;
@@ -296,7 +309,6 @@ export function getCookiePairsForRequest(
 ): CookiePairForRequest[] {
   const url = new URL(urlStr);
   const hostname = url.hostname.toLowerCase();
-  const port = url.port ? Number(url.port) : null;
   const reqPath = url.pathname || "/";
   const isHttps = url.protocol === "https:";
   const now = nowIso();
@@ -323,7 +335,7 @@ export function getCookiePairsForRequest(
   const byName = new Map<string, CookiePairForRequest>();
   for (const r of rows) {
     if (!domainMatches(hostname, r.domain)) continue;
-    if (!portMatches(port, r.port)) continue;
+    if (!portMatches(url, r.port)) continue;
     if (!pathMatches(reqPath, r.path)) continue;
     if (r.secure === 1 && !isHttps && r.domain !== "localhost") continue;
     if (r.expires_at && r.expires_at <= now) continue;

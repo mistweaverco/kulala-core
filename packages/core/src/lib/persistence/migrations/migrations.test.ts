@@ -25,18 +25,30 @@ test("runMigrations creates app tables and records baseline", () => {
   expect(tables).toContain("schema_migrations");
 
   const applied = getAppliedMigrations(db);
-  expect(applied).toHaveLength(3);
+  expect(applied).toHaveLength(4);
   expect(applied[0]).toMatchObject({ version: 1, name: "initial" });
   expect(applied[1]).toMatchObject({ version: 2, name: "graphql_schemas" });
   expect(applied[2]).toMatchObject({ version: 3, name: "cookie_jar_port" });
+  expect(applied[3]).toMatchObject({
+    version: 4,
+    name: "cookie_jar_default_port",
+  });
   expect(tables).toContain("graphql_schemas");
+
+  const index = db
+    .query<
+      { name: string },
+      []
+    >("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'uq_cookie_jar_identity'")
+    .get();
+  expect(index?.name).toBe("uq_cookie_jar_identity");
 });
 
 test("runMigrations is idempotent", () => {
   const db = openMemoryDb();
   runMigrations(db);
   runMigrations(db);
-  expect(getAppliedMigrations(db)).toHaveLength(3);
+  expect(getAppliedMigrations(db)).toHaveLength(4);
 });
 
 test("runMigrations on pre-migration DB that already has tables", () => {
@@ -52,7 +64,7 @@ test("runMigrations on pre-migration DB that already has tables", () => {
 
   runMigrations(db);
 
-  expect(getAppliedMigrations(db)).toHaveLength(3);
+  expect(getAppliedMigrations(db)).toHaveLength(4);
   expect(db.query("SELECT 1 FROM documents LIMIT 1").get()).toBeNull();
 });
 
@@ -89,7 +101,79 @@ test("runMigrations upgrades legacy cookie_jar without port column", () => {
       []
     >("SELECT domain, port, name FROM cookie_jar")
     .get();
-  expect(row).toEqual({ domain: "example.com", port: null, name: "sid" });
+  expect(row).toEqual({ domain: "example.com", port: 0, name: "sid" });
 
-  expect(getAppliedMigrations(db)).toHaveLength(3);
+  expect(getAppliedMigrations(db)).toHaveLength(4);
+});
+
+test("runMigrations dedupes cookie_jar rows with NULL port", () => {
+  const db = openMemoryDb();
+  runMigrations(db);
+  db.run("DROP INDEX IF EXISTS uq_cookie_jar_identity");
+  db.run(
+    "INSERT INTO cookie_jar (domain, port, path, name, value, updated_at) VALUES ('httpbin.org', NULL, '/', 'kulala', 'test', '2026-01-01T00:00:00.000Z')",
+  );
+  db.run(
+    "INSERT INTO cookie_jar (domain, port, path, name, value, updated_at) VALUES ('httpbin.org', NULL, '/', 'kulala', 'test1', '2026-06-09T13:21:33.397Z')",
+  );
+  db.run("DELETE FROM schema_migrations WHERE version = 4");
+  runMigrations(db);
+
+  const rows = db
+    .query<
+      { port: number; value: string },
+      []
+    >("SELECT port, value FROM cookie_jar WHERE domain = 'httpbin.org' AND name = 'kulala'")
+    .all();
+  expect(rows).toHaveLength(1);
+  expect(rows[0]).toEqual({ port: 0, value: "test1" });
+});
+
+test("runMigrations normalizes legacy NULL port so subsequent upserts work", () => {
+  const db = openMemoryDb();
+  runMigrations(db);
+  db.run("DROP INDEX IF EXISTS uq_cookie_jar_identity");
+  db.run(
+    "INSERT INTO cookie_jar (domain, port, path, name, value, updated_at) VALUES ('httpbin.org', NULL, '/', 'kulala', 'old', '2026-01-01T00:00:00.000Z')",
+  );
+  db.run("DELETE FROM schema_migrations WHERE version = 4");
+  runMigrations(db);
+
+  db.run(
+    `INSERT INTO cookie_jar (domain, port, path, name, value, updated_at)
+     VALUES ('httpbin.org', 0, '/', 'kulala', 'new', datetime('now'))
+     ON CONFLICT(domain, port, path, name) DO UPDATE SET value = excluded.value`,
+  );
+
+  const rows = db
+    .query<
+      { port: number; value: string },
+      []
+    >("SELECT port, value FROM cookie_jar WHERE domain = 'httpbin.org' AND name = 'kulala'")
+    .all();
+  expect(rows).toHaveLength(1);
+  expect(rows[0]).toEqual({ port: 0, value: "new" });
+});
+
+test("runMigrations dedupes port-0 and NULL duplicates from mixed migration state", () => {
+  const db = openMemoryDb();
+  runMigrations(db);
+  db.run("DROP INDEX IF EXISTS uq_cookie_jar_identity");
+  db.run(
+    "INSERT INTO cookie_jar (domain, port, path, name, value, updated_at) VALUES ('httpbin.org', 0, '/', 'kulala', 'test1', '2026-06-09T13:21:33.397Z')",
+  );
+  db.run(
+    "INSERT INTO cookie_jar (domain, port, path, name, value, updated_at) VALUES ('httpbin.org', NULL, '/', 'kulala', 'test1', '2026-06-09T13:27:57.389Z')",
+  );
+  db.run("DELETE FROM schema_migrations WHERE version = 4");
+  runMigrations(db);
+
+  const rows = db
+    .query<
+      { port: number; value: string },
+      []
+    >("SELECT port, value FROM cookie_jar WHERE domain = 'httpbin.org' AND name = 'kulala'")
+    .all();
+  expect(rows).toHaveLength(1);
+  expect(rows[0]).toEqual({ port: 0, value: "test1" });
 });
