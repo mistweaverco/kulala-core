@@ -40,8 +40,8 @@ describe("resolveRequestFromBlock", () => {
     expect(result).toMatchObject({ ok: true });
     if (!("ok" in result) || !result.ok) return;
 
-    expect(result.request.url).toBe("http://httpbin.org/get");
-    expect(result.request.headers.Host).toBe("httpbin.org");
+    expect(result.request.url).toBe("http://echo.kulala.app/get");
+    expect(result.request.headers.Host).toBe("echo.kulala.app");
   });
 
   test("omit-req-url-but-set-host: full URL in Host header keeps scheme", async () => {
@@ -59,8 +59,8 @@ describe("resolveRequestFromBlock", () => {
     expect(result).toMatchObject({ ok: true });
     if (!("ok" in result) || !result.ok) return;
 
-    expect(result.request.url).toBe("https://httpbin.org/get");
-    expect(result.request.headers.Host).toBe("httpbin.org");
+    expect(result.request.url).toBe("https://echo.kulala.app/get");
+    expect(result.request.headers.Host).toBe("echo.kulala.app");
   });
 
   test("adds Content-Type application/json for GRAPHQL", async () => {
@@ -90,7 +90,7 @@ describe("resolveRequestFromBlock", () => {
   ])
 %}
 
-GET https://httpbin.org/get?user={{users[*].name}} HTTP/1.1
+GET https://echo.kulala.app/get?user={{users[*].name}} HTTP/1.1
 Content-Type: application/json`;
     const doc = await getDocument(content, "/test.http");
 
@@ -118,7 +118,7 @@ Content-Type: application/json`;
   ])
 %}
 
-GET https://httpbin.org/get?user={{users[*].name}} HTTP/1.1
+GET https://echo.kulala.app/get?user={{users[*].name}} HTTP/1.1
 Content-Type: application/json`;
     const doc = await getDocument(content, "/test.http");
 

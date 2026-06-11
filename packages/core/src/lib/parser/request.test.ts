@@ -43,7 +43,7 @@ test("getRequest: multi-line request with HTTP/1.1 on continuation line sets htt
 
 test("getRequest: multi-line request with URL part and HTTP/1.1 on same continuation line", () => {
   const lines = [
-    "GET https://httpbin.org/get?foo=httpbin.org/get?foo=1",
+    "GET https://echo.kulala.app/get?foo=echo.kulala.app/get?foo=1",
     "  &bar=1 HTTP/1.1",
   ];
   const [result, consumed] = getRequest(lines, 0);
@@ -51,14 +51,14 @@ test("getRequest: multi-line request with URL part and HTTP/1.1 on same continua
   expect(consumed).toBe(2);
   if (!("errorMessage" in result!)) {
     expect(result.url).toBe(
-      "https://httpbin.org/get?foo=httpbin.org/get?foo=1&bar=1",
+      "https://echo.kulala.app/get?foo=echo.kulala.app/get?foo=1&bar=1",
     );
     expect(result.httpVersion).toBe("HTTP/1.1");
     expect(result.httpVersionInline).toBe(true);
     expect(result.requestLineParts).toEqual([
       {
         type: "url",
-        line: "https://httpbin.org/get?foo=httpbin.org/get?foo=1",
+        line: "https://echo.kulala.app/get?foo=echo.kulala.app/get?foo=1",
       },
       { type: "url", line: "&bar=1" },
     ]);

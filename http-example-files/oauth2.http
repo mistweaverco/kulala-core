@@ -4,6 +4,6 @@
 # If the access token expires, Kulala will automatically refresh it
 # using the refresh_token (if available) before making this request
 
-POST https://httpbin.org/post HTTP/1.1
+POST https://echo.kulala.app/post HTTP/1.1
 Authorization: Bearer {{$auth.token("playground-oauth2")}}
 Accept: application/json

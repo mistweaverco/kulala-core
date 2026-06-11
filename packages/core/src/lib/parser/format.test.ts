@@ -34,7 +34,7 @@ POST https://example.com/post HTTP/1.1
 
   test("respects bodyFormat.indent for JSON bodies without Content-Type", async () => {
     const content = `### MOO
-POST https://httpbin.org/get?foo=bar HTTP/1.1
+POST https://echo.kulala.app/get?foo=bar HTTP/1.1
 Accept: application/json
 
 {
@@ -53,7 +53,7 @@ Accept: application/json
 
   test("adds default http version on the same line for simple requests", async () => {
     const content = `### MOO
-POST https://httpbin.org/get?foo=bar
+POST https://echo.kulala.app/get?foo=bar
 Accept: application/json
 `;
     const result = await formatHttp(content, undefined, {
@@ -63,7 +63,7 @@ Accept: application/json
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.formatted).toContain(
-        "POST https://httpbin.org/get?foo=bar HTTP/1.1",
+        "POST https://echo.kulala.app/get?foo=bar HTTP/1.1",
       );
       expect(result.formatted).not.toMatch(
         /POST https:\/\/httpbin\.org\/get\?foo=bar\n\s+HTTP\/1\.1/,
@@ -73,11 +73,11 @@ Accept: application/json
 
   test("omits http version when defaults.http_version is false", async () => {
     const content = `### FOO
-GET https://httpbin.org/get?foo=bar HTTP/1.1
+GET https://echo.kulala.app/get?foo=bar HTTP/1.1
 Accept: application/json
 
 ### MOO
-POST https://httpbin.org/get?foo=bar
+POST https://echo.kulala.app/get?foo=bar
 Accept: application/json
 `;
     const result = await formatHttp(content, undefined, {
@@ -87,10 +87,10 @@ Accept: application/json
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.formatted).toContain(
-        "GET https://httpbin.org/get?foo=bar\nAccept:",
+        "GET https://echo.kulala.app/get?foo=bar\nAccept:",
       );
       expect(result.formatted).toContain(
-        "POST https://httpbin.org/get?foo=bar\nAccept:",
+        "POST https://echo.kulala.app/get?foo=bar\nAccept:",
       );
       expect(result.formatted).not.toContain("HTTP/1.1");
       expect(result.formatted).not.toContain("HTTP/2");

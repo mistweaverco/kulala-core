@@ -111,10 +111,10 @@ test("runMigrations dedupes cookie_jar rows with NULL port", () => {
   runMigrations(db);
   db.run("DROP INDEX IF EXISTS uq_cookie_jar_identity");
   db.run(
-    "INSERT INTO cookie_jar (domain, port, path, name, value, updated_at) VALUES ('httpbin.org', NULL, '/', 'kulala', 'test', '2026-01-01T00:00:00.000Z')",
+    "INSERT INTO cookie_jar (domain, port, path, name, value, updated_at) VALUES ('echo.kulala.app', NULL, '/', 'kulala', 'test', '2026-01-01T00:00:00.000Z')",
   );
   db.run(
-    "INSERT INTO cookie_jar (domain, port, path, name, value, updated_at) VALUES ('httpbin.org', NULL, '/', 'kulala', 'test1', '2026-06-09T13:21:33.397Z')",
+    "INSERT INTO cookie_jar (domain, port, path, name, value, updated_at) VALUES ('echo.kulala.app', NULL, '/', 'kulala', 'test1', '2026-06-09T13:21:33.397Z')",
   );
   db.run("DELETE FROM schema_migrations WHERE version = 4");
   runMigrations(db);
@@ -123,7 +123,7 @@ test("runMigrations dedupes cookie_jar rows with NULL port", () => {
     .query<
       { port: number; value: string },
       []
-    >("SELECT port, value FROM cookie_jar WHERE domain = 'httpbin.org' AND name = 'kulala'")
+    >("SELECT port, value FROM cookie_jar WHERE domain = 'echo.kulala.app' AND name = 'kulala'")
     .all();
   expect(rows).toHaveLength(1);
   expect(rows[0]).toEqual({ port: 0, value: "test1" });
@@ -134,14 +134,14 @@ test("runMigrations normalizes legacy NULL port so subsequent upserts work", () 
   runMigrations(db);
   db.run("DROP INDEX IF EXISTS uq_cookie_jar_identity");
   db.run(
-    "INSERT INTO cookie_jar (domain, port, path, name, value, updated_at) VALUES ('httpbin.org', NULL, '/', 'kulala', 'old', '2026-01-01T00:00:00.000Z')",
+    "INSERT INTO cookie_jar (domain, port, path, name, value, updated_at) VALUES ('echo.kulala.app', NULL, '/', 'kulala', 'old', '2026-01-01T00:00:00.000Z')",
   );
   db.run("DELETE FROM schema_migrations WHERE version = 4");
   runMigrations(db);
 
   db.run(
     `INSERT INTO cookie_jar (domain, port, path, name, value, updated_at)
-     VALUES ('httpbin.org', 0, '/', 'kulala', 'new', datetime('now'))
+     VALUES ('echo.kulala.app', 0, '/', 'kulala', 'new', datetime('now'))
      ON CONFLICT(domain, port, path, name) DO UPDATE SET value = excluded.value`,
   );
 
@@ -149,7 +149,7 @@ test("runMigrations normalizes legacy NULL port so subsequent upserts work", () 
     .query<
       { port: number; value: string },
       []
-    >("SELECT port, value FROM cookie_jar WHERE domain = 'httpbin.org' AND name = 'kulala'")
+    >("SELECT port, value FROM cookie_jar WHERE domain = 'echo.kulala.app' AND name = 'kulala'")
     .all();
   expect(rows).toHaveLength(1);
   expect(rows[0]).toEqual({ port: 0, value: "new" });
@@ -160,10 +160,10 @@ test("runMigrations dedupes port-0 and NULL duplicates from mixed migration stat
   runMigrations(db);
   db.run("DROP INDEX IF EXISTS uq_cookie_jar_identity");
   db.run(
-    "INSERT INTO cookie_jar (domain, port, path, name, value, updated_at) VALUES ('httpbin.org', 0, '/', 'kulala', 'test1', '2026-06-09T13:21:33.397Z')",
+    "INSERT INTO cookie_jar (domain, port, path, name, value, updated_at) VALUES ('echo.kulala.app', 0, '/', 'kulala', 'test1', '2026-06-09T13:21:33.397Z')",
   );
   db.run(
-    "INSERT INTO cookie_jar (domain, port, path, name, value, updated_at) VALUES ('httpbin.org', NULL, '/', 'kulala', 'test1', '2026-06-09T13:27:57.389Z')",
+    "INSERT INTO cookie_jar (domain, port, path, name, value, updated_at) VALUES ('echo.kulala.app', NULL, '/', 'kulala', 'test1', '2026-06-09T13:27:57.389Z')",
   );
   db.run("DELETE FROM schema_migrations WHERE version = 4");
   runMigrations(db);
@@ -172,7 +172,7 @@ test("runMigrations dedupes port-0 and NULL duplicates from mixed migration stat
     .query<
       { port: number; value: string },
       []
-    >("SELECT port, value FROM cookie_jar WHERE domain = 'httpbin.org' AND name = 'kulala'")
+    >("SELECT port, value FROM cookie_jar WHERE domain = 'echo.kulala.app' AND name = 'kulala'")
     .all();
   expect(rows).toHaveLength(1);
   expect(rows[0]).toEqual({ port: 0, value: "test1" });

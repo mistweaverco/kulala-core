@@ -254,7 +254,7 @@ Content-Type: application/json
 test("parser: redirect response to file (>> and >>!) JetBrains syntax", async () => {
   const contentWithAppend = `### SAVE_RESPONSE
 
-GET https://httpbin.org/get HTTP/1.1
+GET https://echo.kulala.app/get HTTP/1.1
 
 >> myFolder/myFile.json`;
 
@@ -268,7 +268,7 @@ GET https://httpbin.org/get HTTP/1.1
 
   const contentWithOverwrite = `### OVERWRITE_RESPONSE
 
-POST https://httpbin.org/post HTTP/1.1
+POST https://echo.kulala.app/post HTTP/1.1
 Content-Type: application/json
 
 {}
@@ -489,7 +489,7 @@ test("scripts-style block keeps {{NAME}} in request URL after parse (inlined fix
   client.global.set("GLOBAL_FOO", "bar")
 %}
 
-POST https://httpbin.org/post?name={{NAME}}
+POST https://echo.kulala.app/post?name={{NAME}}
 Content-Type: application/json
 X-Global-Foo: {{GLOBAL_FOO}}
 
@@ -557,7 +557,7 @@ WS wss://echo.websocket.org
 });
 
 test("parser: multi-line URL with HTTP version on same continuation line", async () => {
-  const content = `GET https://httpbin.org/get?foo=httpbin.org/get?foo=1
+  const content = `GET https://echo.kulala.app/get?foo=echo.kulala.app/get?foo=1
   &bar=1 HTTP/1.1
 Accept: application/json
 `;
@@ -568,7 +568,7 @@ Accept: application/json
   expect(block.errors).toEqual([]);
   expect(block.request.method).toBe("GET");
   expect(block.request.url).toBe(
-    "https://httpbin.org/get?foo=httpbin.org/get?foo=1&bar=1",
+    "https://echo.kulala.app/get?foo=echo.kulala.app/get?foo=1&bar=1",
   );
   expect(block.request.httpVersion).toBe("HTTP/1.1");
   expect(block.request.headerSection).toEqual([

@@ -147,20 +147,20 @@ test("applyDefaultHeaders: Host prefixes relative URL", () => {
 
 test("resolveUrlFromHostHeader: prefixes relative URL from request Host header", () => {
   const result = resolveUrlFromHostHeader({
-    headers: { Host: "https://httpbin.org" },
+    headers: { Host: "https://echo.kulala.app" },
     url: "/",
   });
-  expect(result.headers.Host).toBe("httpbin.org");
-  expect(result.url).toBe("https://httpbin.org/");
+  expect(result.headers.Host).toBe("echo.kulala.app");
+  expect(result.url).toBe("https://echo.kulala.app/");
 });
 
 test("resolveUrlFromHostHeader: bare hostname defaults to http scheme", () => {
   const result = resolveUrlFromHostHeader({
-    headers: { Host: "httpbin.org" },
+    headers: { Host: "echo.kulala.app" },
     url: "/get",
   });
-  expect(result.headers.Host).toBe("httpbin.org");
-  expect(result.url).toBe("http://httpbin.org/get");
+  expect(result.headers.Host).toBe("echo.kulala.app");
+  expect(result.url).toBe("http://echo.kulala.app/get");
 });
 
 test("resolveUrlFromHostHeader: bare hostname with port", () => {
@@ -174,9 +174,9 @@ test("resolveUrlFromHostHeader: bare hostname with port", () => {
 
 test("resolveUrlFromHostHeader: leaves absolute URL unchanged", () => {
   const result = resolveUrlFromHostHeader({
-    headers: { Host: "https://httpbin.org" },
+    headers: { Host: "https://echo.kulala.app" },
     url: "https://example.com/api",
   });
-  expect(result.headers.Host).toBe("httpbin.org");
+  expect(result.headers.Host).toBe("echo.kulala.app");
   expect(result.url).toBe("https://example.com/api");
 });

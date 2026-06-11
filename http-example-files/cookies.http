@@ -2,7 +2,7 @@
 
 ### NON_LOCAL_SET_COOKIE
 
-GET https://httpbin.org/cookies/set/kulala/test HTTP/1.1
+GET https://echo.kulala.app/cookies/set/kulala/test HTTP/1.1
 
 ### NON_LOCAL_PREVENT_GET_COOKIES
 
@@ -10,12 +10,12 @@ GET https://httpbin.org/cookies/set/kulala/test HTTP/1.1
 # Prevents the cookies set by
 # NON_LOCAL_SET_COOKIE from being sent in the request
 
-GET https://httpbin.org/cookies HTTP/1.1
+GET https://echo.kulala.app/cookies HTTP/1.1
 
 ### NON_LOCAL_GET_COOKIES
 # Gets the cookies set by NON_LOCAL_SET_COOKIE
 
-GET https://httpbin.org/cookies HTTP/1.1
+GET https://echo.kulala.app/cookies HTTP/1.1
 
 ### LOCAL_SET_COOKIE
 

@@ -198,7 +198,7 @@ test("getBody: body from file with quoted path", async () => {
 
 test("getBody: JSON body with trailing >> redirect line is stripped (no stray > in payload)", async () => {
   const lines = [
-    "POST https://httpbin.org/post HTTP/1.1",
+    "POST https://echo.kulala.app/post HTTP/1.1",
     "Content-Type: application/json",
     "",
     "{",

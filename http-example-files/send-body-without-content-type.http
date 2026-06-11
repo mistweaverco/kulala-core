@@ -1,16 +1,16 @@
 ### WITH_BODY_NO_CONTENT_TYPE_REQ
 
-POST https://httpbin.org/post HTTP/1.1
+POST https://echo.kulala.app/post HTTP/1.1
 
 { "foo": "bar" }
 
 ### WITHOUT_BODY_REQ
 
-POST https://httpbin.org/post HTTP/1.1
+POST https://echo.kulala.app/post HTTP/1.1
 
 ### WITH_BODY_AND_CONTENT_TYPE_REQ
 
-POST https://httpbin.org/post HTTP/1.1
+POST https://echo.kulala.app/post HTTP/1.1
 Content-Type: application/json
 
 { "foo": "bar" }
