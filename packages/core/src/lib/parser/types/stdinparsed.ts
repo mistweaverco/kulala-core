@@ -38,6 +38,12 @@ export type KulalaStdinActionRunLimit =
       name: string;
     };
 
+export type KulalaResponseFormatStdinOptions = {
+  indent?: number;
+  expand_tabs?: boolean;
+  sort_keys?: boolean;
+};
+
 export type KulalaStdinActionRun = {
   action: "run";
   /* The full contents of the document to be processed */
@@ -47,6 +53,8 @@ export type KulalaStdinActionRun = {
   /** Environment name for variable lookup (kuba, http-client.env.json). Defaults to "default". */
   env?: string;
   limit?: KulalaStdinActionRunLimit[];
+  /** Pretty-print response bodies (indentation, tabs vs spaces). */
+  responseFormat?: KulalaResponseFormatStdinOptions;
 };
 
 export type KulalaStdinActionContinue = {
@@ -84,6 +92,8 @@ export type KulalaStdinActionHttpRequest = {
   connectionTimeoutSec?: number;
   /** Working directory for kulala-core persistence (cookies, env files). */
   cwd?: string;
+  /** Pretty-print response bodies (indentation, tabs vs spaces). */
+  responseFormat?: KulalaResponseFormatStdinOptions;
 };
 
 export type KulalaStdinActionClearGlobals = {

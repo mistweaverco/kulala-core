@@ -1,4 +1,5 @@
 import type { KulalaScriptType } from "../parser/types/script";
+import type { KulalaResponseFormatOptions } from "./http-response-body";
 
 /** Where captured script output came from (pre/post phase, directive site, optional callsite). */
 export type KulalaScriptConsoleOrigin = {
@@ -58,7 +59,11 @@ export type KulalaRequestSuccessResponse = {
     url: string;
     body:
       | { type: "text"; content: string; mediaType?: string }
-      | { type: "json"; content: Record<string, unknown> };
+      | {
+          type: "json";
+          content: Record<string, unknown>;
+          formatted?: string;
+        };
     timings: {
       dns: number;
       tcp: number;
@@ -88,7 +93,11 @@ export type KulalaRequestSuccessResponse = {
   };
   body:
     | { type: "text"; content: string; mediaType?: string }
-    | { type: "json"; content: Record<string, unknown> };
+    | {
+        type: "json";
+        content: Record<string, unknown>;
+        formatted?: string;
+      };
   /** Present when scripts emitted console output (including client.test / client.log). */
   scriptConsole?: KulalaScriptConsoleLine[];
 };
@@ -165,6 +174,8 @@ export type KulalaRunOptions = {
   content?: string;
   /** Environment name for variable resolution (kuba, etc.). Defaults to "default". */
   env?: string;
+  /** Pretty-print response bodies (indentation, tabs vs spaces). */
+  responseFormat?: KulalaResponseFormatOptions;
 };
 
 /** Response-like value passed to scripts (fetch Response or compatible). */

@@ -153,7 +153,7 @@ export async function runDocument(
       resolver,
       env,
       flow,
-      { doc },
+      { doc, responseFormat: options?.responseFormat },
     );
 
     if (flow.collectedSharedHttpResults?.length) {
