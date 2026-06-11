@@ -94,7 +94,7 @@ test("lspCompletion suggests script API inside {% %} body", async () => {
   ]);
 %}
 
-GET https://httpbin.org/get?user={{users[*].name}} HTTP/1.1
+GET https://echo.kulala.app/get?user={{users[*].name}} HTTP/1.1
 `;
   const res = await lspCompletion({
     content,

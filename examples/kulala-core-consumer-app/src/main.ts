@@ -1,7 +1,7 @@
 import { kulalaCore } from "@mistweaverco/kulala-core";
 
 const content = `### Example request
-GET https://httpbin.org/get
+GET https://echo.kulala.app/get
 Accept: application/json
 `;
 

@@ -2,7 +2,7 @@
 
 ### TEST_REQUEST1
 
-GET https://httpbin.org/get
+GET https://echo.kulala.app/get
 Content-Type: application/json
 
 {

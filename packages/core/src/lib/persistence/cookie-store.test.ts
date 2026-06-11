@@ -33,32 +33,34 @@ test("storeCookiesFromResponse: upserts with released schema (migrations 1-3 onl
   db.run("DROP INDEX IF EXISTS uq_cookie_jar_identity");
   setDbForTesting(db);
 
-  storeCookiesFromResponse("http://httpbin.org/", ["kulala=a; Path=/"]);
-  storeCookiesFromResponse("http://httpbin.org/", ["kulala=b; Path=/"]);
+  storeCookiesFromResponse("http://echo.kulala.app/", ["kulala=a; Path=/"]);
+  storeCookiesFromResponse("http://echo.kulala.app/", ["kulala=b; Path=/"]);
 
   const rows = db
     .query<
       { port: number; value: string },
       []
-    >("SELECT port, value FROM cookie_jar WHERE domain = 'httpbin.org'")
+    >("SELECT port, value FROM cookie_jar WHERE domain = 'echo.kulala.app'")
     .all();
   expect(rows).toHaveLength(1);
   expect(rows[0]).toEqual({ port: 0, value: "b" });
 });
 
 test("storeCookiesFromResponse: upserts default-port cookies instead of duplicating", () => {
-  storeCookiesFromResponse("http://httpbin.org/", ["kulala=test; Path=/"]);
-  storeCookiesFromResponse("http://httpbin.org/", ["kulala=test1; Path=/"]);
+  storeCookiesFromResponse("http://echo.kulala.app/", ["kulala=test; Path=/"]);
+  storeCookiesFromResponse("http://echo.kulala.app/", ["kulala=test1; Path=/"]);
 
   const rows = getDb()
     .query<
       { name: string; port: number; value: string },
       []
-    >("SELECT name, port, value FROM cookie_jar WHERE domain = 'httpbin.org'")
+    >("SELECT name, port, value FROM cookie_jar WHERE domain = 'echo.kulala.app'")
     .all();
   expect(rows).toHaveLength(1);
   expect(rows[0]).toEqual({ name: "kulala", port: 0, value: "test1" });
-  expect(getCookieHeaderForRequest("http://httpbin.org/")).toBe("kulala=test1");
+  expect(getCookieHeaderForRequest("http://echo.kulala.app/")).toBe(
+    "kulala=test1",
+  );
 });
 
 test("getCookieHeaderForRequest: same name at different paths keeps most specific", () => {

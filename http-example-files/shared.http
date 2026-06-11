@@ -7,7 +7,7 @@
   ]);
 %}
 
-GET https://httpbin.org/get?foobar=1 HTTP/1.1
+GET https://echo.kulala.app/get?foobar=1 HTTP/1.1
 Content-Type: application/json
 
 ### FOO1
@@ -19,10 +19,10 @@ Content-Type: application/json
   ]);
 %}
 
-GET https://httpbin.org/get?user={{users[*].name}} HTTP/1.1
+GET https://echo.kulala.app/get?user={{users[*].name}} HTTP/1.1
 Content-Type: application/json
 X-Header: {{users[*].name}}
 
 ### FOO2
 
-GET https://httpbin.org/get?user={{users[*].name}} HTTP/1.1
+GET https://echo.kulala.app/get?user={{users[*].name}} HTTP/1.1

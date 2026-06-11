@@ -1,6 +1,6 @@
 ### LOGIN_REQUEST
 
-POST https://httpbin.org/post HTTP/1.1
+POST https://echo.kulala.app/post HTTP/1.1
 Content-Type: application/json
 
 {
@@ -16,7 +16,7 @@ Content-Type: application/json
 # @kulala-curl--connect-timeout 5
 # @kulala-curl--max-time 5
 
-POST https://httpbin.org/post
+POST https://echo.kulala.app/post
   ?someKey=someValue1
   # &someKey2=someValue2
   &someKey3=someValue3
@@ -39,7 +39,7 @@ X-My-Custom-Header7: MyValue7
 
 ### COOKIE_REQUEST
 
-POST https://httpbin.org/post HTTP/1.1
+POST https://echo.kulala.app/post HTTP/1.1
 Content-Type: application/json
 Accept-Language: en-US,en;q=0.5
 Cookie: _ga=GA1.2.1903065019.1615319519
@@ -53,7 +53,7 @@ Cookie: NAME2=VALUE2
 
 ### GRAPHQL_REQUEST
 
-GRAPHQL https://httpbin.org/post HTTP/1.1
+GRAPHQL https://echo.kulala.app/post HTTP/1.1
 
 {
   "username": "user123",
@@ -62,7 +62,7 @@ GRAPHQL https://httpbin.org/post HTTP/1.1
 
 ### NAMED_SIMPLE
 
-POST https://httpbin.org/post HTTP/1.1
+POST https://echo.kulala.app/post HTTP/1.1
 X-Custom-Header: Kulala-Named-Request
 
 {

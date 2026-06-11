@@ -5,7 +5,7 @@ const http = `### LUA_SCRIPTED
   request.variables.set("NAME", "kulala")
   client.global.set("GLOBAL_FOO", "bar")
 %}
-GET https://httpbin.org/anything?name={{NAME}}
+GET https://echo.kulala.app/anything?name={{NAME}}
 Accept: application/json
 
 > {% lang=lua

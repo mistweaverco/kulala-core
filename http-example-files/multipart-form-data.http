@@ -1,6 +1,6 @@
 ### MULTIPART_FORM_DATA_REQ
 
-POST https://httpbin.org/post HTTP/1.1
+POST https://echo.kulala.app/post HTTP/1.1
 Content-Type: multipart/form-data; boundary=boundary-{{$timestamp}}
 
 --boundary-{{$timestamp}}
@@ -11,7 +11,7 @@ Content-Disposition: form-data; name="first"; filename="multipart-form-data.txt"
 
 ### MULTIPART_FORM_DATA_MULTI_FILES_INTELLILJ_COMPAT_REQ
 
-POST https://httpbin.org/post HTTP/1.1
+POST https://echo.kulala.app/post HTTP/1.1
 Content-Type: multipart/form-data; boundary=boundary
 
 --boundary

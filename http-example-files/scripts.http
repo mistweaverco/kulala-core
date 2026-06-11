@@ -4,7 +4,7 @@
 
 < ./scripts.pre.http.js
 
-GET https://httpbin.org/get?user={{users_from_js[*].name}}&type={{ TYPE_FROM_JS }} HTTP/1.1
+GET https://echo.kulala.app/get?user={{users_from_js[*].name}}&type={{ TYPE_FROM_JS }} HTTP/1.1
 Content-Type: application/json
 X-Header-From-JS: {{ HEADER_VALUE_FROM_JS }}
 
@@ -40,7 +40,7 @@ X-Header-From-JS: {{ HEADER_VALUE_FROM_JS }}
   })
 %}
 
-GET https://httpbin.org/get?user={{users_from_lua[*].name}}&type={{ TYPE_FROM_LUA }} HTTP/1.1
+GET https://echo.kulala.app/get?user={{users_from_lua[*].name}}&type={{ TYPE_FROM_LUA }} HTTP/1.1
 Content-Type: application/json
 X-Header-From-Lua: {{ HEADER_VALUE_FROM_LUA }}
 

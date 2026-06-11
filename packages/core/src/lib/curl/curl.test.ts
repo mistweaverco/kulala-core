@@ -14,12 +14,12 @@ describe("curl parse", () => {
 
   test("parses POST with JSON body and headers", () => {
     const cmd =
-      "curl -X POST -H 'Content-Type:application/json' -d '{\"foo\":\"bar\"}' 'https://httpbin.org/post'";
+      "curl -X POST -H 'Content-Type:application/json' -d '{\"foo\":\"bar\"}' 'https://echo.kulala.app/post'";
     const p = parseCurlCommand(cmd);
     expect(p?.method).toBe("POST");
     expect(p?.headers["content-type"]).toBe("application/json");
     expect(p?.body[0]).toBe('{"foo":"bar"}');
-    expect(p?.url).toBe("https://httpbin.org/post");
+    expect(p?.url).toBe("https://echo.kulala.app/post");
   });
 
   test("parseCurlToHttpSpec returns http spec", () => {
