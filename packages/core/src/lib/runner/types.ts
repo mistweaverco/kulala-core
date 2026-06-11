@@ -57,7 +57,7 @@ export type KulalaRequestSuccessResponse = {
     headers: Record<string, string>;
     url: string;
     body:
-      | { type: "text"; content: string }
+      | { type: "text"; content: string; mediaType?: string }
       | { type: "json"; content: Record<string, unknown> };
     timings: {
       dns: number;
@@ -87,7 +87,7 @@ export type KulalaRequestSuccessResponse = {
     total: number;
   };
   body:
-    | { type: "text"; content: string }
+    | { type: "text"; content: string; mediaType?: string }
     | { type: "json"; content: Record<string, unknown> };
   /** Present when scripts emitted console output (including client.test / client.log). */
   scriptConsole?: KulalaScriptConsoleLine[];

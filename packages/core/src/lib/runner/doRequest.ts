@@ -1017,18 +1017,7 @@ export async function doRequestFromBlock(
         const raw = entry.body;
         const rawStr = typeof raw === "string" ? raw : String(raw ?? "");
         const ct = entry.headers["content-type"] || "";
-        let json: Record<string, unknown> | null = null;
-        if (ct.toLowerCase().includes("json")) {
-          try {
-            json = JSON.parse(rawStr);
-          } catch {
-            // ignore
-          }
-        }
-        const body =
-          json !== null
-            ? { type: "json" as const, content: json }
-            : { type: "text" as const, content: rawStr };
+        const body = buildRunnerResponseBody(rawStr, ct);
         const p = entry.timings.phases;
         return {
           status: entry.statusCode,

@@ -5,7 +5,7 @@
 
 export type PreviousResponse = {
   body:
-    | { type: "text"; content: string }
+    | { type: "text"; content: string; mediaType?: string }
     | { type: "json"; content: Record<string, unknown> };
   headers: Record<string, string>;
 };
