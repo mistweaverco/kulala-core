@@ -539,9 +539,10 @@ async function executeLuaScript(
       const LuaFactory = LuaFactoryCtor as LuaFactoryConstructor;
       let wasmAsset: unknown = undefined;
       try {
-        const wasmMod = (await import(
-          "wasmoon-lua5.1/dist/liblua5.1.wasm"
-        )) as unknown as { default?: unknown };
+        const wasmMod =
+          (await import("wasmoon-lua5.1/dist/liblua5.1.wasm")) as unknown as {
+            default?: unknown;
+          };
         wasmAsset = wasmMod.default;
       } catch {
         // If this import fails (older wasmoon package layout), fall back below.
