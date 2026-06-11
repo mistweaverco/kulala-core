@@ -37,7 +37,11 @@ import {
   ScriptReplayError,
   ScriptSkipError,
 } from "./script-control-error";
-import { buildRunnerResponseBody } from "./http-response-body";
+import {
+  buildRunnerResponseBody,
+  responseBodyDisplayText,
+  type KulalaResponseFormatOptions,
+} from "./http-response-body";
 import { runScripts, type ScriptFlowContext } from "./scripts";
 import {
   isSharedBlockName,
@@ -119,6 +123,8 @@ export type DoRequestFromBlockOptions = {
   doc?: KulalaDocument;
   /** Internal: skip shared pre/post hooks and nested shared HTTP (shared block HTTP hook). */
   skipSharedHooks?: boolean;
+  /** Pretty-print response bodies for this run. */
+  responseFormat?: KulalaResponseFormatOptions;
 };
 
 /** `### KULALA_SHARED` pre/post scripts wrap each request in the file. */
@@ -192,6 +198,7 @@ async function runSharedBlockHttpRequests(opts: {
   doc?: KulalaDocument;
   mutableVars: Record<string, string>;
   resolver: VariableResolver | undefined;
+  responseFormat?: KulalaResponseFormatOptions;
 }): Promise<void> {
   const flow = opts.flow;
   if (!flow) return;
@@ -224,6 +231,7 @@ async function runSharedBlockHttpRequests(opts: {
       {
         doc: opts.doc,
         skipSharedHooks: true,
+        responseFormat: opts.responseFormat,
       },
     );
 
@@ -467,6 +475,7 @@ export async function doRequestFromBlock(
             doc: iterationOptions?.doc,
             mutableVars,
             resolver,
+            responseFormat: iterationOptions?.responseFormat,
           });
         }
 
@@ -567,6 +576,7 @@ export async function doRequestFromBlock(
                 // Pre-request scripts should run per expanded request.
                 skipCollectionExpansion: true,
                 doc: iterationOptions?.doc,
+                responseFormat: iterationOptions?.responseFormat,
               },
             );
             const one = Array.isArray(child) ? child[0]! : child;
@@ -830,19 +840,11 @@ export async function doRequestFromBlock(
         };
       }
       const grpcBodyRaw = grpcRes.body ?? "";
-      let grpcBodyParsed: unknown = null;
-      try {
-        grpcBodyParsed = JSON.parse(grpcBodyRaw);
-      } catch {
-        // text response
-      }
-      const grpcResponseBody =
-        grpcBodyParsed !== null && typeof grpcBodyParsed === "object"
-          ? {
-              type: "json" as const,
-              content: grpcBodyParsed as Record<string, unknown>,
-            }
-          : { type: "text" as const, content: grpcBodyRaw };
+      const grpcResponseBody = await buildRunnerResponseBody(
+        grpcBodyRaw,
+        ok ? "application/json" : "text/plain",
+        iterationOptions?.responseFormat,
+      );
       const grpcBodyText =
         typeof body === "string"
           ? body
@@ -1009,15 +1011,22 @@ export async function doRequestFromBlock(
         }
       }
       const contentType = res.headers["content-type"] || "";
-      const responseBody = buildRunnerResponseBody(rawBodyStr, contentType);
+      const responseFormat = iterationOptions?.responseFormat;
+      const responseBody = await buildRunnerResponseBody(
+        rawBodyStr,
+        contentType,
+        responseFormat,
+      );
 
-      const mapChainEntry = (
+      const mapChainEntry = async (
         entry: NonNullable<typeof res.redirectChain>[number],
-      ): NonNullable<KulalaRequestSuccessResponse["redirectChain"]>[number] => {
+      ): Promise<
+        NonNullable<KulalaRequestSuccessResponse["redirectChain"]>[number]
+      > => {
         const raw = entry.body;
         const rawStr = typeof raw === "string" ? raw : String(raw ?? "");
         const ct = entry.headers["content-type"] || "";
-        const body = buildRunnerResponseBody(rawStr, ct);
+        const body = await buildRunnerResponseBody(rawStr, ct, responseFormat);
         const p = entry.timings.phases;
         return {
           status: entry.statusCode,
@@ -1038,6 +1047,10 @@ export async function doRequestFromBlock(
         };
       };
 
+      const redirectChainEntries = res.redirectChain
+        ? await Promise.all(res.redirectChain.map(mapChainEntry))
+        : undefined;
+
       // Redirect response to file (>> path or >>! path)
       const redirect = block.request.responseRedirect;
       if (redirect?.filePath) {
@@ -1046,12 +1059,9 @@ export async function doRequestFromBlock(
         const resolved = pathMod.resolve(startDir, redirect.filePath);
         await fs.mkdir(pathMod.dirname(resolved), { recursive: true });
         const isBuffer = Buffer.isBuffer(rawBody);
-        const bodyToWrite: string | Buffer =
-          typeof rawBody === "string"
-            ? rawBody
-            : isBuffer
-              ? rawBody
-              : String(rawBody ?? "");
+        const bodyToWrite: string | Buffer = isBuffer
+          ? rawBody
+          : responseBodyDisplayText(responseBody);
         const writeOpts: { encoding?: BufferEncoding } = isBuffer
           ? {}
           : { encoding: "utf-8" };
@@ -1177,10 +1187,8 @@ export async function doRequestFromBlock(
             total,
           },
           body: responseBody,
-          ...(res.redirectChain
-            ? {
-                redirectChain: res.redirectChain.map(mapChainEntry),
-              }
+          ...(redirectChainEntries
+            ? { redirectChain: redirectChainEntries }
             : {}),
           ...(res.verboseTrace ? { verboseTrace: res.verboseTrace } : {}),
           ...(scriptConsole.length > 0 ? { scriptConsole } : {}),
@@ -1244,8 +1252,8 @@ export async function doRequestFromBlock(
           requestHeaders,
           bodyPayload,
         ),
-        ...(res.redirectChain
-          ? { redirectChain: res.redirectChain.map(mapChainEntry) }
+        ...(redirectChainEntries
+          ? { redirectChain: redirectChainEntries }
           : {}),
         timings: {
           dns: phases.dns ?? 0,

@@ -79,6 +79,7 @@ const kulalaParser: KulalaParser = {
         await kulalaRunner.run(doc, stdIn.limit, {
           content: stdIn.content,
           env: stdIn.env ?? "default",
+          responseFormat: stdIn.responseFormat,
         });
         break;
       }
@@ -184,12 +185,20 @@ const kulalaParser: KulalaParser = {
           });
           const rawBody =
             typeof res.body === "string" ? res.body : res.body.toString("utf8");
+          const { buildRunnerResponseBody } =
+            await import("../runner/http-response-body");
+          const contentType = res.headers["content-type"] || "";
+          const body = await buildRunnerResponseBody(
+            rawBody,
+            contentType,
+            stdIn.responseFormat,
+          );
           await writeRequestResponseToStdout({
             type: "http_request",
             success: true,
             status: res.statusCode,
             headers: res.headers,
-            body: rawBody,
+            body,
             url: res.url,
           });
         } catch (error) {

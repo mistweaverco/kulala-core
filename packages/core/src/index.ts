@@ -56,6 +56,15 @@ export type {
 } from "./lib/lsp";
 
 export type { KulalaRunOptions } from "./lib/runner";
+export type { KulalaResponseFormatOptions } from "./lib/runner/http-response-body";
+export {
+  buildRunnerResponseBody,
+  formatJsonValue,
+  formatXmlBody,
+  responseBodyDisplayText,
+  resolveResponseFormatOptions,
+  DEFAULT_RESPONSE_FORMAT,
+} from "./lib/runner/http-response-body";
 export {
   parseCurlCommand,
   formatCurlCommand,
@@ -97,12 +106,14 @@ export const kulalaCore = {
     filepath?: string;
     env?: string;
     limit?: KulalaStdinActionRunLimit[];
+    responseFormat?: KulalaRunOptions["responseFormat"];
   }): Promise<{ doc: KulalaDocument; response: KulalaResponseWrapper }> => {
     const doc = await getDocument(input.content, input.filepath);
 
     const options: KulalaRunOptions = {
       content: input.content,
       env: input.env ?? "default",
+      responseFormat: input.responseFormat,
     };
     const response = await runDocument(doc, input.limit, options);
     return { doc, response };
