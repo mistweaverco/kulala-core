@@ -13,6 +13,7 @@ function embedCurlCompileFlag(): boolean {
 async function tryEmbedCurl(): Promise<{
   bytes: Buffer;
   filename: string;
+  licenseBytes?: Buffer;
 } | null> {
   // Single-file `bun build --compile` only: embed curl for the *build* target.
   // The npm library build sets __KULALA_EMBED_CURL__=false so nothing is embedded.
@@ -26,6 +27,7 @@ async function tryEmbedCurl(): Promise<{
       getVendoredCurl?: () => Promise<{
         bytes: Buffer;
         filename: string;
+        licenseBytes?: Buffer;
       } | null>;
     };
     if (typeof mod.getVendoredCurl === "function") {

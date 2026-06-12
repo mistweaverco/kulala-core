@@ -10,6 +10,7 @@ import {
 } from "./download";
 import { getToolInstallRoot } from "./paths";
 import type { ExternalToolDefinition, PlatformArchKey } from "./types";
+import { ensureVendoredLicense } from "./vendored-license";
 
 const execFileAsync = promisify(execFile);
 
@@ -83,7 +84,11 @@ export type ResolveExternalBinaryOptions = {
   platform?: NodeJS.Platform;
   arch?: string;
   /** Bun embed / packaged fallback: runs after cache miss, before download. */
-  tryEmbed?: () => Promise<{ bytes: Buffer; filename: string } | null>;
+  tryEmbed?: () => Promise<{
+    bytes: Buffer;
+    filename: string;
+    licenseBytes?: Buffer;
+  } | null>;
 };
 
 const resolvedMemo = new Map<string, string>();
@@ -125,12 +130,12 @@ export async function resolveExternalBinary(
     }
 
     const subdir = resolvePlatformVendorSubdir(platform, arch);
-    const cached = join(
-      getToolInstallRoot(def.id),
-      subdir,
-      def.binaryFileName(platform),
-    );
-    if (await fileIsExecutable(cached)) return cached;
+    const cacheDir = join(getToolInstallRoot(def.id), subdir);
+    const cached = join(cacheDir, def.binaryFileName(platform));
+    if (await fileIsExecutable(cached)) {
+      await ensureVendoredLicense(def.id, cacheDir);
+      return cached;
+    }
 
     const embedded = options.tryEmbed ? await options.tryEmbed() : null;
     if (embedded) {
@@ -148,7 +153,10 @@ export async function resolveExternalBinary(
     if (binarySpec) {
       try {
         await downloadAndVerifyBinaryToExe(binarySpec, cached, def.userAgent);
-        if (await fileIsExecutable(cached)) return cached;
+        if (await fileIsExecutable(cached)) {
+          await ensureVendoredLicense(def.id, cacheDir);
+          return cached;
+        }
       } catch {
         // fall through
       }
@@ -158,7 +166,10 @@ export async function resolveExternalBinary(
     if (spec) {
       try {
         await downloadAndVerifyArchiveToExe(spec, cached, def.userAgent);
-        if (await fileIsExecutable(cached)) return cached;
+        if (await fileIsExecutable(cached)) {
+          await ensureVendoredLicense(def.id, cacheDir);
+          return cached;
+        }
       } catch {
         // fall through
       }

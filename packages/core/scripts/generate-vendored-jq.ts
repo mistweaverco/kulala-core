@@ -1,4 +1,4 @@
-import { writeFileSync } from "node:fs";
+import { copyFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { JQ_TOOL } from "../src/lib/runner/external-tools/defs/jq.ts";
@@ -39,9 +39,14 @@ await resolveExternalBinary(JQ_TOOL, {
   arch,
 });
 
-const assetImportPath = resolve(join(getToolInstallRoot("jq"), subdir, exe));
+const cacheDir = join(getToolInstallRoot("jq"), subdir);
+const assetImportPath = resolve(join(cacheDir, exe));
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
+const licenseImportPath = resolve(
+  join(scriptDir, "vendored-licenses", "jq", "LICENSE"),
+);
+copyFileSync(licenseImportPath, join(cacheDir, "LICENSE"));
 const outPath = join(
   scriptDir,
   "..",
@@ -57,10 +62,16 @@ const content = `// @ts-nocheck — generated; gitignored; import path is machin
 // into the single executable produced by \`bun build --compile\` with \`__KULALA_EMBED_JQ__=true\`.
 
 import jqAsset from ${JSON.stringify(assetImportPath)} with { type: "file" };
+import licenseAsset from ${JSON.stringify(licenseImportPath)} with { type: "file" };
 
-export async function getVendoredJq(): Promise<{ bytes: Buffer; filename: string } | null> {
+export async function getVendoredJq(): Promise<{
+  bytes: Buffer;
+  filename: string;
+  licenseBytes: Buffer;
+} | null> {
   const bytes = Buffer.from(await Bun.file(jqAsset).arrayBuffer());
-  return { bytes, filename: ${JSON.stringify(exe)} };
+  const licenseBytes = Buffer.from(await Bun.file(licenseAsset).arrayBuffer());
+  return { bytes, filename: ${JSON.stringify(exe)}, licenseBytes };
 }
 `;
 

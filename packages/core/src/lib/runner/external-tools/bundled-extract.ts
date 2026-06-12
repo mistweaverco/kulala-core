@@ -2,6 +2,7 @@ import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExternalToolId } from "./types";
+import { ensureVendoredLicense } from "./vendored-license";
 
 /**
  * Writes an embedded/packaged binary to a temp dir (used when Bun `--compile` ships bytes).
@@ -9,7 +10,7 @@ import type { ExternalToolId } from "./types";
 export async function writeBundledToTemp(
   toolId: ExternalToolId,
   platformSubdir: string,
-  bundled: { bytes: Buffer; filename: string },
+  bundled: { bytes: Buffer; filename: string; licenseBytes?: Buffer },
 ): Promise<string> {
   const base = join(tmpdir(), "kulala-core", toolId, platformSubdir);
   await mkdir(base, { recursive: true });
@@ -18,5 +19,6 @@ export async function writeBundledToTemp(
   if (process.platform !== "win32") {
     await chmod(target, 0o755);
   }
+  await ensureVendoredLicense(toolId, base, bundled.licenseBytes);
   return target;
 }
