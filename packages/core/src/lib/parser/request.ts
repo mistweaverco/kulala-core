@@ -19,13 +19,12 @@ const getValidHttpMethods = (): KulalaHttpMethodAvailable[] => [
   "OPTIONS",
   "GRAPHQL",
   "GRPC",
-  "WS",
-  "WSS",
+  "WEBSOCKET",
 ];
 
 const HTTP_VERSION = /^HTTP\/\d+(\.\d+)?$/;
 const REQUEST_LINE =
-  /^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS|TRACE|CONNECT|GRAPHQL|GRPC|WS|WSS|WEBSOCKET) /i;
+  /^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS|TRACE|CONNECT|GRAPHQL|GRPC|WEBSOCKET) /i;
 
 const VALID_HTTP_VERSIONS: KulalaHttpVersion[] = [
   "HTTP/1.0",
@@ -86,7 +85,7 @@ export const getRequest = (
 
   const methodRaw = trimmed.slice(0, firstSpace).toUpperCase();
   const method = (
-    methodRaw === "WEBSOCKET" ? "WS" : methodRaw
+    methodRaw === "WEBSOCKET" ? "WEBSOCKET" : methodRaw
   ) as KulalaHttpMethodAvailable;
   if (!getValidHttpMethods().includes(method)) {
     return [
@@ -122,16 +121,12 @@ export const getRequest = (
     ];
   }
 
-  if (method === "WS" || method === "WSS") {
+  if (method === "WEBSOCKET") {
     const urlToken = afterMethod.split(/\s+/)[0] ?? afterMethod;
-    let url = urlToken;
-    if (!/^wss?:\/\//i.test(url)) {
-      url = `${method === "WSS" ? "wss" : "ws"}://${url}`;
-    }
     return [
       {
-        method,
-        url: url as KulalaHttpURL,
+        method: "WEBSOCKET",
+        url: urlToken as KulalaHttpURL,
         headerSection: [],
       },
       1,

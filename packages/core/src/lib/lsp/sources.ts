@@ -64,7 +64,7 @@ export function staticCompletionItems(sourceName: string): LspCompletionItem[] {
     { label: "CONNECT", insertText: "CONNECT " },
     { label: "GRAPHQL", insertText: "GRAPHQL " },
     { label: "GRPC", insertText: "GRPC " },
-    { label: "WS", insertText: "WS " },
+    { label: "WEBSOCKET", insertText: "WEBSOCKET " },
   ];
 
   const schemes: SourceItem[] = [
