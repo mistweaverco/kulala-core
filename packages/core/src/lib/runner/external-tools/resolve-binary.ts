@@ -81,12 +81,6 @@ export type ResolveExternalBinaryOptions = {
    * @default true
    */
   allowSystemFallback?: boolean;
-  /**
-   * When true (e.g. `generate-vendored-*.ts`), ignore `KULALA_*_PATH` so the pinned
-   * cache binary is populated even when CI sets system tool paths.
-   * @default false
-   */
-  ignorePathEnvVar?: boolean;
   platform?: NodeJS.Platform;
   arch?: string;
   /** Bun embed / packaged fallback: runs after cache miss, before download. */
@@ -105,9 +99,8 @@ function memoKey(
   platform: NodeJS.Platform,
   arch: string,
   allowSystem: boolean,
-  ignorePathEnvVar: boolean,
 ): string {
-  return `${def.id}:${platform}:${arch}:${allowSystem ? "1" : "0"}:${ignorePathEnvVar ? "1" : "0"}`;
+  return `${def.id}:${platform}:${arch}:${allowSystem ? "1" : "0"}`;
 }
 
 /**
@@ -122,8 +115,7 @@ export async function resolveExternalBinary(
   const platform = options.platform ?? process.platform;
   const arch = options.arch ?? process.arch;
   const allowSystem = options.allowSystemFallback !== false;
-  const ignorePathEnvVar = options.ignorePathEnvVar === true;
-  const key = memoKey(def, platform, arch, allowSystem, ignorePathEnvVar);
+  const key = memoKey(def, platform, arch, allowSystem);
   const hit = resolvedMemo.get(key);
   if (hit && (await fileIsExecutable(hit))) return hit;
   if (hit) resolvedMemo.delete(key);
@@ -132,11 +124,9 @@ export async function resolveExternalBinary(
   if (existing) return existing;
 
   const run = (async () => {
-    if (!ignorePathEnvVar) {
-      const explicit = process.env[def.pathEnvVar];
-      if (explicit && (await fileIsExecutable(explicit))) {
-        return explicit;
-      }
+    const explicit = process.env[def.pathEnvVar];
+    if (explicit && (await fileIsExecutable(explicit))) {
+      return explicit;
     }
 
     const subdir = resolvePlatformVendorSubdir(platform, arch);

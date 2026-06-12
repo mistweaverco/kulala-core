@@ -2,8 +2,7 @@ import { copyFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CURL_TOOL } from "../src/lib/runner/external-tools/defs/curl.ts";
-import { getToolInstallRoot } from "../src/lib/runner/external-tools/paths.ts";
-import { resolveExternalBinary } from "../src/lib/runner/external-tools/resolve-binary.ts";
+import { ensureCachedToolForEmbed } from "./ensure-cached-tool-for-embed.ts";
 
 type Platform = "linux" | "darwin" | "win32";
 type Arch = "x64" | "arm64";
@@ -33,15 +32,11 @@ const { platform, arch, bunTarget } = parseTargetArg(process.argv.slice(2));
 const subdir = `${platform}-${arch}`;
 const exe = CURL_TOOL.binaryFileName(platform);
 
-await resolveExternalBinary(CURL_TOOL, {
-  allowSystemFallback: false,
-  ignorePathEnvVar: true,
+const { cacheDir, cachedExe: assetImportPath } = await ensureCachedToolForEmbed(
+  CURL_TOOL,
   platform,
   arch,
-});
-
-const cacheDir = join(getToolInstallRoot("curl"), subdir);
-const assetImportPath = resolve(join(cacheDir, exe));
+);
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const licenseImportPath = resolve(
