@@ -36,6 +36,10 @@ export {
   loadDefaultHeaders,
   resolveUrlFromHostHeader,
 } from "./default-headers";
+export {
+  DEFAULT_CURL_OPTIONS_KEY,
+  loadDefaultCurlOptions,
+} from "./default-curl-options";
 export { getMagicVariables } from "./magic";
 export { type HttpFileVariableSources, resolveVariables } from "./resolve";
 export {

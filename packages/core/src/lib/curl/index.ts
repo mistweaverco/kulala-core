@@ -9,6 +9,7 @@ export {
   curlPassthroughFlagKey,
   isKulalaCurlPassthroughOperator,
   kulalaCurlOperatorToArgv,
+  mergeCurlArgv,
   mergeCurlPassthroughOperators,
   splitCurlOperatorArgs,
 } from "./passthrough";

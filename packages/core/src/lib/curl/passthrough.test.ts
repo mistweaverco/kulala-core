@@ -4,6 +4,7 @@ import {
   curlArgvFromOperators,
   curlPassthroughFlagKey,
   kulalaCurlOperatorToArgv,
+  mergeCurlArgv,
   mergeCurlPassthroughOperators,
 } from "./passthrough";
 
@@ -51,4 +52,17 @@ test("curlArgvFromOperators concatenates distinct flags", () => {
       op("kulala-curl--max-time", "3"),
     ]),
   ).toEqual(["--insecure", "--max-time", "3"]);
+});
+
+test("mergeCurlArgv: later layer overrides same flag token", () => {
+  expect(
+    mergeCurlArgv([
+      ["--max-time", "5"],
+      ["--max-time", "10"],
+    ]),
+  ).toEqual(["--max-time", "10"]);
+});
+
+test("mergeCurlArgv: -k and --insecure are distinct pass-through flags", () => {
+  expect(mergeCurlArgv([["-k"], ["--insecure"]])).toEqual(["-k", "--insecure"]);
 });
