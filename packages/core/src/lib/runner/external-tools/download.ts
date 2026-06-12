@@ -3,7 +3,7 @@ import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { spawn } from "node:child_process";
-import type { ArchiveDownloadSpec } from "./types";
+import type { ArchiveDownloadSpec, BinaryDownloadSpec } from "./types";
 
 export function sha256Hex(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
@@ -12,6 +12,7 @@ export function sha256Hex(bytes: Uint8Array): string {
 export async function downloadUrl(
   url: string,
   userAgent: string,
+  minBytes = 1024 * 64,
 ): Promise<Uint8Array> {
   const res = await fetch(url, {
     redirect: "follow",
@@ -21,10 +22,33 @@ export async function downloadUrl(
     throw new Error(`HTTP ${res.status} ${res.statusText}`);
   }
   const buf = new Uint8Array(await res.arrayBuffer());
-  if (buf.byteLength < 1024 * 64) {
+  if (buf.byteLength < minBytes) {
     throw new Error(`Downloaded file too small (${buf.byteLength} bytes)`);
   }
   return buf;
+}
+
+/**
+ * Downloads a single executable, verifies SHA-256, and writes it to `outExePath`.
+ */
+export async function downloadAndVerifyBinaryToExe(
+  spec: BinaryDownloadSpec,
+  outExePath: string,
+  userAgent: string,
+): Promise<void> {
+  const targetDir = dirname(outExePath);
+  await mkdir(targetDir, { recursive: true });
+  const bytes = await downloadUrl(spec.url, userAgent, 1024 * 256);
+  const actualSha = sha256Hex(bytes);
+  if (actualSha !== spec.expectedSha256) {
+    throw new Error(
+      `SHA256 mismatch for ${basename(outExePath)}: expected ${spec.expectedSha256} got ${actualSha}`,
+    );
+  }
+  await writeFile(outExePath, bytes, { mode: 0o755 });
+  if (process.platform !== "win32") {
+    await chmod(outExePath, 0o755);
+  }
 }
 
 export async function extractTarXz(

@@ -1,5 +1,7 @@
 ### WEBSOCKET_ECHO
 
-WEBSOCKET wss://echo.websocket.org
+WS wss://ws.ifelse.io
 
-{ "name": "world" }
+{
+  "name": "world"
+}

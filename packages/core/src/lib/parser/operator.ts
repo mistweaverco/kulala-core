@@ -13,6 +13,8 @@ const operatorNameRequiresArgs = new Set([
   "kulala-prompt",
   "kulala-file-contents-to-variable",
   "kulala-expect-status-code",
+  "kulala-jq",
+  "jq",
   "grpc-import-path",
   "grpc-proto",
   "grpc-protoset",

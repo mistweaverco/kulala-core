@@ -11,6 +11,7 @@ export type {
 
 export {
   CURL_TOOL,
+  JQ_TOOL,
   getKulalaCoreCacheRoot,
   getKulalaCoreDataDir,
   getToolInstallRoot,
@@ -19,10 +20,13 @@ export {
 } from "./lib/runner/external-tools";
 export type {
   ArchiveDownloadSpec,
+  BinaryDownloadSpec,
   ExternalToolDefinition,
   ExternalToolId,
   ResolveExternalBinaryOptions,
 } from "./lib/runner/external-tools";
+
+export { applyJqFilter, enrichResponseWithJq, runJq } from "./lib/jq";
 
 export type { KulalaDocument } from "./lib/parser/types";
 export type { KulalaStdinParsed } from "./lib/parser/types/stdinparsed";

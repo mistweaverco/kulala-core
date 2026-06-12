@@ -146,7 +146,6 @@ function completionSourceTypes(opts: {
 }): string[] {
   // Mirrors kulala.nvim `source_type` matching order, simplified.
   const matches: Array<[RegExp, string | string[]]> = [
-    [/@curl-/, "curl"],
     [/@grpc-/, "grpc"],
     [/^run #/, "request_names"],
     [/\$auth\.\w+oken\("[^"]+$/, "auth_configs"], // kept for parity; core doesn't read oauth configs here
