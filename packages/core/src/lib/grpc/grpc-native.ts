@@ -17,6 +17,7 @@ export type GrpcNativeRequestOptions = {
   headers: Record<string, string>;
   body?: string;
   cwd: string;
+  vars?: Record<string, string>;
   insecure?: boolean;
 };
 
@@ -85,10 +86,12 @@ function metadataFromHeaders(headers: Record<string, string>): grpc.Metadata {
 function loadPackageDefinition(
   flags: KulalaGrpcFlag[],
   cwd: string,
+  vars: Record<string, string> = {},
 ): grpc.GrpcObject {
   const { importPaths, protoFiles, protosetFiles } = grpcFlagsToLoaderOptions(
     flags,
     cwd,
+    vars,
   );
 
   if (protosetFiles.length > 0) {
@@ -241,7 +244,8 @@ export async function grpcNativeRequest(
   const t0 = performance.now();
   const parsed = opts.grpcCommand ?? parseGrpcTarget(opts.target);
   const flags = mergeGrpcFlags(opts.metadataFlags, parsed.inlineFlags);
-  const { plaintext } = grpcFlagsToLoaderOptions(flags, opts.cwd);
+  const vars = opts.vars ?? {};
+  const { plaintext } = grpcFlagsToLoaderOptions(flags, opts.cwd, vars);
   const insecure = opts.insecure === true || plaintext;
   const address = parsed.address;
   if (!address) {
@@ -263,7 +267,7 @@ export async function grpcNativeRequest(
     }
 
     if (parsed.command === "describe") {
-      const pkg = loadPackageDefinition(flags, opts.cwd);
+      const pkg = loadPackageDefinition(flags, opts.cwd, vars);
       const body = describeFromPackage(pkg, parsed.symbol);
       return {
         statusCode: 200,
@@ -280,7 +284,7 @@ export async function grpcNativeRequest(
     }
 
     const { serviceName, methodName } = parseGrpcSymbol(parsed.symbol);
-    const pkg = loadPackageDefinition(flags, opts.cwd);
+    const pkg = loadPackageDefinition(flags, opts.cwd, vars);
     const Client = findServiceClient(pkg, serviceName);
     if (!Client) {
       throw new Error(`gRPC service not found in proto: ${serviceName}`);

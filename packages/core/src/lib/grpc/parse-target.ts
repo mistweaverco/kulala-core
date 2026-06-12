@@ -54,11 +54,12 @@ export function mergeGrpcFlags(
   return groups.flat();
 }
 
-import { resolve as pathResolve } from "node:path";
+import { resolveGrpcPath } from "./resolve-path";
 
 export function grpcFlagsToLoaderOptions(
   flags: KulalaGrpcFlag[],
   cwd: string,
+  vars: Record<string, string> = {},
 ): {
   importPaths: string[];
   protoFiles: string[];
@@ -73,13 +74,13 @@ export function grpcFlagsToLoaderOptions(
   for (const { flag, value } of flags) {
     switch (flag) {
       case "import-path":
-        if (value) importPaths.push(pathResolve(cwd, value));
+        if (value) importPaths.push(resolveGrpcPath(value, cwd, vars));
         break;
       case "proto":
-        if (value) protoFiles.push(pathResolve(cwd, value));
+        if (value) protoFiles.push(resolveGrpcPath(value, cwd, vars));
         break;
       case "protoset":
-        if (value) protosetFiles.push(pathResolve(cwd, value));
+        if (value) protosetFiles.push(resolveGrpcPath(value, cwd, vars));
         break;
       case "plaintext":
         plaintext = true;
