@@ -5,6 +5,7 @@ import {
   HTTP_CLIENT_ENV_JSON,
   HTTP_CLIENT_PRIVATE_ENV_JSON,
 } from "./env-files";
+import { DEFAULT_CURL_OPTIONS_KEY } from "./default-curl-options";
 import { DEFAULT_HEADERS_KEY, KULALA_SHARED_KEY } from "./default-headers";
 import {
   findKubaYamlDir,
@@ -14,7 +15,7 @@ import {
 } from "./kuba";
 
 export type KulalaEnvironmentCatalog = {
-  /** Kulala-only: shared variables and `$kulalaDefaultHeaders` for all environments. */
+  /** Kulala-only: shared variables, `$kulalaDefaultHeaders`, and `$kulalaDefaultCurlOptions`. */
   $kulalaShared?: Record<string, unknown>;
   /** Environment name → variables (http-client sections + kuba flat vars). */
   environments: Record<string, Record<string, unknown>>;
@@ -104,13 +105,14 @@ export function mergeHttpClientEnvCatalog(
   };
 }
 
-/** Variables from `$kulalaShared`, excluding `$kulalaDefaultHeaders`. */
+/** Variables from `$kulalaShared`, excluding Kulala-only request defaults. */
 export function kulalaSharedVariables(
   section: Record<string, unknown> | undefined,
 ): Record<string, unknown> {
   if (!section) return {};
   const out: Record<string, unknown> = { ...section };
   delete out[DEFAULT_HEADERS_KEY];
+  delete out[DEFAULT_CURL_OPTIONS_KEY];
   return out;
 }
 

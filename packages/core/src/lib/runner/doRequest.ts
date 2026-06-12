@@ -5,8 +5,11 @@ import { mergeGrpcFlags } from "../grpc/parse-target";
 import type { KulalaWebSocketPlanResponse } from "./types";
 import type { KulalaDocument } from "../parser/types";
 import type { KulalaBlock } from "../parser/types/block";
-import { curlArgvFromOperators, curlArgvHasFlag } from "../curl/passthrough";
-import { getEffectiveOperators } from "./effective-operators";
+import { curlArgvHasFlag } from "../curl/passthrough";
+import {
+  getEffectiveCurlArgv,
+  getEffectiveOperators,
+} from "./effective-operators";
 import {
   applyDefaultHeaders,
   loadDefaultHeaders,
@@ -373,7 +376,12 @@ export async function doRequestFromBlock(
     iterationOptions?.doc,
     block,
   );
-  const extraCurlArgv = curlArgvFromOperators(effectiveOperators);
+  const extraCurlArgv = getEffectiveCurlArgv(
+    iterationOptions?.doc,
+    block,
+    env,
+    startDir,
+  );
   const getOps = (names: string[]) =>
     effectiveOperators.filter((o) => names.includes(o.name));
   const getOpArgs = (names: string[]): string | undefined =>

@@ -69,3 +69,41 @@ export function curlArgvFromOperators(operators: KulalaOperator[]): string[] {
 export function curlArgvHasFlag(argv: string[], flag: string): boolean {
   return argv.includes(flag);
 }
+
+function looksLikeCurlFlag(token: string): boolean {
+  return token.startsWith("-");
+}
+
+/**
+ * Merge curl argv layers; later layers override earlier ones on the same flag token.
+ * Pass-through only — no alias mapping or special flags.
+ */
+export function mergeCurlArgv(layers: string[][]): string[] {
+  const byFlag = new Map<string, string[]>();
+
+  const applyLayer = (layer: string[]) => {
+    let i = 0;
+    while (i < layer.length) {
+      const arg = layer[i]!;
+      if (!looksLikeCurlFlag(arg)) {
+        i++;
+        continue;
+      }
+      const segment = [arg];
+      if (
+        !arg.includes("=") &&
+        i + 1 < layer.length &&
+        !looksLikeCurlFlag(layer[i + 1]!)
+      ) {
+        segment.push(layer[i + 1]!);
+        i += 2;
+      } else {
+        i += 1;
+      }
+      byFlag.set(arg, segment);
+    }
+  };
+
+  for (const layer of layers) applyLayer(layer);
+  return [...byFlag.values()].flat();
+}

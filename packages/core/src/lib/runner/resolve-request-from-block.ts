@@ -1,7 +1,9 @@
 import type { KulalaDocument } from "../parser/types";
 import type { KulalaBlock } from "../parser/types/block";
-import { curlArgvFromOperators } from "../curl/passthrough";
-import { getEffectiveOperators } from "./effective-operators";
+import {
+  getEffectiveCurlArgv,
+  getEffectiveOperators,
+} from "./effective-operators";
 import { OAuth2Manager } from "../auth/oauth2/manager";
 import { OAuth2PromptError } from "../auth/oauth2/prompt-error";
 import { ScriptPromptError } from "./script-prompt-error";
@@ -97,7 +99,7 @@ export async function resolveRequestFromBlock(
   const stableDocId = filePath ?? "";
   const mutableVars = { ...(vars ?? {}) };
   const effectiveOperators = getEffectiveOperators(doc, block);
-  const extraCurlArgv = curlArgvFromOperators(effectiveOperators);
+  const extraCurlArgv = getEffectiveCurlArgv(doc, block, env, startDir);
   const getOps = (names: string[]) =>
     effectiveOperators.filter((o) => names.includes(o.name));
   const getOpArgs = (names: string[]): string | undefined =>

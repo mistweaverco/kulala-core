@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "fs";
 import { dirname, join } from "path";
+import { DEFAULT_CURL_OPTIONS_KEY } from "./default-curl-options";
 import { DEFAULT_HEADERS_KEY, KULALA_SHARED_KEY } from "./default-headers";
 import { flattenToDotPaths } from "./flatten-json";
 
@@ -53,6 +54,7 @@ function sectionToEnvVars(
   const out: Record<string, string> = {};
   const forVars = { ...section };
   delete forVars[DEFAULT_HEADERS_KEY];
+  delete forVars[DEFAULT_CURL_OPTIONS_KEY];
   flattenToDotPaths(forVars, "", out);
   return out;
 }
@@ -108,7 +110,7 @@ function parseDotEnv(content: string): Record<string, string> {
  * Load environment variables from system, http-client.env.json, and .env.
  * Order (later overrides earlier): system env → `$kulalaShared` vars → per-env section
  * (http-client.env.json / private, merged root → closest) → .env.
- * `$kulalaDefaultHeaders` is excluded (applied separately when sending requests).
+ * `$kulalaDefaultHeaders` and `$kulalaDefaultCurlOptions` are excluded (applied separately when sending requests).
  * Also exposes system env as {{$env.VAR_NAME}} per JetBrains HTTP Client spec.
  * See https://www.jetbrains.com/help/idea/http-client-variables.html
  */
