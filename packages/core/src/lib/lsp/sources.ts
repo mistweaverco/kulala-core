@@ -89,95 +89,22 @@ export function staticCompletionItems(sourceName: string): LspCompletionItem[] {
   ];
 
   const metadata: SourceItem[] = [
-    {
-      label: "prompt",
-      insertText: "prompt ",
-      documentation: "Prompt `variable` `prompt string`",
-    },
-    {
-      label: "secret",
-      insertText: "secret ",
-      documentation: "Secret prompt `variable` `prompt string`",
-    },
-    { label: "curl", insertText: "curl", documentation: "Curl flag" },
     { label: "grpc", insertText: "grpc", documentation: "Grpc flag" },
     {
-      label: "accept chunked",
-      insertText: "accept chunked",
-      documentation: "Accept chunked responses",
+      label: "kulala-jq",
+      insertText: "kulala-jq ",
+      documentation: "Filter response body in UI with jq",
     },
     {
-      label: "env-stdin-cmd-pre",
-      insertText: "env-stdin-cmd-pre ",
-      documentation: "Set env variable with external cmd before request",
+      label: "kulala-prompt",
+      insertText:
+        'kulala-prompt "What is your password?" MY_VAR_NAME { type: "password|text" }',
+      documentation: "Prompt for a variable",
     },
     {
-      label: "env-stdin-cmd",
-      insertText: "env-stdin-cmd ",
-      documentation: "Set env variable with external cmd",
-    },
-    {
-      label: "env-json-key",
-      insertText: "env-json-key ",
-      documentation: "Set env variable with json key",
-    },
-    {
-      label: "stdin-cmd-pre",
-      insertText: "stdin-cmd-pre ",
-      documentation: "Run external command before request",
-    },
-    {
-      label: "stdin-cmd",
-      insertText: "stdin-cmd ",
-      documentation: "Run external command",
-    },
-    {
-      label: "jq",
-      insertText: "jq ",
-      documentation: "Filter response body with jq",
-    },
-    {
-      label: "delay",
-      insertText: "delay ",
-      documentation: "Delay running request for .. ms",
-    },
-    {
-      label: "attach-cookie-jar",
-      insertText: "attach-cookie-jar",
-      documentation: "Attach cookies from cookie jar",
-    },
-    {
-      label: "no-cookie-jar",
-      insertText: "no-cookie-jar",
-      documentation: "Do not save cookies to cookie jar",
-    },
-  ];
-
-  const curl: SourceItem[] = [
-    {
-      label: "curl-compressed",
-      insertText: "curl-compressed",
-      documentation: "Decompress response",
-    },
-    {
-      label: "curl-location",
-      insertText: "curl-location",
-      documentation: "Follow redirects",
-    },
-    {
-      label: "curl-no-buffer",
-      insertText: "curl-no-buffer",
-      documentation: "Disable buffering",
-    },
-    {
-      label: "curl-insecure",
-      insertText: "curl-insecure",
-      documentation: "Skip verification",
-    },
-    {
-      label: "curl-data-urlencode",
-      insertText: "curl-data-urlencode",
-      documentation: "Urlencode payload",
+      label: "kulala-curl--",
+      insertText: "kulala-curl--",
+      documentation: "Curl flag",
     },
   ];
 
@@ -481,8 +408,6 @@ export function staticCompletionItems(sourceName: string): LspCompletionItem[] {
       return mk(commands, "Command", kindValue);
     case "metadata":
       return mk(metadata, "Metadata", kindValue);
-    case "curl":
-      return mk(curl, "Curl", kindValue);
     case "grpc":
       return mk(grpc, "Grpc", kindValue);
     case "header_values":

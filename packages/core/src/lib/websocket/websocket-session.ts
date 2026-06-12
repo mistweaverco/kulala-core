@@ -42,6 +42,54 @@ function normalizeWsUrl(method: string, target: string): string {
   return `${scheme}://${t}`;
 }
 
+function errorEventMessage(ev: Event): string {
+  if (ev instanceof ErrorEvent) {
+    if (ev.message) return ev.message;
+    const nested = (ev as ErrorEvent & { error?: unknown }).error;
+    if (nested instanceof Error && nested.message) return nested.message;
+    if (typeof nested === "string" && nested) return nested;
+  }
+  return "WebSocket error";
+}
+
+function closeCodeHint(code: number): string {
+  if (code === 1002) return "WebSocket handshake failed (protocol error)";
+  if (code === 1006) return "WebSocket connection closed abnormally";
+  return `WebSocket closed before handshake (code ${code})`;
+}
+
+/** Read HTTP status/body when the server rejects the WebSocket upgrade (e.g. 429 rate limit). */
+async function describeHandshakeFailure(url: string): Promise<string> {
+  const httpUrl = url.replace(/^ws/i, "http");
+  try {
+    const res = await fetch(httpUrl, {
+      headers: {
+        Connection: "Upgrade",
+        Upgrade: "websocket",
+        "Sec-WebSocket-Version": "13",
+        "Sec-WebSocket-Key": "dGhlIHNhbXBsZSBub25jZQ==",
+      },
+      redirect: "manual",
+    });
+    if (res.status === 101) {
+      return "WebSocket handshake failed unexpectedly";
+    }
+    const body = (await res.text()).trim();
+    if (body) return `HTTP ${res.status}: ${body}`;
+    return `HTTP ${res.status} (expected 101 Switching Protocols)`;
+  } catch (e) {
+    return e instanceof Error ? e.message : "WebSocket handshake failed";
+  }
+}
+
+function isGenericHandshakeError(message: string): boolean {
+  return (
+    message === "WebSocket error" ||
+    message.includes("Expected 101") ||
+    message.includes("Unexpected server response")
+  );
+}
+
 /**
  * Long-lived WebSocket session for kulala.nvim (replaces websocat).
  * Invoked via `kulala-core --websocket -i <connect.json>`.
@@ -62,6 +110,9 @@ export async function runWebSocketSession(
     }
 
     const rl = createInterface({ input: process.stdin, terminal: false });
+    let opened = false;
+    let errorSent = false;
+    let handshakeError: Promise<void> | undefined;
 
     const cleanup = () => {
       rl.close();
@@ -72,7 +123,18 @@ export async function runWebSocketSession(
       }
     };
 
+    const emitHandshakeError = async (fallback: string): Promise<void> => {
+      if (errorSent) return;
+      errorSent = true;
+      let message = fallback;
+      if (isGenericHandshakeError(fallback)) {
+        message = await describeHandshakeFailure(url);
+      }
+      writeOutbound({ type: "error", error: message });
+    };
+
     ws.addEventListener("open", () => {
+      opened = true;
       writeOutbound({ type: "ready" });
       if (connect.body && connect.body.trim()) {
         ws.send(
@@ -91,14 +153,23 @@ export async function runWebSocketSession(
       writeOutbound({ type: "message", data });
     });
 
-    ws.addEventListener("error", () => {
-      writeOutbound({ type: "error", error: "WebSocket error" });
+    ws.addEventListener("error", (ev) => {
+      handshakeError = emitHandshakeError(errorEventMessage(ev));
     });
 
     ws.addEventListener("close", (ev) => {
-      writeOutbound({ type: "closed", code: ev.code });
-      cleanup();
-      resolve();
+      void (async () => {
+        if (!opened) {
+          if (handshakeError) {
+            await handshakeError;
+          } else if (!errorSent) {
+            await emitHandshakeError(closeCodeHint(ev.code));
+          }
+        }
+        writeOutbound({ type: "closed", code: ev.code });
+        cleanup();
+        resolve();
+      })();
     });
 
     rl.on("line", (line) => {

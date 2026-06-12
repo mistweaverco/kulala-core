@@ -7,7 +7,7 @@
   "exclude": [
     "node_modules",
     "**/node_modules",
-    "packages/core/src/lib/runner/vendored-curl.embed.generated.ts"
+    "packages/core/src/lib/runner/vendored-*"
   ],
   "compilerOptions": {
     // Enable latest features

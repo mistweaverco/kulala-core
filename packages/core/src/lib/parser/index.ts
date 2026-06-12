@@ -80,6 +80,7 @@ const kulalaParser: KulalaParser = {
           content: stdIn.content,
           env: stdIn.env ?? "default",
           responseFormat: stdIn.responseFormat,
+          jqFilter: stdIn.jqFilter,
         });
         break;
       }
@@ -204,6 +205,37 @@ const kulalaParser: KulalaParser = {
         } catch (error) {
           await writeRequestResponseToStdout({
             type: "http_request",
+            success: false,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+        break;
+      }
+      case "apply_jq_filter": {
+        try {
+          const { applyJqFilter } = await import("../jq");
+          const result = await applyJqFilter(
+            stdIn.rawBody,
+            stdIn.filter,
+            stdIn.contentType ?? "application/json",
+            stdIn.responseFormat,
+          );
+          if (!result.ok) {
+            await writeRequestResponseToStdout({
+              type: "apply_jq_filter",
+              success: false,
+              error: result.error,
+            });
+            break;
+          }
+          await writeRequestResponseToStdout({
+            type: "apply_jq_filter",
+            success: true,
+            filteredBody: result.filteredBody,
+          });
+        } catch (error) {
+          await writeRequestResponseToStdout({
+            type: "apply_jq_filter",
             success: false,
             error: error instanceof Error ? error.message : String(error),
           });

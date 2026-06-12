@@ -4,7 +4,10 @@ import { access } from "node:fs/promises";
 import { promisify } from "node:util";
 import { join } from "node:path";
 import { writeBundledToTemp } from "./bundled-extract";
-import { downloadAndVerifyArchiveToExe } from "./download";
+import {
+  downloadAndVerifyArchiveToExe,
+  downloadAndVerifyBinaryToExe,
+} from "./download";
 import { getToolInstallRoot } from "./paths";
 import type { ExternalToolDefinition, PlatformArchKey } from "./types";
 
@@ -140,7 +143,18 @@ export async function resolveExternalBinary(
       if (sys) return sys;
     }
 
-    const spec = def.downloadsByPlatform[downloadKey(def, platform, arch)];
+    const binarySpec =
+      def.binaryDownloadsByPlatform?.[downloadKey(def, platform, arch)];
+    if (binarySpec) {
+      try {
+        await downloadAndVerifyBinaryToExe(binarySpec, cached, def.userAgent);
+        if (await fileIsExecutable(cached)) return cached;
+      } catch {
+        // fall through
+      }
+    }
+
+    const spec = def.downloadsByPlatform?.[downloadKey(def, platform, arch)];
     if (spec) {
       try {
         await downloadAndVerifyArchiveToExe(spec, cached, def.userAgent);

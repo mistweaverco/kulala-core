@@ -153,7 +153,11 @@ export async function runDocument(
       resolver,
       env,
       flow,
-      { doc, responseFormat: options?.responseFormat },
+      {
+        doc,
+        responseFormat: options?.responseFormat,
+        jqFilter: options?.jqFilter,
+      },
     );
 
     if (flow.collectedSharedHttpResults?.length) {

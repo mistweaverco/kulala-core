@@ -1,109 +1,47 @@
-import { mkdirSync, rmSync, writeFileSync } from "fs";
-import { join } from "path";
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import type { KulalaDocument } from "../parser/types";
 import type { KulalaBlock } from "../parser/types/block";
-import type { KulalaOperator } from "../parser/types/operator";
-import { curlArgvFromOperators } from "../curl/passthrough";
-import {
-  getEffectiveCurlArgv,
-  getEffectiveOperators,
-} from "./effective-operators";
+import { getEffectiveJqFilter } from "./effective-operators";
 
-const tmpRoot = join(import.meta.dir, ".tmp-effective-operators-test");
-
-beforeEach(() => {
-  rmSync(tmpRoot, { recursive: true, force: true });
-  mkdirSync(tmpRoot, { recursive: true });
-});
-
-afterEach(() => {
-  rmSync(tmpRoot, { recursive: true, force: true });
-});
-
-function op(name: string, args?: string): KulalaOperator {
-  return { name: name as KulalaOperator["name"], args, lineNumber: 0 };
+function block(operators: KulalaBlock["operators"]): KulalaBlock {
+  return {
+    name: "TEST",
+    operators,
+    request: { method: "GET", url: "https://example.com" },
+    scripts: { preRequest: [], postRequest: [] },
+  } as unknown as KulalaBlock;
 }
 
-test("block operator overrides file-header operator with same name", () => {
-  const doc: KulalaDocument = {
-    directives: [],
-    blocks: [],
-    fileHeaderOperators: [op("kulala-curl--max-time", "30")],
-  };
-  const block = {
-    name: "A",
-    operators: [op("kulala-curl--max-time", "5")],
-  } as KulalaBlock;
-  const argv = curlArgvFromOperators(getEffectiveOperators(doc, block));
-  expect(argv).toEqual(["--max-time", "5"]);
-});
+describe("getEffectiveJqFilter", () => {
+  test("block operator overrides file header", () => {
+    const doc = {
+      fileHeaderOperators: [{ name: "kulala-jq", args: ".a", lineNumber: 0 }],
+    } as KulalaDocument;
+    const b = block([{ name: "kulala-jq", args: ".b", lineNumber: 1 }]);
+    expect(getEffectiveJqFilter(doc, b)).toBe(".b");
+  });
 
-test("file-header and block curl operators merge by flag", () => {
-  const doc: KulalaDocument = {
-    directives: [],
-    blocks: [],
-    fileHeaderOperators: [op("kulala-curl--insecure")],
-  };
-  const block = {
-    name: "A",
-    operators: [op("kulala-curl--max-time", "10")],
-  } as KulalaBlock;
-  const argv = curlArgvFromOperators(getEffectiveOperators(doc, block));
-  expect(argv).toEqual(["--insecure", "--max-time", "10"]);
-});
+  test("uses file header when block has no jq operator", () => {
+    const doc = {
+      fileHeaderOperators: [
+        { name: "kulala-jq", args: ".header", lineNumber: 0 },
+      ],
+    } as KulalaDocument;
+    const b = block([]);
+    expect(getEffectiveJqFilter(doc, b)).toBe(".header");
+  });
 
-test("getEffectiveCurlArgv: env defaults merged with request operators", () => {
-  const dir = join(tmpRoot, "env-defaults");
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(
-    join(dir, "http-client.env.json"),
-    JSON.stringify({
-      $kulalaShared: { $kulalaDefaultCurlOptions: ["--insecure"] },
-      default: {},
-    }),
-  );
+  test("run-time filter applies when no operator is set", () => {
+    const b = block([]);
+    expect(getEffectiveJqFilter(undefined, b, ".runtime")).toBe(".runtime");
+  });
 
-  const doc: KulalaDocument = {
-    directives: [],
-    blocks: [],
-    fileHeaderOperators: [],
-  };
-  const block = {
-    name: "A",
-    operators: [op("kulala-curl--max-time", "10")],
-  } as KulalaBlock;
-
-  expect(getEffectiveCurlArgv(doc, block, "default", dir)).toEqual([
-    "--insecure",
-    "--max-time",
-    "10",
-  ]);
-});
-
-test("getEffectiveCurlArgv: request operator overrides env default for same flag", () => {
-  const dir = join(tmpRoot, "override");
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(
-    join(dir, "http-client.env.json"),
-    JSON.stringify({
-      $kulalaShared: { $kulalaDefaultCurlOptions: ["--max-time 30"] },
-      default: {},
-    }),
-  );
-
-  const doc: KulalaDocument = {
-    directives: [],
-    blocks: [],
-    fileHeaderOperators: [],
-  };
-  const block = {
-    name: "A",
-    operators: [op("kulala-curl--max-time", "5")],
-  } as KulalaBlock;
-
-  expect(getEffectiveCurlArgv(doc, block, "default", dir)).toEqual([
-    "--max-time",
-    "5",
-  ]);
+  test("block operator wins over run-time filter", () => {
+    const withBlock = block([
+      { name: "kulala-jq", args: ".block", lineNumber: 1 },
+    ]);
+    expect(getEffectiveJqFilter(undefined, withBlock, ".runtime")).toBe(
+      ".block",
+    );
+  });
 });

@@ -6,8 +6,10 @@ import type { KulalaWebSocketPlanResponse } from "./types";
 import type { KulalaDocument } from "../parser/types";
 import type { KulalaBlock } from "../parser/types/block";
 import { curlArgvHasFlag } from "../curl/passthrough";
+import { enrichResponseWithJq } from "../jq";
 import {
   getEffectiveCurlArgv,
+  getEffectiveJqFilter,
   getEffectiveOperators,
 } from "./effective-operators";
 import {
@@ -128,6 +130,8 @@ export type DoRequestFromBlockOptions = {
   skipSharedHooks?: boolean;
   /** Pretty-print response bodies for this run. */
   responseFormat?: KulalaResponseFormatOptions;
+  /** Optional jq filter override (block `# @kulala-jq` still wins). */
+  jqFilter?: string;
 };
 
 /** `### KULALA_SHARED` pre/post scripts wrap each request in the file. */
@@ -382,6 +386,11 @@ export async function doRequestFromBlock(
     env,
     startDir,
   );
+  const jqFilter = getEffectiveJqFilter(
+    iterationOptions?.doc,
+    block,
+    iterationOptions?.jqFilter,
+  );
   const getOps = (names: string[]) =>
     effectiveOperators.filter((o) => names.includes(o.name));
   const getOpArgs = (names: string[]): string | undefined =>
@@ -585,6 +594,7 @@ export async function doRequestFromBlock(
                 skipCollectionExpansion: true,
                 doc: iterationOptions?.doc,
                 responseFormat: iterationOptions?.responseFormat,
+                jqFilter: iterationOptions?.jqFilter,
               },
             );
             const one = Array.isArray(child) ? child[0]! : child;
@@ -816,6 +826,7 @@ export async function doRequestFromBlock(
           headers,
           bodyStr || undefined,
         ),
+        ...(jqFilter ? { jqFilter } : {}),
       };
     }
 
@@ -849,11 +860,26 @@ export async function doRequestFromBlock(
         };
       }
       const grpcBodyRaw = grpcRes.body ?? "";
+      const grpcContentType = ok ? "application/json" : "text/plain";
       const grpcResponseBody = await buildRunnerResponseBody(
         grpcBodyRaw,
-        ok ? "application/json" : "text/plain",
+        grpcContentType,
         iterationOptions?.responseFormat,
       );
+      const grpcEnriched = await enrichResponseWithJq(
+        grpcBodyRaw,
+        grpcContentType,
+        grpcResponseBody,
+        jqFilter,
+        iterationOptions?.responseFormat,
+      );
+      if (!grpcEnriched.ok) {
+        return {
+          success: false,
+          error: grpcEnriched.error,
+          ...(scriptConsole.length > 0 ? { scriptConsole } : {}),
+        };
+      }
       const grpcBodyText =
         typeof body === "string"
           ? body
@@ -878,7 +904,11 @@ export async function doRequestFromBlock(
           startTransfer: grpcRes.timings.total,
           total: grpcRes.timings.total,
         },
-        body: grpcResponseBody,
+        body: grpcEnriched.body,
+        rawBody: grpcEnriched.rawBody,
+        ...(grpcEnriched.filteredBody
+          ? { filteredBody: grpcEnriched.filteredBody, jqFilter }
+          : {}),
         scriptConsole: scriptConsole.length > 0 ? scriptConsole : undefined,
       };
     }
@@ -1250,6 +1280,21 @@ export async function doRequestFromBlock(
         });
       }
 
+      const enriched = await enrichResponseWithJq(
+        rawBodyStr,
+        contentType,
+        responseBody,
+        jqFilter,
+        responseFormat,
+      );
+      if (!enriched.ok) {
+        return {
+          success: false,
+          error: enriched.error,
+          ...(scriptConsole.length > 0 ? { scriptConsole } : {}),
+        };
+      }
+
       return {
         success: true,
         status: res.statusCode,
@@ -1274,7 +1319,11 @@ export async function doRequestFromBlock(
           startTransfer,
           total,
         },
-        body: responseBody,
+        body: enriched.body,
+        rawBody: enriched.rawBody,
+        ...(enriched.filteredBody
+          ? { filteredBody: enriched.filteredBody, jqFilter }
+          : {}),
         ...(res.verboseTrace ? { verboseTrace: res.verboseTrace } : {}),
         ...(scriptConsole.length > 0 ? { scriptConsole } : {}),
       } as KulalaRequestSuccessResponse;

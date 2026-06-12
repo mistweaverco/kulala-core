@@ -21,7 +21,7 @@ export default ts.config(
       "**/dist/**",
       "http-example-files/**/*.js",
       "packages/core/.test-import-run/**",
-      "packages/core/src/lib/runner/vendored-curl.embed.generated.ts",
+      "packages/core/src/lib/runner/vendored-*",
     ],
   },
 );

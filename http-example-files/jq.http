@@ -1,0 +1,73 @@
+### JQ_FILTER_UI_RESPONSE
+
+# @kulala-jq .headers
+
+POST https://echo.kulala.app/post
+Content-Type: application/json
+X-My-Custom-Header1: MyValue1
+X-My-Custom-Header2: MyValue2
+X-My-Custom-Header3: MyValue3
+
+{
+  "username": "user123",
+  "password": "pass123"
+}
+
+> {%
+  client.log(response.body)
+%}
+
+### JQ_TRANSFORM_UI_RESPONSE
+
+# @kulala-jq {"header-value": .headers."x-my-custom-header1", userdata: .json.user}
+
+POST https://echo.kulala.app/post
+Content-Type: application/json
+X-My-Custom-Header1: MyValue1
+X-My-Custom-Header2: MyValue2
+X-My-Custom-Header3: MyValue3
+
+{
+  "user": {
+    "username": "user123",
+    "password": "pass123"
+  }
+}
+
+> {%
+  client.log(response.body)
+%}
+
+
+### JQ_WEBSOCKET_FILTER_UI_RESPONSE
+
+# INFO:
+# Websocket repsponses are stored as
+# an in-memory array
+# (in each editor implementation, not in the kulala-core persistence layer)
+# and you can use jq to filter the data as needed.
+# For example,
+# to get the metadata of all users from the last websocket message:
+
+# @kulala-jq .[-1].users[].metadata
+
+WEBSOCKET wss://ws.ifelse.io
+
+{
+  "users": [
+    {
+      "username": "kulala-user1",
+      "metadata": {
+        "birthday": "1988-08-23",
+        "location": "Earth"
+      }
+    },
+    {
+      "username": "kulala-user2",
+      "metadata": {
+        "birthday": "2009-11-05",
+        "location": "Earth"
+      }
+    }
+  ]
+}

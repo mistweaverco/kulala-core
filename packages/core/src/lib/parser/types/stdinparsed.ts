@@ -55,6 +55,19 @@ export type KulalaStdinActionRun = {
   limit?: KulalaStdinActionRunLimit[];
   /** Pretty-print response bodies (indentation, tabs vs spaces). */
   responseFormat?: KulalaResponseFormatStdinOptions;
+  /** Optional jq filter for this run (block `# @kulala-jq` overrides). */
+  jqFilter?: string;
+};
+
+export type KulalaStdinActionApplyJqFilter = {
+  action: "apply_jq_filter";
+  /** Raw unfiltered response body text. */
+  rawBody: string;
+  /** jq filter expression. */
+  filter: string;
+  /** Source response Content-Type (affects formatting when output is JSON). */
+  contentType?: string;
+  responseFormat?: KulalaResponseFormatStdinOptions;
 };
 
 export type KulalaStdinActionContinue = {
@@ -193,6 +206,7 @@ export type KulalaStdinParsed =
   | KulalaStdinActionParse
   | KulalaStdinActionFormat
   | KulalaStdinActionRun
+  | KulalaStdinActionApplyJqFilter
   | KulalaStdinActionContinue
   | KulalaStdinActionCrypto
   | KulalaStdinActionHttpRequest

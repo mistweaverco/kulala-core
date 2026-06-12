@@ -34,7 +34,7 @@
     "lint": "prettier --check . && eslint .",
     "test": "bun test",
     "build": "bun run build:js && bun run build:types",
-    "build:js": "bun build src/index.ts --outdir dist --format esm --target bun --sourcemap --define __KULALA_EMBED_CURL__=false",
+    "build:js": "bun build src/index.ts --outdir dist --format esm --target bun --sourcemap --define __KULALA_EMBED_CURL__=false --define __KULALA_EMBED_JQ__=false",
     "build:types": "tsc -p tsconfig.build.json",
     "prepack": "cp ./../../README.md . && cp ./../../LICENSE . && bun run build"
   },

@@ -40,6 +40,8 @@ export type KulalaWebSocketPlanResponse = {
   url: string;
   initialMessage?: string;
   request?: KulalaRequestSent;
+  /** jq filter from `# @kulala-jq` (block overrides file header). */
+  jqFilter?: string;
 };
 
 export type KulalaRequestSuccessResponse = {
@@ -98,6 +100,12 @@ export type KulalaRequestSuccessResponse = {
         content: Record<string, unknown>;
         formatted?: string;
       };
+  /** Unformatted response body (for on-demand jq filtering). */
+  rawBody?: string;
+  /** jq-filtered body when a filter is active (`# @kulala-jq` or run-time filter). */
+  filteredBody?: KulalaRequestSuccessResponse["body"];
+  /** Active jq filter when `filteredBody` is present. */
+  jqFilter?: string;
   /** Present when scripts emitted console output (including client.test / client.log). */
   scriptConsole?: KulalaScriptConsoleLine[];
 };
@@ -119,6 +127,8 @@ export type KulalaRequestErrorResponse = {
   request?: KulalaRequestSent;
   timings?: KulalaRequestSuccessResponse["timings"];
   body?: KulalaRequestSuccessResponse["body"];
+  rawBody?: string;
+  filteredBody?: KulalaRequestSuccessResponse["body"];
   redirectChain?: KulalaRequestSuccessResponse["redirectChain"];
   verboseTrace?: string;
 };
@@ -176,6 +186,8 @@ export type KulalaRunOptions = {
   env?: string;
   /** Pretty-print response bodies (indentation, tabs vs spaces). */
   responseFormat?: KulalaResponseFormatOptions;
+  /** Optional jq filter override for this run (block `# @kulala-jq` still wins). */
+  jqFilter?: string;
 };
 
 /** Response-like value passed to scripts (fetch Response or compatible). */
