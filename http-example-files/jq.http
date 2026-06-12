@@ -2,7 +2,7 @@
 
 # @kulala-jq .headers
 
-POST https://echo.kulala.app/post
+POST https://echo.kulala.app/post HTTP/1.1
 Content-Type: application/json
 X-My-Custom-Header1: MyValue1
 X-My-Custom-Header2: MyValue2
@@ -21,7 +21,7 @@ X-My-Custom-Header3: MyValue3
 
 # @kulala-jq {"header-value": .headers."x-my-custom-header1", userdata: .json.user}
 
-POST https://echo.kulala.app/post
+POST https://echo.kulala.app/post HTTP/1.1
 Content-Type: application/json
 X-My-Custom-Header1: MyValue1
 X-My-Custom-Header2: MyValue2
@@ -38,7 +38,6 @@ X-My-Custom-Header3: MyValue3
   client.log(response.body)
 %}
 
-
 ### JQ_WEBSOCKET_FILTER_UI_RESPONSE
 
 # INFO:
@@ -48,10 +47,9 @@ X-My-Custom-Header3: MyValue3
 # and you can use jq to filter the data as needed.
 # For example,
 # to get the metadata of all users from the last websocket message:
-
 # @kulala-jq .[-1].users[].metadata
 
-WEBSOCKET wss://ws.ifelse.io
+WEBSOCKET wss://ws.ifelse.io HTTP/1.1
 
 {
   "users": [

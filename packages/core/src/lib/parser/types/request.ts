@@ -11,8 +11,7 @@ export type KulalaHttpMethodAvailable =
   | "PATCH"
   | "POST"
   | "PUT"
-  | "WS"
-  | "WSS";
+  | "WEBSOCKET";
 
 export type KulalaHttpVersion = "HTTP/1.0" | "HTTP/1.1" | "HTTP/2";
 

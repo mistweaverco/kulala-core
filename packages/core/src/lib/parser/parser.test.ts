@@ -541,18 +541,18 @@ Content-Type: application/json
   expect(opNames).toContain("grpc-proto");
 });
 
-test("parses WS request line", async () => {
+test("parses WEBSOCKET request line", async () => {
   const content = `
 ### Echo
 
-WS wss://echo.websocket.org
+WEBSOCKET wss://echo.websocket.org
 
 {"hello": true}
 `;
   const doc = await getDocument(content, "/tmp/ws.http");
   const block = doc.blocks.find((b) => b.name === "Echo");
   expect(block).toBeDefined();
-  expect(block!.request.method).toBe("WS");
+  expect(block!.request.method).toBe("WEBSOCKET");
   expect(block!.request.url).toBe("wss://echo.websocket.org");
 });
 
