@@ -814,7 +814,7 @@ export async function doRequestFromBlock(
     if (methodUpper === "GRPC") {
       const grpcFlags = mergeGrpcFlags(
         flow?.sharedGrpcFlags ?? [],
-        grpcFlagsFromOperators(effectiveOperators, startDir),
+        grpcFlagsFromOperators(effectiveOperators),
       );
       const grpcRes = await grpcNativeRequest({
         target: url,
@@ -828,6 +828,7 @@ export async function doRequestFromBlock(
               ? JSON.stringify(body)
               : undefined,
         cwd: startDir,
+        vars: mutableVars,
         insecure:
           curlArgvHasFlag(extraCurlArgv, "--insecure") ||
           curlArgvHasFlag(extraCurlArgv, "-k"),

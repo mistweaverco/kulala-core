@@ -2,7 +2,6 @@ import type { KulalaBlock } from "../parser/types/block";
 import { isSharedBlockName } from "../shared-blocks";
 import type { KulalaOperator } from "../parser/types/operator";
 import type { KulalaGrpcFlag } from "./types";
-import { resolve } from "node:path";
 
 const GRPC_OPERATOR_MAP: Record<string, string> = {
   "grpc-import-path": "import-path",
@@ -14,18 +13,12 @@ const GRPC_OPERATOR_MAP: Record<string, string> = {
 
 export function grpcFlagsFromOperators(
   operators: KulalaOperator[],
-  cwd: string,
 ): KulalaGrpcFlag[] {
   const flags: KulalaGrpcFlag[] = [];
   for (const op of operators) {
     const mapped = GRPC_OPERATOR_MAP[op.name];
     if (!mapped) continue;
-    let value = op.args != null ? String(op.args).trim() : "";
-    if (mapped === "import-path" && value) {
-      value = resolve(cwd, value);
-    } else if ((mapped === "proto" || mapped === "protoset") && value) {
-      value = resolve(cwd, value);
-    }
+    const value = op.args != null ? String(op.args).trim() : "";
     flags.push({ flag: mapped, value });
   }
   return flags;
@@ -34,12 +27,11 @@ export function grpcFlagsFromOperators(
 /** Collect `# @grpc-*` flags from KULALA_SHARED blocks in the document. */
 export function collectSharedGrpcFlags(
   blocks: KulalaBlock[],
-  cwd: string,
 ): KulalaGrpcFlag[] {
   const out: KulalaGrpcFlag[] = [];
   for (const block of blocks) {
     if (isSharedBlockName(block.name)) {
-      out.push(...grpcFlagsFromOperators(block.operators, cwd));
+      out.push(...grpcFlagsFromOperators(block.operators));
     }
   }
   return out;

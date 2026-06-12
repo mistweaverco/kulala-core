@@ -59,7 +59,7 @@ export async function inspectRequestAtCursor(
   });
   const flow: ScriptFlowContext = {
     globalHeaders: {},
-    sharedGrpcFlags: collectSharedGrpcFlags(doc.blocks, startDir),
+    sharedGrpcFlags: collectSharedGrpcFlags(doc.blocks),
   };
 
   const { resolver } = createRequestVarContext(doc, block, stableDocId);
@@ -107,7 +107,7 @@ export async function toCurlAtCursor(
   });
   const flow: ScriptFlowContext = {
     globalHeaders: {},
-    sharedGrpcFlags: collectSharedGrpcFlags(doc.blocks, startDir),
+    sharedGrpcFlags: collectSharedGrpcFlags(doc.blocks),
   };
 
   const { resolver } = createRequestVarContext(doc, block, stableDocId);

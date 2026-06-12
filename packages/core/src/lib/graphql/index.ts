@@ -87,7 +87,7 @@ async function resolveGraphQLRequest(
   });
   const flow: ScriptFlowContext = {
     globalHeaders: {},
-    sharedGrpcFlags: collectSharedGrpcFlags(doc.blocks, startDir),
+    sharedGrpcFlags: collectSharedGrpcFlags(doc.blocks),
   };
   const { resolver } = createRequestVarContext(doc, block, stableDocId);
   const resolved = await resolveRequestFromBlock(

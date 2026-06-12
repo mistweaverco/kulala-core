@@ -108,7 +108,7 @@ export async function runDocument(
   )[] = [];
   const flow: ScriptFlowContext = {
     globalHeaders: {},
-    sharedGrpcFlags: collectSharedGrpcFlags(doc.blocks, startDir),
+    sharedGrpcFlags: collectSharedGrpcFlags(doc.blocks),
     sharedBlocks: doc.blocks.filter((b) => isSharedBlockName(b.name)),
     sharedHttpExecuted: new Set(),
     collectedSharedHttpResults: [],
