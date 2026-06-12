@@ -1,4 +1,4 @@
-import { writeFileSync } from "node:fs";
+import { copyFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CURL_TOOL } from "../src/lib/runner/external-tools/defs/curl.ts";
@@ -39,9 +39,14 @@ await resolveExternalBinary(CURL_TOOL, {
   arch,
 });
 
-const assetImportPath = resolve(join(getToolInstallRoot("curl"), subdir, exe));
+const cacheDir = join(getToolInstallRoot("curl"), subdir);
+const assetImportPath = resolve(join(cacheDir, exe));
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
+const licenseImportPath = resolve(
+  join(scriptDir, "vendored-licenses", "curl", "LICENSE"),
+);
+copyFileSync(licenseImportPath, join(cacheDir, "LICENSE"));
 const outPath = join(
   scriptDir,
   "..",
@@ -57,10 +62,16 @@ const content = `// @ts-nocheck — generated; gitignored; import path is machin
 // into the single executable produced by \`bun build --compile\` with \`__KULALA_EMBED_CURL__=true\`.
 
 import curlAsset from ${JSON.stringify(assetImportPath)} with { type: "file" };
+import licenseAsset from ${JSON.stringify(licenseImportPath)} with { type: "file" };
 
-export async function getVendoredCurl(): Promise<{ bytes: Buffer; filename: string } | null> {
+export async function getVendoredCurl(): Promise<{
+  bytes: Buffer;
+  filename: string;
+  licenseBytes: Buffer;
+} | null> {
   const bytes = Buffer.from(await Bun.file(curlAsset).arrayBuffer());
-  return { bytes, filename: ${JSON.stringify(exe)} };
+  const licenseBytes = Buffer.from(await Bun.file(licenseAsset).arrayBuffer());
+  return { bytes, filename: ${JSON.stringify(exe)}, licenseBytes };
 }
 `;
 

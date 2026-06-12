@@ -12,6 +12,7 @@ function embedJqCompileFlag(): boolean {
 async function tryEmbedJq(): Promise<{
   bytes: Buffer;
   filename: string;
+  licenseBytes?: Buffer;
 } | null> {
   if (!embedJqCompileFlag() || typeof Bun === "undefined") return null;
   try {
@@ -23,6 +24,7 @@ async function tryEmbedJq(): Promise<{
       getVendoredJq?: () => Promise<{
         bytes: Buffer;
         filename: string;
+        licenseBytes?: Buffer;
       } | null>;
     };
     if (typeof mod.getVendoredJq === "function") {
