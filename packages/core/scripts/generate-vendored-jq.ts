@@ -1,4 +1,4 @@
-import { copyFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { JQ_TOOL } from "../src/lib/runner/external-tools/defs/jq.ts";
@@ -35,6 +35,7 @@ const exe = JQ_TOOL.binaryFileName(platform);
 
 await resolveExternalBinary(JQ_TOOL, {
   allowSystemFallback: false,
+  ignorePathEnvVar: true,
   platform,
   arch,
 });
@@ -46,6 +47,7 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const licenseImportPath = resolve(
   join(scriptDir, "vendored-licenses", "jq", "LICENSE"),
 );
+mkdirSync(cacheDir, { recursive: true });
 copyFileSync(licenseImportPath, join(cacheDir, "LICENSE"));
 const outPath = join(
   scriptDir,
