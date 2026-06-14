@@ -1,5 +1,5 @@
 {
-  "name": "@mistweaverco/kulala-core",
+  "name": "@kulala/root",
   "type": "module",
   "private": true,
   "scripts": {
