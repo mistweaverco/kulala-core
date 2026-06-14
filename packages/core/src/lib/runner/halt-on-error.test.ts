@@ -69,7 +69,9 @@ test("runDocument: haltOnError stops after the first failing block", async () =>
   expect(res.type).toBe("responses");
   expect(res.data).toHaveLength(1);
   expect(res.data[0]?.success).toBe(false);
-  expect(res.data[0]?.blockName).toBe("First");
+  expect(
+    res.data[0] && "blockName" in res.data[0] && res.data[0].blockName,
+  ).toBe("First");
 });
 
 test("runDocument: haltOnError false runs all blocks even after a failure", async () => {
