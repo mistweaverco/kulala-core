@@ -10,10 +10,12 @@ if (existsSync(join(packageRoot, "scripts", "build.ts"))) {
   process.exit(0);
 }
 
-tryInstallBackend().catch((error: unknown) => {
+try {
+  await tryInstallBackend();
+} catch (error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
   process.stderr.write(`Warning: kulala-core postinstall failed: ${message}\n`);
   process.stderr.write(
     "@mistweaverco/kulala-core will attempt to download it on first use instead.\n",
   );
-});
+}
