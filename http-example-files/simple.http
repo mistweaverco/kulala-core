@@ -86,7 +86,7 @@ if (!fs.existsSync('TOKEN.txt')) {
 %}
 
 // @kulala-curl--insecure
-POST https://echo.getkulala.net/post HTTP/1.1
+POST https://echo.kulala.app/post HTTP/1.1
 Content-Type: application/json
 X-Custom-Header: Kulala-Insecure
 
@@ -98,5 +98,5 @@ X-Custom-Header: Kulala-Insecure
 
 > {%
   const fs = require('fs');
-  fs.writeFileSync('TOKEN.txt', response.body.body.token);
+  fs.writeFileSync('TOKEN.txt', response.body.json.token);
 %}

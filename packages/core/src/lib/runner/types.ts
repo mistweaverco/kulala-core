@@ -188,6 +188,8 @@ export type KulalaRunOptions = {
   responseFormat?: KulalaResponseFormatOptions;
   /** Optional jq filter override for this run (block `# @kulala-jq` still wins). */
   jqFilter?: string;
+  /** Stop running remaining requests after the first failure. */
+  haltOnError?: boolean;
 };
 
 /** Response-like value passed to scripts (fetch Response or compatible). */

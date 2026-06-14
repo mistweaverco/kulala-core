@@ -71,6 +71,26 @@ Accept: application/json
     }
   });
 
+  test("omits http version for GRPC requests", async () => {
+    const content = `### GRPC_ECHO
+GRPC localhost:8080 grpc_echo.v1.EchoService/Echo
+Content-Type: application/json
+
+{ "ping": "Hello" }
+`;
+    const result = await formatHttp(content, undefined, {
+      formatBody: false,
+      defaults: { http_version: "HTTP/1.1" },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.formatted).toContain(
+        "GRPC localhost:8080 grpc_echo.v1.EchoService/Echo\n",
+      );
+      expect(result.formatted).not.toContain("HTTP/1.1");
+    }
+  });
+
   test("omits http version when defaults.http_version is false", async () => {
     const content = `### FOO
 GET https://echo.kulala.app/get?foo=bar HTTP/1.1

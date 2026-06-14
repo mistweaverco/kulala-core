@@ -111,6 +111,7 @@ export const kulalaCore = {
     env?: string;
     limit?: KulalaStdinActionRunLimit[];
     responseFormat?: KulalaRunOptions["responseFormat"];
+    haltOnError?: boolean;
   }): Promise<{ doc: KulalaDocument; response: KulalaResponseWrapper }> => {
     const doc = await getDocument(input.content, input.filepath);
 
@@ -118,6 +119,7 @@ export const kulalaCore = {
       content: input.content,
       env: input.env ?? "default",
       responseFormat: input.responseFormat,
+      haltOnError: input.haltOnError,
     };
     const response = await runDocument(doc, input.limit, options);
     return { doc, response };

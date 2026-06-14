@@ -48,6 +48,23 @@ export type {
   KulalaScriptConsoleOrigin,
 } from "./types";
 
+type RunResultItem =
+  | KulalaRequestSuccessResponse
+  | KulalaRequestErrorResponse
+  | KulalaPromptResponse
+  | KulalaSkippedResponse
+  | KulalaWebSocketPlanResponse;
+
+function shouldHaltAfterResult(
+  item: RunResultItem,
+  haltOnError: boolean | undefined,
+): boolean {
+  if (!haltOnError || item.success !== false) {
+    return false;
+  }
+  return !("prompt" in item && item.prompt);
+}
+
 export async function runDocument(
   doc: KulalaDocument,
   limit?: KulalaStdinActionRunLimit[],
@@ -119,6 +136,7 @@ export async function runDocument(
     stableDocId,
   );
   flow.requestVarResults = previousResults;
+  const haltOnError = options?.haltOnError;
   for (const block of blocks) {
     const vars = await resolveVariables(
       env,
@@ -168,6 +186,9 @@ export async function runDocument(
           ...(item as KulalaRequestSuccessResponse),
           blockName,
         });
+        if (shouldHaltAfterResult(item as RunResultItem, haltOnError)) {
+          return { type: "responses", data: results };
+        }
       }
       flow.collectedSharedHttpResults = [];
     }
@@ -183,6 +204,10 @@ export async function runDocument(
           data: results,
         };
         return responseWrapper;
+      }
+
+      if (shouldHaltAfterResult(item, haltOnError)) {
+        return { type: "responses", data: results };
       }
 
       if (item.success && "skipped" in item && item.skipped) {
