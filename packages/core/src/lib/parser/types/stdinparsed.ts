@@ -57,6 +57,8 @@ export type KulalaStdinActionRun = {
   responseFormat?: KulalaResponseFormatStdinOptions;
   /** Optional jq filter for this run (block `# @kulala-jq` overrides). */
   jqFilter?: string;
+  /** Stop running remaining requests after the first failure. */
+  haltOnError?: boolean;
 };
 
 export type KulalaStdinActionApplyJqFilter = {

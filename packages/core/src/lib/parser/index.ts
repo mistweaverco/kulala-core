@@ -81,6 +81,7 @@ const kulalaParser: KulalaParser = {
           env: stdIn.env ?? "default",
           responseFormat: stdIn.responseFormat,
           jqFilter: stdIn.jqFilter,
+          haltOnError: stdIn.haltOnError,
         });
         break;
       }
