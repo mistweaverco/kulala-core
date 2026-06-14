@@ -1,20 +1,27 @@
 #!/usr/bin/env node
 
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { downloader } from "./lib/downloader";
 
 async function main(): Promise<void> {
-  const executable = await downloader.ensureInstalled();
-  const result = spawnSync(executable, process.argv.slice(2), {
-    stdio: "inherit",
+  const executable =
+    downloader.resolveExecutableSync() ?? (await downloader.ensureInstalled());
+
+  const child = spawn(executable, process.argv.slice(2), {
+    stdio: [process.stdin, process.stdout, process.stderr],
     env: process.env,
   });
 
-  if (result.error) {
-    throw result.error;
-  }
-
-  process.exit(result.status ?? 1);
+  await new Promise<void>((resolve, reject) => {
+    child.on("error", reject);
+    child.on("close", (code, signal) => {
+      if (signal) {
+        process.kill(process.pid, signal);
+        return;
+      }
+      process.exit(code ?? 1);
+    });
+  });
 }
 
 main().catch((error: unknown) => {

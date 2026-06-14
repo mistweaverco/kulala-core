@@ -234,7 +234,7 @@ export async function tryInstallBackend(): Promise<void> {
   }
 }
 
-export async function ensureInstalled(): Promise<string> {
+export function resolveExecutableSync(): string | null {
   const fromEnv = process.env.KULALA_CORE_PATH;
   if (fromEnv && fromEnv.length > 0) {
     if (!fs.existsSync(fromEnv)) {
@@ -252,6 +252,15 @@ export async function ensureInstalled(): Promise<string> {
     return getBinPath();
   }
 
+  return null;
+}
+
+export async function ensureInstalled(): Promise<string> {
+  const cached = resolveExecutableSync();
+  if (cached) {
+    return cached;
+  }
+
   if (binaryExists()) {
     removeStaleBinary();
   }
@@ -262,6 +271,7 @@ export async function ensureInstalled(): Promise<string> {
 
 export const downloader = {
   ensureInstalled,
+  resolveExecutableSync,
   getBinPath,
   installBackend,
   tryInstallBackend,
