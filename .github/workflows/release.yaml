@@ -175,7 +175,7 @@ jobs:
             packages/core/dist/kulala-core-*
 
   publish-npm:
-    name: Publish npm packages
+    name: Publish npm package
     runs-on: ubuntu-latest
     needs: [release]
     permissions:
