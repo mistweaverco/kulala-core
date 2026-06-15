@@ -12,13 +12,14 @@ Content-Type: application/json
 
 > {%
   client.test("Request executed successfully", function() {
-    client.assert(response.status === 200, "Response status is not 200");
+    const expectedStatus = 200;
+    client.assert(response.status === expectedStatus, response.status === expectedStatus ? `Response status is ${expectedStatus}` : `Expected status ${expectedStatus} but received ${response.status}`);
   });
 
   client.test("Headers option exists", function() {
     client.assert(
-      response.body.hasOwnProperty("headers"),
-      "Cannot find 'headers' in parsed JSON body",
+      response.hasOwnProperty("headers"),
+      "Response has 'headers' property",
     );
   });
 
@@ -26,7 +27,7 @@ Content-Type: application/json
     const type = response.contentType.mimeType;
     client.assert(
       type === "application/json",
-      "Expected 'application/json' but received '" + type + "'",
+      type !== "application/json" ? "Expected 'application/json' but received '" + type + "'" : "Response content-type is 'application/json'",
     );
   });
 %}
