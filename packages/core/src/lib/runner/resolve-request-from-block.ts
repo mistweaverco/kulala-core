@@ -20,11 +20,13 @@ import {
   getGraphQLRequestBody,
   getJSONRequestBody,
   getRequestHeaderType,
+  graphQLRawSubstitutionText,
   isBodyFromFileRef,
   isRawMultipartTemplateBody,
   resolveEffectiveBodyFromFileRef,
   resolveInlineBodyFileRefs,
   stripHttpClientDoubleSlashLineComments,
+  substituteGraphQLRequestBody,
 } from "./body";
 import {
   buildHeadersFromSection,
@@ -199,10 +201,15 @@ export async function resolveRequestFromBlock(
   );
   const headerStr = JSON.stringify(headerSectionWithUnescapedBraces);
   const bodyStrCheck = JSON.stringify(effectiveBody ?? {});
+  const graphqlRawText = graphQLRawSubstitutionText(
+    block.request.body,
+    block.request.sourceBodyText,
+  );
   const needsAsyncSubstitution =
     urlStr.includes("$auth.") ||
     headerStr.includes("$auth.") ||
-    bodyStrCheck.includes("$auth.");
+    bodyStrCheck.includes("$auth.") ||
+    (graphqlRawText?.includes("$auth.") ?? false);
 
   let url: string;
   try {
@@ -279,18 +286,31 @@ export async function resolveRequestFromBlock(
 
   let body: typeof block.request.body;
   try {
-    body = needsAsyncSubstitution
-      ? ((await substituteInObjectAsync(
-          effectiveBody,
-          activeVars,
-          resolver,
-          authResolver,
-        )) as typeof block.request.body)
-      : (substituteInObject(
-          effectiveBody,
-          activeVars,
-          resolver,
-        ) as typeof block.request.body);
+    if (block.request.method === "GRAPHQL") {
+      body = (await substituteGraphQLRequestBody({
+        method: block.request.method,
+        originalBody: block.request.body,
+        effectiveBody,
+        sourceBodyText: block.request.sourceBodyText,
+        vars: activeVars,
+        resolver,
+        authResolver,
+        needsAsyncSubstitution,
+      })) as typeof block.request.body;
+    } else {
+      body = needsAsyncSubstitution
+        ? ((await substituteInObjectAsync(
+            effectiveBody,
+            activeVars,
+            resolver,
+            authResolver,
+          )) as typeof block.request.body)
+        : (substituteInObject(
+            effectiveBody,
+            activeVars,
+            resolver,
+          ) as typeof block.request.body);
+    }
   } catch (error) {
     if (error instanceof OAuth2PromptError) {
       return error.promptResponse;

@@ -108,6 +108,38 @@ GRAPHQL https://api.example.com/graphql HTTP/1.1
     expect(normalizeDoc(doc2)).toEqual(normalizeDoc(doc1));
   });
 
+  test("serializes GRAPHQL with unquoted {{ var }} in variables JSON", async () => {
+    const content = `@PERSON_ID = 1
+
+### GQL_STARWARS_QUERY_PERSON
+
+GRAPHQL https://swapi-graphql.netlify.app/graphql HTTP/1.1
+Accept: application/json
+
+query Person($id: ID) {
+  person(personID: $id) {
+    name
+  }
+}
+
+{
+  "id": {{ PERSON_ID }}
+}
+`;
+    const doc1 = await getDocument(content, "/tmp/gql-unquoted.http");
+    expect(doc1.blocks[0]?.request.body).toEqual({
+      query:
+        "query Person($id: ID) {\n  person(personID: $id) {\n    name\n  }\n}",
+      variablesSourceText: '{\n  "id": {{ PERSON_ID }}\n}',
+    });
+
+    const serialized = serializeHttp(doc1);
+    expect(serialized).toContain('"id": {{ PERSON_ID }}');
+
+    const doc2 = await getDocument(serialized, "/tmp/gql-unquoted.http");
+    expect(normalizeDoc(doc2)).toEqual(normalizeDoc(doc1));
+  });
+
   test("serializes run/import directives and file-header vars/operators", async () => {
     const content = `@HOST = example.com
 # @kulala-vscode-restclient-compat
