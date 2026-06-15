@@ -25,11 +25,11 @@ POST https://echo.kulala.app/post
   &someKey7=someValue7
   HTTP/1.1
 # X-My-Custom-Header1: MyValue1
+# X-My-Custom-Header4: MyValue4
+# X-My-Custom-Header6: MyValue6
 Content-Type: application/json
 X-My-Custom-Header2: MyValue2
-# X-My-Custom-Header4: MyValue4
 X-My-Custom-Header5: MyValue5
-# X-My-Custom-Header6: MyValue6
 X-My-Custom-Header7: MyValue7
 
 {
@@ -70,9 +70,9 @@ Content-Type: application/json
 // @no-auto-encoding
 
 GET https://echo.kulala.app/get?
-            name=@#$somebody&
-            qwerty=%40%23%24
-
+  name=@#$somebody&
+  qwerty=%40%23%24
+  HTTP/1.1
 
 ### CONNECTION_TIMEOUT_PRIVATE_IP_NO_RESOLVE
 
