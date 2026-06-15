@@ -392,10 +392,21 @@ async function formatBodyContent(
 
   if (typeof body === "object" && !("__bodyFromFile" in body)) {
     if (block.request.method === "GRAPHQL" && "query" in body) {
-      const formatted = await formatGraphQLBodyObject(
-        body as { query: string; variables?: Record<string, unknown> },
-        bodyFormat,
-      );
+      const gqlBody = body as {
+        query: string;
+        variables?: Record<string, unknown>;
+        variablesSourceText?: string;
+      };
+      if (gqlBody.variablesSourceText !== undefined) {
+        const formattedQuery = await formatWithPrettier(
+          gqlBody.query,
+          "graphql",
+          bodyFormat,
+        );
+        block.request.body = `${formattedQuery}\n\n${gqlBody.variablesSourceText}`;
+        return;
+      }
+      const formatted = await formatGraphQLBodyObject(gqlBody, bodyFormat);
       let result = formatted.query;
       if (formatted.variables !== undefined) {
         result += `\n\n${await formatWithPrettier(

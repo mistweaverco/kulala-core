@@ -9,6 +9,8 @@ export type KulalaRequestBodyType =
 export type KulalaRequestGraphQLBody = {
   query: string;
   variables?: Record<string, unknown>;
+  /** Raw variables JSON when it could not be parsed (e.g. unquoted {{ var }} placeholders). */
+  variablesSourceText?: string;
 };
 
 export type KulalaRequestFormBody = {

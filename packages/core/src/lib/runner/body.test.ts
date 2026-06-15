@@ -15,6 +15,7 @@ import {
   resolveEffectiveBodyFromFileRef,
   resolveInlineBodyFileRefs,
   stripHttpClientDoubleSlashLineComments,
+  substituteGraphQLRequestBody,
 } from "./body";
 
 test("getRequestHeaderType returns json for application/json", () => {
@@ -392,4 +393,69 @@ test("resolveInlineBodyFileRefs: trailing LF in file + blank before boundary —
   const out = (await resolveInlineBodyFileRefs(template, dir)).toString("utf8");
   expect(out).toContain("BODY\n\r\n--b--\r\n");
   expect(out).not.toContain("BODY\n\n--b--\r\n");
+});
+
+test("substituteGraphQLRequestBody: unquoted {{ var }} in variables JSON (JetBrains parity)", async () => {
+  const sourceBodyText = [
+    "query Person($id: ID) {",
+    "  person(personID: $id) { name }",
+    "}",
+    "",
+    "{",
+    '  "id": {{ PERSON_ID }}',
+    "}",
+  ].join("\n");
+
+  const parsedBody = {
+    query: "query Person($id: ID) {\n  person(personID: $id) { name }\n}",
+  };
+
+  const result = await substituteGraphQLRequestBody({
+    method: "GRAPHQL",
+    originalBody: parsedBody,
+    effectiveBody: parsedBody,
+    sourceBodyText,
+    vars: { PERSON_ID: "1" },
+  });
+
+  expect(result).toEqual({
+    query: "query Person($id: ID) {\n  person(personID: $id) { name }\n}",
+    variables: { id: 1 },
+  });
+});
+
+test("substituteGraphQLRequestBody: body-from-file with unquoted variables suffix", async () => {
+  const { mkdtempSync } = await import("fs");
+  const { join } = await import("path");
+  const { tmpdir } = await import("os");
+  const dir = mkdtempSync(join(tmpdir(), "kulala-gql-unquoted-"));
+  const queryFile = join(dir, "query.graphql");
+  await Bun.write(
+    queryFile,
+    ["query Person($id: ID) {", "  person(personID: $id) { name }", "}"].join(
+      "\n",
+    ),
+  );
+
+  const originalBody = {
+    __bodyFromFile: "query.graphql",
+    __graphqlVariablesSuffix: '{ "id": {{ PERSON_ID }} }',
+  };
+  const effectiveBody = await resolveEffectiveBodyFromFileRef(
+    originalBody,
+    dir,
+    "GRAPHQL",
+  );
+
+  const result = await substituteGraphQLRequestBody({
+    method: "GRAPHQL",
+    originalBody,
+    effectiveBody,
+    vars: { PERSON_ID: "42" },
+  });
+
+  expect(result).toEqual({
+    query: "query Person($id: ID) {\n  person(personID: $id) { name }\n}",
+    variables: { id: 42 },
+  });
 });

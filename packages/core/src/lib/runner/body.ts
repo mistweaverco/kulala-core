@@ -3,7 +3,13 @@ import {
   parseGraphQLVariablesJson,
 } from "../parser/graphql-content";
 import type { KulalaRequestBodyFromFileContent } from "../parser/types/body";
-import type { RequestHeaderType } from "./types";
+import {
+  substituteInObject,
+  substituteInObjectAsync,
+  substituteInString,
+  substituteInStringAsync,
+} from "../variables";
+import type { RequestHeaderType, VariableResolver } from "./types";
 
 /**
  * Normalize CRLF and CR-only line endings to `\n`.
@@ -460,4 +466,85 @@ export async function buildMultipartBody(
     }
   }
   return form;
+}
+
+/** Raw GraphQL body text that may contain {{ }} placeholders (JetBrains substitutes before JSON parse). */
+export function graphQLRawSubstitutionText(
+  originalBody: unknown,
+  sourceBodyText?: string,
+): string | undefined {
+  if (isBodyFromFileRef(originalBody)) {
+    return originalBody.__graphqlVariablesSuffix;
+  }
+  if (sourceBodyText && !isBodyFromFileRef(originalBody)) {
+    return sourceBodyText;
+  }
+  return undefined;
+}
+
+/**
+ * Substitute variables in GraphQL request body text before parsing variables JSON,
+ * so unquoted placeholders like `"id": {{ PERSON_ID }}` work (JetBrains parity).
+ */
+export async function substituteGraphQLRequestBody(options: {
+  method?: string;
+  originalBody: unknown;
+  effectiveBody: unknown;
+  sourceBodyText?: string;
+  vars: Record<string, string>;
+  resolver?: VariableResolver;
+  authResolver?: (
+    func: "token" | "idToken",
+    authId: string,
+  ) => Promise<string | undefined>;
+  needsAsyncSubstitution?: boolean;
+}): Promise<unknown> {
+  const methodUpper = (options.method ?? "").toUpperCase();
+  if (methodUpper !== "GRAPHQL") {
+    return options.effectiveBody;
+  }
+
+  const substituteText = (text: string): Promise<string> =>
+    options.needsAsyncSubstitution
+      ? substituteInStringAsync(
+          text,
+          options.vars,
+          options.resolver,
+          options.authResolver,
+        )
+      : Promise.resolve(
+          substituteInString(text, options.vars, options.resolver),
+        );
+
+  const inlineSource =
+    options.sourceBodyText && !isBodyFromFileRef(options.originalBody)
+      ? options.sourceBodyText
+      : undefined;
+  if (inlineSource) {
+    return parseGraphQLContent(await substituteText(inlineSource));
+  }
+
+  if (isBodyFromFileRef(options.originalBody)) {
+    const gql = getGraphQLRequestBody(options.effectiveBody);
+    if (!gql) {
+      return options.effectiveBody;
+    }
+    const suffix = options.originalBody.__graphqlVariablesSuffix;
+    if (suffix) {
+      const variables = parseGraphQLVariablesJson(await substituteText(suffix));
+      return {
+        query: gql.query,
+        ...(variables !== undefined ? { variables } : {}),
+      };
+    }
+  }
+
+  return options.needsAsyncSubstitution
+    ? substituteInObjectAsync(
+        options.effectiveBody,
+        options.vars,
+        options.resolver,
+        options.authResolver,
+      )
+    : substituteInObject(options.effectiveBody, options.vars, options.resolver);
 }

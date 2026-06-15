@@ -1,6 +1,8 @@
 export type KulalaGraphQLBodyContent = {
   query: string;
   variables?: Record<string, unknown>;
+  /** Raw variables JSON when it could not be parsed (e.g. unquoted {{ var }} placeholders). */
+  variablesSourceText?: string;
 };
 
 /** Parse variables JSON from trailing .http body text (after a `< path` line or blank line). */
@@ -42,7 +44,14 @@ export function parseGraphQLContent(content: string): KulalaGraphQLBodyContent {
   let variables: Record<string, unknown> | undefined = undefined;
 
   if (parts.length > 1) {
-    variables = parseGraphQLVariablesJson(parts[1]!);
+    const variablesPart = parts[1]!;
+    variables = parseGraphQLVariablesJson(variablesPart);
+    if (variables === undefined) {
+      return {
+        query,
+        variablesSourceText: variablesPart,
+      };
+    }
   }
 
   return {

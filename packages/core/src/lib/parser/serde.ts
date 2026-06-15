@@ -152,9 +152,11 @@ function isBodyFromFile(body: unknown): body is { __bodyFromFile: string } {
   );
 }
 
-function isGraphQLBody(
-  body: unknown,
-): body is { query: string; variables?: Record<string, unknown> } {
+function isGraphQLBody(body: unknown): body is {
+  query: string;
+  variables?: Record<string, unknown>;
+  variablesSourceText?: string;
+} {
   return (
     typeof body === "object" &&
     body !== null &&
@@ -189,9 +191,12 @@ function serializeBody(
   }
 
   if (method === "GRAPHQL" && isGraphQLBody(body)) {
-    const gql = body as { query: string; variables?: Record<string, unknown> };
+    const gql = body;
     const out = gql.query.trimEnd().split("\n");
-    if (gql.variables !== undefined) {
+    if (gql.variablesSourceText !== undefined) {
+      out.push("");
+      out.push(...gql.variablesSourceText.split("\n"));
+    } else if (gql.variables !== undefined) {
       out.push("");
       out.push(JSON.stringify(gql.variables, null, 2));
     }
