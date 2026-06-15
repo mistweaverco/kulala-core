@@ -243,6 +243,30 @@ GET https://example.com HTTP/1.1
     expect(serialized.endsWith("\n\n")).toBe(false);
   });
 
+  test("serializeHttp: normalizes // @ operators to # @", async () => {
+    const content = `### bar
+
+// @kulala-curl--insecure
+GET https://example.com HTTP/1.1
+`;
+    const doc = await getDocument(content, "/tmp/op-style.http");
+    const serialized = serializeHttp(doc);
+    expect(serialized).toContain("# @kulala-curl--insecure");
+    expect(serialized).not.toContain("// @kulala-curl--insecure");
+  });
+
+  test("serializeHttp: inserts blank line between operators and request", async () => {
+    const content = `### bar
+// @kulala-curl--insecure
+GET https://example.com HTTP/1.1
+`;
+    const doc = await getDocument(content, "/tmp/op-blank.http");
+    const serialized = serializeHttp(doc);
+    expect(serialized).toContain(
+      "# @kulala-curl--insecure\n\nGET https://example.com HTTP/1.1",
+    );
+  });
+
   test("serializeHttp: simple.http round-trips without formatting drift", async () => {
     const fixturePath = join(
       import.meta.dir,
@@ -254,7 +278,7 @@ GET https://example.com HTTP/1.1
 
     expect(serialized).toBe(original);
     expect(serialized).not.toContain("#   #");
-    expect(serialized).toContain("// @kulala-curl--insecure");
+    expect(serialized).toContain("# @kulala-curl--insecure");
     expect(serialized).not.toContain("lang=js");
 
     const queryBlock = doc.blocks.find((b) => b.name.includes("QUERY_PARAMS"));

@@ -30,8 +30,15 @@ export async function deserializeHttp(
 function serializeOperator(op: KulalaOperator): string {
   const args =
     op.args === undefined || op.args === "" ? "" : ` ${String(op.args)}`;
-  const prefix = op.commentStyle ?? "#";
-  return `${prefix} @${op.name}${args}`;
+  return `# @${op.name}${args}`;
+}
+
+function hasPreambleBeforeRequest(block: KulalaBlock): boolean {
+  return (
+    (block.preamble?.length ?? 0) > 0 ||
+    (block.preambleVariables !== undefined &&
+      Object.keys(block.preambleVariables).length > 0)
+  );
 }
 
 function serializeDirective(d: KulalaDirective): string {
@@ -290,7 +297,7 @@ function serializeBlock(
     }
   }
 
-  if (block.blankLineBeforeRequest) {
+  if (hasPreambleBeforeRequest(block)) {
     lines.push("");
   }
 
