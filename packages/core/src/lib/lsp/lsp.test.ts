@@ -311,6 +311,23 @@ request.variables.set("foo", "bar");
   expect(labels.has("run #")).toBe(false);
 });
 
+test("lspCompletion suggests kulala operators in // @ comments", async () => {
+  const content = `// @kulala-
+GET https://example.com HTTP/1.1
+`;
+  const res = await lspCompletion({
+    content,
+    filepath: "/tmp/operators.http",
+    env: "default",
+    line: 1,
+    column: 12,
+    filetype: "http",
+  });
+  const labels = new Set(res.items.map((i) => i.label));
+  expect(labels.has("kulala-expect-status-code")).toBe(true);
+  expect(labels.has("kulala-curl--")).toBe(true);
+});
+
 test('lspCompletion suggests variable keys in request.variables.get("...")', async () => {
   setVariable("global", "X_GLOBAL", "abc");
   const content = `### One
