@@ -1,8 +1,8 @@
 ### TEST
 
 POST https://echo.kulala.app/post HTTP/1.1
-Content-Type: application/json
 Authorization: Bearer {{ $env.API_BEARER_TOKEN }}
+Content-Type: application/json
 
 {
   "name": "John Doe",

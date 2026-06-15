@@ -1,8 +1,8 @@
-@DOC_ENV_TEST=production
+@DOC_ENV_TEST = production
 
 ### TEST_REQUEST1
 
-GET https://echo.kulala.app/get
+GET https://echo.kulala.app/get HTTP/1.1
 Content-Type: application/json
 
 {

@@ -5,5 +5,5 @@
 # using the refresh_token (if available) before making this request
 
 POST https://echo.kulala.app/post HTTP/1.1
-Authorization: Bearer {{$auth.token("playground-oauth2")}}
 Accept: application/json
+Authorization: Bearer {{ $auth.token("playground-oauth2") }}

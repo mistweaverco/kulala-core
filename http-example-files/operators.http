@@ -1,19 +1,19 @@
 ### EXPECT_STATUS_404
 
-// @kulala-expect-status-code 404
+# @kulala-expect-status-code 404
 
 GET https://echo.kulala.app/status/404 HTTP/1.1
 
 ### PROMPT_REQUEST
 
-// @kulala-prompt "What is your name?" NAME
+# @kulala-prompt "What is your name?" NAME
 
 GET https://echo.kulala.app/get?name={{NAME}} HTTP/1.1
 
 ### INSECURE_REQUEST_TIMEOUT_REQUEST
 
-// @kulala-curl--insecure
-// @timeout 5 ms
+# @kulala-curl--insecure
+# @timeout 5 ms
 
 POST https://echo.kulala.app/post
   ?someKey=someValue1
@@ -44,7 +44,7 @@ Content-Type: application/json
 
 ### NO_COOKIE_JAR_REQUEST
 
-// @no-cookie-jar
+# @no-cookie-jar
 
 GET https://echo.kulala.app/cookies HTTP/1.1
 Content-Type: application/json
@@ -56,7 +56,7 @@ Content-Type: application/json
 
 ### NO_LOG_REQUEST
 
-// @no-log
+# @no-log
 
 POST https://echo.kulala.app/anything HTTP/1.1
 Content-Type: application/json
@@ -67,7 +67,7 @@ Content-Type: application/json
 
 ### NO_AUTO_ENCODING_REQUEST
 
-// @no-auto-encoding
+# @no-auto-encoding
 
 GET https://echo.kulala.app/get?
   name=@#$somebody&
@@ -76,9 +76,10 @@ GET https://echo.kulala.app/get?
 
 ### CONNECTION_TIMEOUT_PRIVATE_IP_NO_RESOLVE
 
-// @kulala-curl--insecure
-// @timeout 5 s
-// @connection-timeout 5 s
+# @kulala-curl--insecure
+# @timeout 5 s
+# @connection-timeout 5 s
+
 POST https://10.77.77.77:1337/login HTTP/1.1
 Accept: application/json
 Content-Type: application/json
