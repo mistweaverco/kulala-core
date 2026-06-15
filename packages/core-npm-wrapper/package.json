@@ -1,30 +1,18 @@
 {
   "name": "@mistweaverco/kulala-core",
   "version": "0.0.0",
-  "type": "module",
+  "homepage": "https://github.com/mistweaverco/kulala-core#readme",
+  "bugs": {
+    "url": "https://github.com/mistweaverco/kulala-core/issues"
+  },
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/mistweaverco/kulala-core.git",
     "directory": "packages/core-npm-wrapper"
   },
-  "homepage": "https://github.com/mistweaverco/kulala-core#readme",
-  "bugs": {
-    "url": "https://github.com/mistweaverco/kulala-core/issues"
-  },
-  "engines": {
-    "node": ">=20"
-  },
   "bin": {
     "kulala-core": "dist/cli.js"
-  },
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
-    }
   },
   "files": [
     "dist/cli.js",
@@ -33,12 +21,24 @@
     "dist/install-backend.js",
     "dist/lib"
   ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "bun run scripts/build.ts",
     "prepare": "bun run scripts/build.ts || true",
     "postinstall": "node dist/install-backend.js || true"
   },
-  "publishConfig": {
-    "access": "public"
+  "engines": {
+    "node": ">=20"
   }
 }

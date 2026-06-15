@@ -1246,9 +1246,7 @@ export async function doRequestFromBlock(
         if (codes.length > 0 && !codes.includes(res.statusCode)) {
           return {
             success: false,
-            error: `Expected status code ${codes.join(
-              ", ",
-            )} but got ${res.statusCode}`,
+            error: `Expected status code ${codes.join(", ")} but got ${res.statusCode}`,
             ...(scriptConsole.length > 0 ? { scriptConsole } : {}),
           } as KulalaRequestErrorResponse;
         }

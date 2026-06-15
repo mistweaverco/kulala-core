@@ -2,11 +2,11 @@
   "name": "kulala-core-consumer-app-example",
   "private": true,
   "type": "module",
-  "dependencies": {
-    "@mistweaverco/kulala-core": "workspace:*"
-  },
   "scripts": {
     "build": "bun run ../../packages/core/scripts/generate-vendored-curl.ts && bun build src/main.ts --compile --define __KULALA_EMBED_CURL__=true --outfile dist/kulala-core-consumer-app",
     "run": "bun run build && ./dist/kulala-core-consumer-app"
+  },
+  "dependencies": {
+    "@mistweaverco/kulala-core": "workspace:*"
   }
 }

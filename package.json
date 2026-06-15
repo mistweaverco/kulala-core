@@ -1,7 +1,11 @@
 {
   "name": "@kulala/root",
-  "type": "module",
   "private": true,
+  "workspaces": [
+    "packages/*",
+    "examples/*"
+  ],
+  "type": "module",
   "scripts": {
     "format": "prettier --write .",
     "lint": "tsc --noEmit && prettier --check . && eslint .",
@@ -38,9 +42,5 @@
   },
   "peerDependencies": {
     "typescript": "5.9.2"
-  },
-  "workspaces": [
-    "packages/*",
-    "examples/*"
-  ]
+  }
 }

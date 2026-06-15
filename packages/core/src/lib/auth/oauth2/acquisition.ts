@@ -72,9 +72,7 @@ export async function acquireClientCredentialsToken(
   // Handle client credentials location
   if (clientCredentialsLocation === "basic") {
     // Basic auth header
-    const credentials = `${config["Client ID"]}:${
-      config["Client Secret"] ?? ""
-    }`;
+    const credentials = `${config["Client ID"]}:${config["Client Secret"] ?? ""}`;
     const encoded = Buffer.from(credentials, "utf8").toString("base64");
     headers.Authorization = `Basic ${encoded}`;
   } else if (clientCredentialsLocation === "in body") {
