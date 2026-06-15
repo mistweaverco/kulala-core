@@ -91,6 +91,11 @@ export function staticCompletionItems(sourceName: string): LspCompletionItem[] {
   const metadata: SourceItem[] = [
     { label: "grpc", insertText: "grpc", documentation: "Grpc flag" },
     {
+      label: "kulala-expect-status-code",
+      insertText: "kulala-expect-status-code ",
+      documentation: "Assert response status code",
+    },
+    {
       label: "kulala-jq",
       insertText: "kulala-jq ",
       documentation: "Filter response body in UI with jq",
