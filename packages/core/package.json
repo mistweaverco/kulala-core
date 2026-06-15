@@ -1,19 +1,23 @@
 {
   "name": "@kulala/core",
-  "type": "module",
+  "version": "0.0.0",
   "private": false,
+  "homepage": "https://github.com/mistweaverco/kulala-core#readme",
+  "bugs": {
+    "url": "https://github.com/mistweaverco/kulala-core/issues"
+  },
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/mistweaverco/kulala-core.git"
   },
-  "homepage": "https://github.com/mistweaverco/kulala-core#readme",
-  "bugs": {
-    "url": "https://github.com/mistweaverco/kulala-core/issues"
-  },
-  "engines": {
-    "bun": "1.3.14"
-  },
+  "files": [
+    "dist",
+    "scripts",
+    "README.md",
+    "LICENSE"
+  ],
+  "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -23,12 +27,9 @@
       "default": "./dist/index.js"
     }
   },
-  "files": [
-    "dist",
-    "scripts",
-    "README.md",
-    "LICENSE"
-  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "format": "prettier --write .",
     "lint": "prettier --check . && eslint .",
@@ -38,8 +39,7 @@
     "build:types": "tsc -p tsconfig.build.json",
     "prepack": "cp ./../../README.md . && cp ./../../LICENSE . && bun run build"
   },
-  "publishConfig": {
-    "access": "public"
-  },
-  "version": "0.0.0"
+  "engines": {
+    "bun": "1.3.14"
+  }
 }

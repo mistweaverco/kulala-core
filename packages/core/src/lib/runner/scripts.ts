@@ -581,22 +581,8 @@ async function executeLuaScript(
   // Bridge: mirror the JS shape closely.
   luaCtx.client = {
     log: (...args: unknown[]) => ctx.client.log(...args),
-    test: (name: string, func: unknown) => {
-      if (typeof name !== "string" || name.trim().length === 0) {
-        throw new Error("client.test: name must be a non-empty string");
-      }
-      if (typeof func !== "function") {
-        throw new Error("client.test: func must be a function");
-      }
-      try {
-        // wasmoon functions are callable from JS
-        (func as () => unknown)();
-        ctx.client.log(`✓ ${name}`);
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        throw new Error(`✗ ${name}: ${msg}`);
-      }
-    },
+    test: (name: string, func: unknown) =>
+      ctx.client.test(name, func as () => unknown),
     assert: (cond: unknown, msg?: string) => ctx.client.assert(cond, msg),
     exit: () => ctx.client.exit(),
     global: {
@@ -801,6 +787,7 @@ export const runScripts = async (
       level: KulalaScriptConsoleLine["level"],
       message: string,
       tempCallsite?: ParsedTempCallsite,
+      meta?: Pick<KulalaScriptConsoleLine, "kind" | "testName" | "status">,
     ) => {
       if (scriptConsole) {
         scriptConsole.push({
@@ -813,6 +800,7 @@ export const runScripts = async (
             httpDocumentPath: filePath,
             tempCallsite,
           }),
+          ...meta,
         });
       } else if (level === "error") {
         console.error(message);
@@ -825,6 +813,8 @@ export const runScripts = async (
       script.lang !== "lua"
         ? parseCallsiteFromStack(new Error().stack, tmpName)
         : undefined;
+
+    const testNameStack: string[] = [];
 
     try {
       process.chdir(tempCwd);
@@ -850,23 +840,47 @@ export const runScripts = async (
           if (typeof func !== "function") {
             throw new Error("client.test: func must be a function");
           }
+          testNameStack.push(testName);
           try {
             func();
-            emitConsoleLine("log", `✓ ${testName}`, captureJsCallsite());
+            testNameStack.pop();
+            emitConsoleLine("log", `${testName}`, captureJsCallsite(), {
+              kind: "test",
+              testName,
+              status: "pass",
+            });
           } catch (e) {
+            testNameStack.pop();
             const msg = e instanceof Error ? e.message : String(e);
             emitConsoleLine(
               "error",
-              `✗ ${testName}: ${msg}`,
+              `${testName}: ${msg}`,
               captureJsCallsite(),
+              {
+                kind: "test",
+                testName,
+                status: "fail",
+              },
             );
             throw e;
           }
         },
         assert: (condition: unknown, message?: string) => {
+          const text = message ?? "client.assert failed";
+          const parentTest = testNameStack.at(-1);
           if (!condition) {
-            throw new Error(message ?? "client.assert failed");
+            emitConsoleLine("error", text, captureJsCallsite(), {
+              kind: "assert",
+              testName: parentTest,
+              status: "fail",
+            });
+            throw new Error(text);
           }
+          emitConsoleLine("log", text, captureJsCallsite(), {
+            kind: "assert",
+            testName: parentTest,
+            status: "pass",
+          });
         },
         exit: () => {
           throw new ScriptExitError("client.exit");
@@ -975,9 +989,7 @@ export const runScripts = async (
       }
       emitConsoleLine(
         "error",
-        `Error executing script: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        `Error executing script: ${error instanceof Error ? error.message : String(error)}`,
         captureJsCallsite(),
       );
       // JetBrains: pre-request script errors abort the request; post-request errors

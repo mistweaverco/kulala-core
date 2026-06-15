@@ -122,7 +122,10 @@ function hostHeaderValueToUrlBase(raw: string): string {
 export function resolveUrlFromHostHeader(opts: {
   headers: Record<string, string>;
   url: string;
-}): { headers: Record<string, string>; url: string } {
+}): {
+  headers: Record<string, string>;
+  url: string;
+} {
   const headers = { ...opts.headers };
   let url = opts.url;
   const hostKey = Object.keys(headers).find((k) => k.toLowerCase() === "host");

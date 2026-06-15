@@ -46,9 +46,7 @@ export const getOperator = (
     isKulalaCurlPassthroughOperator(operatorName);
   if (operatorNameRequiresArgs.has(operatorName) && !match[2]) {
     return {
-      errorMessage: `Operator "${operatorName}" requires an argument at line ${
-        lineIdx + 1
-      }`,
+      errorMessage: `Operator "${operatorName}" requires an argument at line ${lineIdx + 1}`,
       lineNumber: lineIdx,
       context: line,
     };

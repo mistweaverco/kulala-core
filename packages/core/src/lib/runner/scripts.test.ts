@@ -242,6 +242,61 @@ client.global.set("DATE", response.headers.valueOf("Date") || "");`,
     ).rejects.toThrow("nope");
   });
 
+  test("client.assert and client.test emit structured scriptConsole lines", async () => {
+    const scriptConsole: import("./types").KulalaScriptConsoleLine[] = [];
+    await runScripts(
+      [
+        {
+          type: "postRequest",
+          source: "inline",
+          lang: "js",
+          content: `
+            client.assert(true, "standalone assert");
+            client.test("nested test", () => {
+              client.assert(true, "nested assert");
+            });
+          `,
+          lineNumber: 1,
+        },
+      ],
+      "postRequest",
+      dummyBlock,
+      "/tmp/example.http",
+      {
+        statusCode: 200,
+        headers: {},
+        body: "{}",
+        timings: { phases: { total: 1 } },
+      },
+      {},
+      undefined,
+      scriptConsole,
+    );
+
+    expect(scriptConsole).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "assert",
+          status: "pass",
+          message: "standalone assert",
+          testName: undefined,
+        }),
+        expect.objectContaining({
+          kind: "assert",
+          status: "pass",
+          message: "nested assert",
+          testName: "nested test",
+        }),
+        expect.objectContaining({
+          kind: "test",
+          status: "pass",
+          testName: "nested test",
+          message: "nested test",
+        }),
+      ]),
+    );
+  });
+
   test("client.test runs the test function and aborts the script on failure", async () => {
     expect(
       runScripts(

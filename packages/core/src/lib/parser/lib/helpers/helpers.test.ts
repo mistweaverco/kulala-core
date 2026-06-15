@@ -36,9 +36,7 @@ function childScript(helperName: string, pad: string): string {
   return `
     import { ${helperName} } from "${HELPER_PATH}";
     const payload = {
-      type: "${
-        helperName === "writeRequestResponseToStderr" ? "error" : "responses"
-      }",
+      type: "${helperName === "writeRequestResponseToStderr" ? "error" : "responses"}",
       data: Array.from({ length: ${COUNT} }, (_, i) => ({
         i,
         pad: "${pad}".repeat(${ITEM_SIZE}),

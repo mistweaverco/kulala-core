@@ -154,7 +154,10 @@ export async function getKeychainSecret(): Promise<string | null> {
     const result = spawnSync(
       "secret-tool",
       ["lookup", "service", SERVICE, "account", ACCOUNT],
-      { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] },
+      {
+        encoding: "utf8",
+        stdio: ["pipe", "pipe", "pipe"],
+      },
     );
     if (result.status !== 0) return null;
     return result.stdout?.trim() ?? null;
@@ -176,7 +179,9 @@ export async function setKeychainSecret(secret: string): Promise<boolean> {
     spawnSync(
       "security",
       ["delete-generic-password", "-s", SERVICE, "-a", ACCOUNT],
-      { encoding: "utf8" },
+      {
+        encoding: "utf8",
+      },
     );
     const result = spawnSync(
       "security",
@@ -241,7 +246,9 @@ export async function deleteKeychainSecret(): Promise<boolean> {
     const result = spawnSync(
       "secret-tool",
       ["clear", "service", SERVICE, "account", ACCOUNT],
-      { encoding: "utf8" },
+      {
+        encoding: "utf8",
+      },
     );
     return result.status === 0;
   }

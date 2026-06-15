@@ -137,13 +137,19 @@ beforeAll(() => {
         } catch {
           return new Response(
             JSON.stringify({ errors: [{ message: "Body is not valid JSON" }] }),
-            { status: 400, headers: { "Content-Type": "application/json" } },
+            {
+              status: 400,
+              headers: { "Content-Type": "application/json" },
+            },
           );
         }
         if (typeof parsed !== "object" || parsed === null) {
           return new Response(
             JSON.stringify({ errors: [{ message: "Body must be an object" }] }),
-            { status: 400, headers: { "Content-Type": "application/json" } },
+            {
+              status: 400,
+              headers: { "Content-Type": "application/json" },
+            },
           );
         }
         const obj = parsed as Record<string, unknown>;

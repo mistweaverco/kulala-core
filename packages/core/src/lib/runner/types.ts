@@ -22,6 +22,11 @@ export type KulalaScriptConsoleLine = {
   level: "log" | "error" | "warn" | "info" | "debug";
   message: string;
   origin: KulalaScriptConsoleOrigin;
+  /** Structured script output kind (tests/asserts vs plain logs). */
+  kind?: "log" | "test" | "assert";
+  /** Parent test name when `kind` is `assert`. */
+  testName?: string;
+  status?: "pass" | "fail";
 };
 
 /** Request as sent (after scripts and variable substitution). */
