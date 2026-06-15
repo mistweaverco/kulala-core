@@ -152,7 +152,7 @@ Content-Type: application/json
 
 ### FOO
 
-GET https://echo.kulala.app/get?var={{MY_VAR}} HTTP/1.1`
+GET https://echo.kulala.app/get?var={{MY_VAR}} HTTP/1.1`;
     const doc = await getDocument(content, implicitFirstRequestPath);
 
     expect(doc.blocks[0]?.position).toEqual({ start: 1, end: 13 });
