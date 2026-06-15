@@ -152,10 +152,10 @@ function completionSourceTypes(opts: {
     [/{{\$/, "dynamic_variables"], // magic vars are already in resolveVariables output
     [/{{/, ["document_variables", "env_variables", "request_names"]],
     [/{%/, "scripts"],
+    [/# @|\/\/ @/, "metadata"],
     [/\//, "request_urls"],
     [/Host:/, "request_urls"],
     [/:\s*[^/]*$/, "header_values"],
-    [/# @|\/\/ @/, "metadata"],
     [/\b[A-Z]+\s+/, ["schemes", "request_urls"]],
     [/</, "snippets_in"],
     [/>/, "snippets_out"],
