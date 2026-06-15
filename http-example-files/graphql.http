@@ -9,9 +9,7 @@ query Person($id: ID) {
   }
 }
 
-{
-  "id": 1
-}
+{ "id": 1 }
 
 ### GQL_STARWARS_QUERY_PLANET
 
@@ -24,11 +22,9 @@ query Planet($id: ID) {
   }
 }
 
-{
-  "id": 1
-}
+{ "id": 1 }
 
-#### GQL_STARWARS_QUERY_FILM
+### GQL_STARWARS_QUERY_FILM
 
 GRAPHQL https://swapi-graphql.netlify.app/graphql HTTP/1.1
 Accept: application/json
@@ -39,7 +35,7 @@ Accept: application/json
   "id": 1
 }
 
-#### GQL_STARWARS_QUERY_FILM_INLINE
+### GQL_STARWARS_QUERY_FILM_INLINE
 
 GRAPHQL https://swapi-graphql.netlify.app/graphql HTTP/1.1
 Accept: application/json

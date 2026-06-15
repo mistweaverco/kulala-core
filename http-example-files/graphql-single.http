@@ -9,6 +9,4 @@ query Person($id: ID) {
   }
 }
 
-{
-  "id": 1
-}
+{ "id": 1 }

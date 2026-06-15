@@ -1,6 +1,6 @@
 ### WEBSOCKET_ECHO
 
-WS wss://ws.ifelse.io
+WEBSOCKET wss://ws.ifelse.io HTTP/1.1
 
 {
   "name": "world"

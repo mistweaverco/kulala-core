@@ -1,6 +1,8 @@
 @MY_VAR = 123
 # @kulala-curl--insecure
 
+### REQUEST_001
+
 < {%
   request.variables.set("users", [
     { name: "Alice" },
