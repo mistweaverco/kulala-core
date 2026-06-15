@@ -137,7 +137,22 @@ Content-Type: application/json`;
   });
 
   test("cursor on file-header lines resolves implicit-first-request.http", async () => {
-    const content = readFileSync(implicitFirstRequestPath, "utf8");
+    const content = `@MY_VAR = 123
+# @kulala-curl--insecure
+
+< {%
+  request.variables.set("users", [
+    { name: "Alice" },
+    { name: "Bob" },
+  ])
+%}
+
+GET https://echo.kulala.app/get?user={{users[*].name}} HTTP/1.1
+Content-Type: application/json
+
+### FOO
+
+GET https://echo.kulala.app/get?var={{MY_VAR}} HTTP/1.1`
     const doc = await getDocument(content, implicitFirstRequestPath);
 
     expect(doc.blocks[0]?.position).toEqual({ start: 1, end: 13 });
