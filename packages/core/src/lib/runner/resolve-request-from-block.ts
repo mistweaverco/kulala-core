@@ -34,6 +34,12 @@ import {
   setUserAgentHeaderIfNotPresent,
 } from "./headers";
 import { bodyPayloadToScriptString } from "./script-request-context";
+import { grpcFlagsFromOperators } from "../grpc/collect-flags";
+import { formatGrpcurlCommand } from "../grpc/format";
+import { mergeGrpcFlags, parseGrpcTarget } from "../grpc/parse-target";
+import type { KulalaGrpcCommand, KulalaGrpcFlag } from "../grpc/types";
+import { curlArgvHasFlag } from "../curl/passthrough";
+import { formatWebsocatCommand } from "../websocket/format";
 import {
   detectCollectionIterationPlan,
   varsForCollectionIndex,
@@ -67,7 +73,8 @@ function readClientGlobalHeaders(): Record<string, string> {
   return out;
 }
 
-export type ResolvedRequestPreview = {
+export type ResolvedHttpRequestPreview = {
+  kind: "http";
   method: string;
   url: string;
   headers: Record<string, string>;
@@ -75,6 +82,29 @@ export type ResolvedRequestPreview = {
   httpVersion?: string;
   extraCurlArgv?: string[];
 };
+
+export type ResolvedGrpcRequestPreview = {
+  kind: "grpc";
+  grpcCommand: KulalaGrpcCommand;
+  flags: KulalaGrpcFlag[];
+  headers: Record<string, string>;
+  body?: string;
+  cwd: string;
+  vars?: Record<string, string>;
+  insecure?: boolean;
+};
+
+export type ResolvedWebSocketRequestPreview = {
+  kind: "websocket";
+  url: string;
+  headers: Record<string, string>;
+  body?: string;
+};
+
+export type ResolvedRequestPreview =
+  | ResolvedHttpRequestPreview
+  | ResolvedGrpcRequestPreview
+  | ResolvedWebSocketRequestPreview;
 
 export type ResolveRequestResult =
   | { ok: true; request: ResolvedRequestPreview }
@@ -319,10 +349,50 @@ export async function resolveRequestFromBlock(
   }
 
   const methodUpper = (block.request.method || "GET").toUpperCase();
-  if (methodUpper === "GRPC" || methodUpper === "WEBSOCKET") {
+
+  if (methodUpper === "GRPC") {
+    const grpcFlags = mergeGrpcFlags(
+      flow?.sharedGrpcFlags ?? [],
+      grpcFlagsFromOperators(effectiveOperators),
+    );
+    const bodyStr =
+      typeof body === "string"
+        ? body
+        : body != null
+          ? JSON.stringify(body)
+          : undefined;
     return {
-      ok: false,
-      error: `${methodUpper} requests cannot be shown as curl or HTTP inspect preview`,
+      ok: true,
+      request: {
+        kind: "grpc",
+        grpcCommand: block.request.grpcCommand ?? parseGrpcTarget(url),
+        flags: grpcFlags,
+        headers,
+        body: bodyStr,
+        cwd: startDir,
+        vars: activeVars,
+        insecure:
+          curlArgvHasFlag(extraCurlArgv, "--insecure") ||
+          curlArgvHasFlag(extraCurlArgv, "-k"),
+      },
+    };
+  }
+
+  if (methodUpper === "WEBSOCKET") {
+    const bodyStr =
+      typeof body === "string"
+        ? body
+        : body != null
+          ? JSON.stringify(body)
+          : undefined;
+    return {
+      ok: true,
+      request: {
+        kind: "websocket",
+        url,
+        headers,
+        body: bodyStr,
+      },
     };
   }
 
@@ -412,6 +482,7 @@ export async function resolveRequestFromBlock(
   return {
     ok: true,
     request: {
+      kind: "http",
       method: sent.method,
       url: sent.url,
       headers: sent.headers ?? {},
@@ -425,6 +496,12 @@ export async function resolveRequestFromBlock(
 export function resolvedRequestToInspectLines(
   preview: ResolvedRequestPreview,
 ): string[] {
+  if (preview.kind === "grpc") {
+    return [formatGrpcurlCommand(preview)];
+  }
+  if (preview.kind === "websocket") {
+    return [formatWebsocatCommand(preview)];
+  }
   const lines: string[] = [];
   const versionSuffix = preview.httpVersion ? ` ${preview.httpVersion}` : "";
   lines.push(`${preview.method} ${preview.url}${versionSuffix}`);

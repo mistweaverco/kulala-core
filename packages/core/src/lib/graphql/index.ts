@@ -108,6 +108,9 @@ async function resolveGraphQLRequest(
       error: "error" in resolved ? resolved.error : "Failed to resolve request",
     };
   }
+  if (resolved.request.kind !== "http") {
+    return { ok: false, error: "GraphQL request resolved to non-HTTP preview" };
+  }
   return {
     ok: true,
     url: resolved.request.url,

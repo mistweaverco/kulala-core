@@ -14,6 +14,14 @@ const omitReqUrlHostPath = join(
   import.meta.dir,
   "../../../../../http-example-files/omit-req-url-but-set-host.http",
 );
+const grpcExamplePath = join(
+  import.meta.dir,
+  "../../../../../http-example-files/grpc.http",
+);
+const websocketExamplePath = join(
+  import.meta.dir,
+  "../../../../../http-example-files/websocket.http",
+);
 
 const graphqlContent = `### GQL_TEST
 
@@ -39,6 +47,7 @@ describe("resolveRequestFromBlock", () => {
     );
     expect(result).toMatchObject({ ok: true });
     if (!("ok" in result) || !result.ok) return;
+    if (result.request.kind !== "http") return;
 
     expect(result.request.url).toBe("http://echo.kulala.app/get");
     expect(result.request.headers.Host).toBe("echo.kulala.app");
@@ -58,6 +67,7 @@ describe("resolveRequestFromBlock", () => {
     );
     expect(result).toMatchObject({ ok: true });
     if (!("ok" in result) || !result.ok) return;
+    if (result.request.kind !== "http") return;
 
     expect(result.request.url).toBe("https://echo.kulala.app/get");
     expect(result.request.headers.Host).toBe("echo.kulala.app");
@@ -76,6 +86,7 @@ describe("resolveRequestFromBlock", () => {
     );
     expect(result).toMatchObject({ ok: true });
     if (!("ok" in result) || !result.ok) return;
+    if (result.request.kind !== "http") return;
 
     expect(result.request.method).toBe("POST");
     expect(result.request.headers["Content-Type"]).toBe("application/json");
@@ -185,5 +196,40 @@ describe("toCurlAtCursor", () => {
     expect(result.curl).toContain("application/json");
     expect(result.curl).toContain("-X");
     expect(result.curl).toContain("POST");
+  });
+
+  test("formats GRPC requests as grpcurl", async () => {
+    const content = readFileSync(grpcExamplePath, "utf8");
+    const result = await toCurlAtCursor({
+      content,
+      filepath: grpcExamplePath,
+      line: 6,
+      column: 1,
+    });
+    expect(result).toMatchObject({ ok: true });
+    if (!("ok" in result) || !result.ok) return;
+
+    expect(result.curl).toContain("grpcurl");
+    expect(result.curl).toContain("-import-path");
+    expect(result.curl).toContain("-proto");
+    expect(result.curl).toContain("-d");
+    expect(result.curl).toContain("EchoService/Echo");
+    expect(result.curl).toContain("Hello, world!");
+  });
+
+  test("formats WEBSOCKET requests as websocat", async () => {
+    const content = readFileSync(websocketExamplePath, "utf8");
+    const result = await toCurlAtCursor({
+      content,
+      filepath: websocketExamplePath,
+      line: 3,
+      column: 1,
+    });
+    expect(result).toMatchObject({ ok: true });
+    if (!("ok" in result) || !result.ok) return;
+
+    expect(result.curl).toContain("websocat");
+    expect(result.curl).toContain("wss://ws.ifelse.io");
+    expect(result.curl).toContain('"name":"world"');
   });
 });
