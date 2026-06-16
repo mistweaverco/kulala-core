@@ -1,0 +1,4 @@
+### IMAGE_REQUEST
+
+GET https://echo.kulala.app/image/png HTTP/1.1
+Accept: image/png

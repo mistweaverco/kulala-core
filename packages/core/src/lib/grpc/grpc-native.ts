@@ -6,6 +6,7 @@ import type { KulalaGrpcCommand, KulalaGrpcFlag } from "./types";
 import {
   grpcFlagsToLoaderOptions,
   mergeGrpcFlags,
+  parseGrpcAddress,
   parseGrpcSymbol,
   parseGrpcTarget,
 } from "./parse-target";
@@ -74,7 +75,8 @@ function buildCredentials(
   if (plaintext || insecure) {
     return grpc.credentials.createInsecure();
   }
-  if (address.startsWith("localhost") || address.startsWith("127.0.0.1")) {
+  const { useTls } = parseGrpcAddress(address);
+  if (!useTls) {
     return grpc.credentials.createInsecure();
   }
   return grpc.credentials.createSsl();
@@ -276,12 +278,13 @@ export async function grpcNativeRequest(
     throw new Error("gRPC request is missing server address (host:port)");
   }
 
+  const { channelTarget } = parseGrpcAddress(address);
   const creds = buildCredentials(address, plaintext, insecure);
   const metadata = metadataFromHeaders(opts.headers);
 
   try {
     if (parsed.command === "list") {
-      const body = await grpcListServices(address, creds, metadata);
+      const body = await grpcListServices(channelTarget, creds, metadata);
       return {
         statusCode: 200,
         body,
@@ -294,7 +297,7 @@ export async function grpcNativeRequest(
       flags,
       cwd: opts.cwd,
       vars,
-      address,
+      address: channelTarget,
       creds,
       metadata,
     };
@@ -306,7 +309,7 @@ export async function grpcNativeRequest(
             parsed.symbol,
           )
         : await describeViaReflection(
-            address,
+            channelTarget,
             creds,
             describeFromPackage,
             parsed.symbol,
@@ -334,7 +337,7 @@ export async function grpcNativeRequest(
     let Client = findServiceClient(pkg, serviceName);
     if (!Client && hasLocalDescriptors(flags, opts.cwd, vars)) {
       pkg = await loadPackageFromReflection(
-        address,
+        channelTarget,
         creds,
         serviceName,
         metadata,
@@ -353,7 +356,7 @@ export async function grpcNativeRequest(
     const response = await unaryCall(
       Client,
       methodName,
-      address,
+      channelTarget,
       creds,
       metadata,
       payload,

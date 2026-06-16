@@ -38,7 +38,7 @@ export type KulalaRequestSent = {
   body?: string;
 };
 
-/** Returned for WS/WSS — nvim starts a native WebSocket session via kulala-core. */
+/** Returned for WEBSOCKET/WS/WSS — nvim starts a native WebSocket session via kulala-core. */
 export type KulalaWebSocketPlanResponse = {
   success: true;
   protocol: "websocket";

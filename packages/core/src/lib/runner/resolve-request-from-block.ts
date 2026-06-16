@@ -319,7 +319,7 @@ export async function resolveRequestFromBlock(
   }
 
   const methodUpper = (block.request.method || "GET").toUpperCase();
-  if (methodUpper === "GRPC" || methodUpper === "WS" || methodUpper === "WSS") {
+  if (methodUpper === "GRPC" || methodUpper === "WEBSOCKET") {
     return {
       ok: false,
       error: `${methodUpper} requests cannot be shown as curl or HTTP inspect preview`,
