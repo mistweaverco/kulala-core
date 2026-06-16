@@ -8,6 +8,8 @@ import {
   resolvedRequestToInspectLines,
 } from "./resolve-request-from-block";
 import { formatCurlCommand } from "../curl";
+import { formatGrpcurlCommand } from "../grpc/format";
+import { formatWebsocatCommand } from "../websocket/format";
 import { parseCurlToHttpSpec, curlToHttpFileLines } from "../curl";
 import type { KulalaPromptResponse } from "./types";
 import type { ScriptFlowContext } from "./scripts";
@@ -129,6 +131,14 @@ export async function toCurlAtCursor(
     };
   }
   const r = resolved.request;
+  if (r.kind === "grpc") {
+    const curl = formatGrpcurlCommand(r);
+    return { ok: true, curl };
+  }
+  if (r.kind === "websocket") {
+    const curl = formatWebsocatCommand(r);
+    return { ok: true, curl };
+  }
   const curl = formatCurlCommand({
     method: r.method,
     url: r.url,

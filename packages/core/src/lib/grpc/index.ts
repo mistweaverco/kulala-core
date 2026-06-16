@@ -10,5 +10,7 @@ export {
   collectSharedGrpcFlags,
   grpcFlagsFromOperators,
 } from "./collect-flags";
+export { formatGrpcurlCommand } from "./format";
+export type { GrpcurlFormatInput } from "./format";
 export { grpcNativeRequest } from "./grpc-native";
 export type { GrpcNativeRequestOptions, GrpcNativeResult } from "./grpc-native";
