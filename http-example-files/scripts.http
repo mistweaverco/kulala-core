@@ -16,6 +16,8 @@ X-Header-From-JS: {{ HEADER_VALUE_FROM_JS }}
   "OS_USER": "{{ $env.USER }}"
 }
 
+> ./scripts.post.http.js
+
 > {%
   async function main() {
     return new Promise((resolve) => {
@@ -24,40 +26,10 @@ X-Header-From-JS: {{ HEADER_VALUE_FROM_JS }}
       }, 10);
     });
   }
+  client.test("Async JavaScript Test", async () => {
+    client.assert(true, "This test should pass");
+  });
   client.log(await main());
   client.log("Status", response.status)
   client.log("Date", response.headers.valueOf("Date") || "")
-%}
-
-### LUA_SCRIPT_REQ
-
-< {% lang=lua
-  client.log("Current iteration from Lua", request.iteration())
-  request.variables.set("TYPE_FROM_LUA", "kulala-type-from-lua")
-  client.global.set("HEADER_VALUE_FROM_LUA", "header-value-from-lua")
-  request.variables.set("users_from_lua", {
-    { name = "Alice" },
-    { name = "Bob" },
-  })
-%}
-
-GET https://echo.kulala.app/get?user={{users_from_lua[*].name}}
-  &type={{ TYPE_FROM_LUA }} HTTP/1.1
-Content-Type: application/json
-X-Header-From-Lua: {{ HEADER_VALUE_FROM_LUA }}
-
-{
-  "username": "user123",
-  "password": "pass123",
-  "doc_env_test": "{{ DOC_ENV_TEST }}",
-  "OS_USER": "{{ $env.USER }}"
-}
-
-> {% lang=lua
-   local function main()
-      return "Hello from Lua!"
-   end
-   client.log(main())
-   client.log("Status", response.status)
-   client.log("Date", response.headers.valueOf("Date") or "")
 %}
