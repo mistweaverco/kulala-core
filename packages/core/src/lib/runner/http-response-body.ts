@@ -2,6 +2,7 @@ import { XMLBuilder, XMLParser, XMLValidator } from "fast-xml-parser";
 
 import { formatWithBundledPrettier } from "../parser/prettier-bundled";
 import type { KulalaRequestSuccessResponse } from "./types";
+import { TextDecoder } from "node:util";
 
 /** Client preferences for pretty-printing HTTP response bodies. */
 export type KulalaResponseFormatOptions = {
@@ -179,6 +180,9 @@ export function responseBodyDisplayText(
   if (body.type === "json") {
     return body.formatted ?? formatJsonValue(body.content);
   }
+  if (body.type === "binary") {
+    return "";
+  }
   return body.content;
 }
 
@@ -214,4 +218,118 @@ export async function buildRunnerResponseBody(
   return mediaType
     ? { type: "text" as const, content, mediaType }
     : { type: "text" as const, content };
+}
+
+function looksBinaryText(text: string): boolean {
+  // NUL is a very strong binary signal.
+  if (text.includes("\u0000")) return true;
+  // Heuristic: if there are many control chars (excluding common whitespace), treat as binary.
+  let ctrl = 0;
+  let total = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    total += 1;
+    if (c < 0x20 && c !== 0x09 && c !== 0x0a && c !== 0x0d) ctrl += 1;
+    if (ctrl >= 16 && ctrl / Math.max(total, 1) > 0.02) return true;
+  }
+  return false;
+}
+
+function shouldTreatAsTextByMediaType(mediaType: string): boolean {
+  if (!mediaType) return false;
+  if (mediaType.startsWith("text/")) return true;
+  if (mediaType.includes("json") || mediaType.endsWith("+json")) return true;
+  if (mediaType.includes("xml") || mediaType.endsWith("+xml")) return true;
+  if (
+    mediaType.includes("javascript") ||
+    mediaType.includes("ecmascript") ||
+    mediaType === "application/graphql"
+  ) {
+    return true;
+  }
+  if (mediaType === "application/x-www-form-urlencoded") return true;
+  return false;
+}
+
+/**
+ * Map raw HTTP body bytes + Content-Type to a runner response body.
+ * For binary payloads (especially images), preserve bytes as base64 so downstream UIs/CLIs
+ * can decide how to render (or omit) without spewing invalid UTF-8.
+ */
+export async function buildRunnerResponseBodyFromRaw(
+  rawBody: string | Buffer,
+  contentType: string,
+  formatOpts?: KulalaResponseFormatOptions,
+): Promise<{ body: KulalaRequestSuccessResponse["body"]; rawBodyStr: string }> {
+  const mediaType = primaryMediaType(contentType);
+
+  if (typeof rawBody === "string") {
+    const body = await buildRunnerResponseBody(
+      rawBody,
+      contentType,
+      formatOpts,
+    );
+    return { body, rawBodyStr: rawBody };
+  }
+
+  const bytes = rawBody;
+  const byteLength = bytes.byteLength;
+
+  // Always treat images as binary.
+  if (mediaType.startsWith("image/")) {
+    return {
+      body: {
+        type: "binary" as const,
+        content: bytes.toString("base64"),
+        encoding: "base64" as const,
+        byteLength,
+        ...(mediaType ? { mediaType } : {}),
+      },
+      rawBodyStr: "",
+    };
+  }
+
+  // If content-type strongly suggests text, try strict UTF-8 decode first.
+  const preferText = shouldTreatAsTextByMediaType(mediaType);
+  if (preferText) {
+    try {
+      const decoded = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+      if (!looksBinaryText(decoded)) {
+        const body = await buildRunnerResponseBody(
+          decoded,
+          contentType,
+          formatOpts,
+        );
+        return { body, rawBodyStr: decoded };
+      }
+    } catch {
+      // fall through to binary
+    }
+  } else {
+    // Opportunistic strict UTF-8: if it decodes cleanly and doesn't look binary, treat as text.
+    try {
+      const decoded = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+      if (!looksBinaryText(decoded)) {
+        const body = await buildRunnerResponseBody(
+          decoded,
+          contentType,
+          formatOpts,
+        );
+        return { body, rawBodyStr: decoded };
+      }
+    } catch {
+      // fall through to binary
+    }
+  }
+
+  return {
+    body: {
+      type: "binary" as const,
+      content: bytes.toString("base64"),
+      encoding: "base64" as const,
+      byteLength,
+      ...(mediaType ? { mediaType } : {}),
+    },
+    rawBodyStr: "",
+  };
 }

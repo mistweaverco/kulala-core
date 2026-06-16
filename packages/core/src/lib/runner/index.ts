@@ -220,7 +220,19 @@ export async function runDocument(
           block,
           stableDocId,
           getBlockResultKey(block),
-          { body: item.body, headers: item.headers },
+          {
+            body:
+              item.body.type === "binary"
+                ? {
+                    type: "text",
+                    content: "",
+                    ...(item.body.mediaType
+                      ? { mediaType: item.body.mediaType }
+                      : {}),
+                  }
+                : item.body,
+            headers: item.headers,
+          },
           previousResults,
         );
       }
