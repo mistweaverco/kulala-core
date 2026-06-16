@@ -16,5 +16,5 @@ GRPC grpc.postman-echo.com:443 HelloService/SayHello
 Content-Type: application/json
 
 {
-  "message": "Hello from Kulala!"
+  "greeting": "Hello from Kulala!"
 }
