@@ -44,6 +44,7 @@ import {
 } from "./script-control-error";
 import {
   buildRunnerResponseBody,
+  buildRunnerResponseBodyFromRaw,
   responseBodyDisplayText,
   type KulalaResponseFormatOptions,
 } from "./http-response-body";
@@ -264,7 +265,19 @@ async function runSharedBlockHttpRequests(opts: {
           shared,
           opts.stableDocId,
           resultKey,
-          { body: item.body, headers: item.headers },
+          {
+            body:
+              item.body.type === "binary"
+                ? {
+                    type: "text",
+                    content: "",
+                    ...(item.body.mediaType
+                      ? { mediaType: item.body.mediaType }
+                      : {}),
+                  }
+                : item.body,
+            headers: item.headers,
+          },
           flow.requestVarResults,
         );
       }
@@ -1036,8 +1049,6 @@ export async function doRequestFromBlock(
       });
 
       const rawBody = res.body;
-      const rawBodyStr =
-        typeof rawBody === "string" ? rawBody : String(rawBody ?? "");
 
       // Cookie jar: store Set-Cookie response headers unless disabled.
       if (cookieJarEnabled) {
@@ -1071,11 +1082,12 @@ export async function doRequestFromBlock(
       }
       const contentType = res.headers["content-type"] || "";
       const responseFormat = iterationOptions?.responseFormat;
-      const responseBody = await buildRunnerResponseBody(
-        rawBodyStr,
-        contentType,
-        responseFormat,
-      );
+      const { body: responseBody, rawBodyStr } =
+        await buildRunnerResponseBodyFromRaw(
+          rawBody,
+          contentType,
+          responseFormat,
+        );
 
       const mapChainEntry = async (
         entry: NonNullable<typeof res.redirectChain>[number],
@@ -1083,9 +1095,12 @@ export async function doRequestFromBlock(
         NonNullable<KulalaRequestSuccessResponse["redirectChain"]>[number]
       > => {
         const raw = entry.body;
-        const rawStr = typeof raw === "string" ? raw : String(raw ?? "");
         const ct = entry.headers["content-type"] || "";
-        const body = await buildRunnerResponseBody(rawStr, ct, responseFormat);
+        const { body } = await buildRunnerResponseBodyFromRaw(
+          raw,
+          ct,
+          responseFormat,
+        );
         const p = entry.timings.phases;
         return {
           status: entry.statusCode,
@@ -1296,6 +1311,14 @@ export async function doRequestFromBlock(
           responseHeaders: res.headers,
           responseBodyText: rawBodyStr,
         });
+      }
+
+      if (jqFilter?.trim() && responseBody.type === "binary") {
+        return {
+          success: false,
+          error: "Cannot apply jq filter to a binary response body",
+          ...(scriptConsole.length > 0 ? { scriptConsole } : {}),
+        } as KulalaRequestErrorResponse;
       }
 
       const enriched = await enrichResponseWithJq(

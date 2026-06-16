@@ -24,15 +24,24 @@ const dummyBlock: KulalaBlock = {
 describe("scripts", () => {
   beforeEach(() => {
     setDbForTesting(getDbInMemory());
-    // stub console.error to avoid noisy output during tests that trigger script errors
-    const originalConsoleError = console.error;
+    // stub console.* to avoid noisy output during tests that trigger script errors
+    const originalConsole = {
+      log: console.log,
+      error: console.error,
+      warn: console.warn,
+      debug: console.debug,
+    };
     console.error = () => {};
-    // restore original console.error after each test
+    console.log = () => {};
+    // restore original console.* after each test
     // in Bun's test environment,
     // there's no built-in afterEach,
     // so we return a cleanup function from beforeEach
     return () => {
-      console.error = originalConsoleError;
+      console.error = originalConsole.error;
+      console.log = originalConsole.log;
+      console.warn = originalConsole.warn;
+      console.debug = originalConsole.debug;
     };
   });
 

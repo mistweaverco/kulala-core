@@ -67,6 +67,14 @@ export type KulalaRequestSuccessResponse = {
     body:
       | { type: "text"; content: string; mediaType?: string }
       | {
+          type: "binary";
+          /** Base64-encoded bytes. */
+          content: string;
+          encoding: "base64";
+          byteLength: number;
+          mediaType?: string;
+        }
+      | {
           type: "json";
           content: Record<string, unknown>;
           formatted?: string;
@@ -100,6 +108,14 @@ export type KulalaRequestSuccessResponse = {
   };
   body:
     | { type: "text"; content: string; mediaType?: string }
+    | {
+        type: "binary";
+        /** Base64-encoded bytes. */
+        content: string;
+        encoding: "base64";
+        byteLength: number;
+        mediaType?: string;
+      }
     | {
         type: "json";
         content: Record<string, unknown>;
