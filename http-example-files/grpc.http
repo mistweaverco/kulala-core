@@ -9,3 +9,12 @@ Content-Type: application/json
 {
   "ping": "Hello, world!"
 }
+
+### POSTMAN_GRPC_ECHO
+
+GRPC grpc.postman-echo.com:443 HelloService/SayHello
+Content-Type: application/json
+
+{
+  "message": "Hello from Kulala!"
+}

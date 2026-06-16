@@ -9,6 +9,12 @@ import {
   parseGrpcSymbol,
   parseGrpcTarget,
 } from "./parse-target";
+import {
+  describeViaReflection,
+  listServicesViaReflection,
+  loadPackageFromReflection,
+  PROTO_LOADER_OPTIONS,
+} from "./reflection";
 
 export type GrpcNativeRequestOptions = {
   target: string;
@@ -83,45 +89,73 @@ function metadataFromHeaders(headers: Record<string, string>): grpc.Metadata {
   return md;
 }
 
-function loadPackageDefinition(
+type LoadPackageContext = {
+  flags: KulalaGrpcFlag[];
+  cwd: string;
+  vars?: Record<string, string>;
+  address?: string;
+  creds?: grpc.ChannelCredentials;
+  metadata?: grpc.Metadata;
+  reflectionSymbol?: string;
+};
+
+function hasLocalDescriptors(
   flags: KulalaGrpcFlag[],
   cwd: string,
-  vars: Record<string, string> = {},
-): grpc.GrpcObject {
-  const { importPaths, protoFiles, protosetFiles } = grpcFlagsToLoaderOptions(
+  vars: Record<string, string>,
+): boolean {
+  const { protoFiles, protosetFiles } = grpcFlagsToLoaderOptions(
     flags,
     cwd,
+    vars,
+  );
+  return protoFiles.length > 0 || protosetFiles.length > 0;
+}
+
+async function loadPackageDefinition(
+  ctx: LoadPackageContext,
+): Promise<grpc.GrpcObject> {
+  const vars = ctx.vars ?? {};
+  const { importPaths, protoFiles, protosetFiles } = grpcFlagsToLoaderOptions(
+    ctx.flags,
+    ctx.cwd,
     vars,
   );
 
   if (protosetFiles.length > 0) {
     const buf = readFileSync(protosetFiles[0]!);
-    const loader = protoLoader as typeof protoLoader & {
-      loadProtoset?: (b: Buffer) => protoLoader.PackageDefinition;
-    };
-    if (typeof loader.loadProtoset !== "function") {
-      throw new Error(
-        "protoset files require @grpc/proto-loader with loadProtoset support",
-      );
-    }
-    return grpc.loadPackageDefinition(loader.loadProtoset(buf));
+    const def = protoLoader.loadFileDescriptorSetFromBuffer(
+      buf,
+      PROTO_LOADER_OPTIONS,
+    );
+    return grpc.loadPackageDefinition(def);
   }
 
-  if (protoFiles.length === 0) {
+  if (protoFiles.length > 0) {
+    const def = protoLoader.loadSync(protoFiles, {
+      ...PROTO_LOADER_OPTIONS,
+      includeDirs: importPaths.length > 0 ? importPaths : [ctx.cwd],
+    });
+    return grpc.loadPackageDefinition(def);
+  }
+
+  if (!ctx.address || !ctx.creds) {
     throw new Error(
-      "gRPC requires # @grpc-proto or -proto on the request (or a protoset file)",
+      "gRPC requires # @grpc-proto or -proto on the request (or a protoset file), or a server address with reflection enabled",
+    );
+  }
+  if (!ctx.reflectionSymbol) {
+    throw new Error(
+      "gRPC reflection requires a service symbol (e.g. helloworld.Greeter/SayHello)",
     );
   }
 
-  const def = protoLoader.loadSync(protoFiles, {
-    keepCase: true,
-    longs: String,
-    enums: String,
-    defaults: true,
-    oneofs: true,
-    includeDirs: importPaths.length > 0 ? importPaths : [cwd],
-  });
-  return grpc.loadPackageDefinition(def);
+  return loadPackageFromReflection(
+    ctx.address,
+    ctx.creds,
+    ctx.reflectionSymbol,
+    ctx.metadata,
+  );
 }
 
 function findServiceClient(
@@ -142,20 +176,10 @@ function findServiceClient(
 async function grpcListServices(
   address: string,
   creds: grpc.ChannelCredentials,
+  metadata: grpc.Metadata,
 ): Promise<string> {
-  try {
-    const mod = await import("grpc-reflection-js");
-    const ReflectionClient = mod.Client ?? mod.default;
-    const reflection = new ReflectionClient(address, creds);
-    const services: string[] = await reflection.listServices();
-    return JSON.stringify(services, null, 2);
-  } catch (e) {
-    throw new Error(
-      `gRPC server reflection failed (is reflection enabled on the server?): ${
-        e instanceof Error ? e.message : String(e)
-      }`,
-    );
-  }
+  const services = await listServicesViaReflection(address, creds, metadata);
+  return JSON.stringify(services, null, 2);
 }
 
 function describeFromPackage(pkg: grpc.GrpcObject, symbol?: string): string {
@@ -257,7 +281,7 @@ export async function grpcNativeRequest(
 
   try {
     if (parsed.command === "list") {
-      const body = await grpcListServices(address, creds);
+      const body = await grpcListServices(address, creds, metadata);
       return {
         statusCode: 200,
         body,
@@ -266,9 +290,28 @@ export async function grpcNativeRequest(
       };
     }
 
+    const loadCtx = {
+      flags,
+      cwd: opts.cwd,
+      vars,
+      address,
+      creds,
+      metadata,
+    };
+
     if (parsed.command === "describe") {
-      const pkg = loadPackageDefinition(flags, opts.cwd, vars);
-      const body = describeFromPackage(pkg, parsed.symbol);
+      const body = hasLocalDescriptors(flags, opts.cwd, vars)
+        ? describeFromPackage(
+            await loadPackageDefinition(loadCtx),
+            parsed.symbol,
+          )
+        : await describeViaReflection(
+            address,
+            creds,
+            describeFromPackage,
+            parsed.symbol,
+            metadata,
+          );
       return {
         statusCode: 200,
         body,
@@ -284,8 +327,20 @@ export async function grpcNativeRequest(
     }
 
     const { serviceName, methodName } = parseGrpcSymbol(parsed.symbol);
-    const pkg = loadPackageDefinition(flags, opts.cwd, vars);
-    const Client = findServiceClient(pkg, serviceName);
+    let pkg = await loadPackageDefinition({
+      ...loadCtx,
+      reflectionSymbol: serviceName,
+    });
+    let Client = findServiceClient(pkg, serviceName);
+    if (!Client && hasLocalDescriptors(flags, opts.cwd, vars)) {
+      pkg = await loadPackageFromReflection(
+        address,
+        creds,
+        serviceName,
+        metadata,
+      );
+      Client = findServiceClient(pkg, serviceName);
+    }
     if (!Client) {
       throw new Error(`gRPC service not found in proto: ${serviceName}`);
     }
