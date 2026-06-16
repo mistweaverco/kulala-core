@@ -112,3 +112,25 @@ export function parseGrpcSymbol(symbol: string): {
     methodName: symbol.slice(slash + 1),
   };
 }
+
+/** grpcurl-compatible address parsing: TLS only for `grpcs://` / `https://`. */
+export function parseGrpcAddress(address: string): {
+  channelTarget: string;
+  useTls: boolean;
+} {
+  const trimmed = address.trim();
+  const lower = trimmed.toLowerCase();
+  if (lower.startsWith("grpcs://") || lower.startsWith("https://")) {
+    return {
+      channelTarget: trimmed.replace(/^(grpcs|https):\/\//i, ""),
+      useTls: true,
+    };
+  }
+  if (lower.startsWith("grpc://")) {
+    return {
+      channelTarget: trimmed.replace(/^grpc:\/\//i, ""),
+      useTls: false,
+    };
+  }
+  return { channelTarget: trimmed, useTls: false };
+}

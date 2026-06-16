@@ -841,7 +841,7 @@ export async function doRequestFromBlock(
 
     const methodUpper = (block.request.method || "GET").toUpperCase();
 
-    if (methodUpper === "WS" || methodUpper === "WSS") {
+    if (methodUpper === "WEBSOCKET") {
       const bodyStr =
         typeof body === "string"
           ? body

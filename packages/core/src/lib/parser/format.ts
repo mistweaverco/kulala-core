@@ -288,13 +288,13 @@ function normalizeBlock(
     block.request.httpVersion = undefined;
   } else if (
     !block.request.httpVersion &&
-    !["WS", "WSS", "GRPC"].includes(method)
+    !["WEBSOCKET", "GRPC"].includes(method)
   ) {
     block.request.httpVersion = (defaults.http_version ??
       "HTTP/1.1") as KulalaHttpVersion;
   }
 
-  if (["WS", "WSS", "GRPC"].includes(method)) {
+  if (["WEBSOCKET", "GRPC"].includes(method)) {
     block.request.httpVersion = undefined;
   }
 

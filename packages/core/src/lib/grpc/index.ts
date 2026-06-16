@@ -1,6 +1,7 @@
 export type { KulalaGrpcCommand, KulalaGrpcFlag } from "./types";
 export {
   parseGrpcTarget,
+  parseGrpcAddress,
   mergeGrpcFlags,
   grpcFlagsToLoaderOptions,
 } from "./parse-target";
