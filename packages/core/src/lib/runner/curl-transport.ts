@@ -131,40 +131,7 @@ function stripCookieHeader(headers: Record<string, string>): void {
   }
 }
 
-function headersFromDump(dump: string): {
-  statusCode: number;
-  headers: Record<string, string>;
-} {
-  // curl --dump-header includes headers for redirects too; pick the last HTTP/* block.
-  const normalized = dump.replace(/\r\n/g, "\n");
-  const blocks = normalized
-    .split("\n\n")
-    .map((b) => b.trim())
-    .filter((b) => b.startsWith("HTTP/"));
-  const last = blocks.length ? blocks[blocks.length - 1] : "";
-  if (!last) return { statusCode: 0, headers: {} };
-
-  const lines = last.split("\n").filter(Boolean);
-  const statusLine = lines[0] ?? "";
-  const m = statusLine.match(/^HTTP\/\d(?:\.\d)?\s+(\d{3})/);
-  const statusCode = m ? parseInt(m[1], 10) : 0;
-
-  const headers: Record<string, string> = {};
-  for (const line of lines.slice(1)) {
-    const idx = line.indexOf(":");
-    if (idx === -1) continue;
-    const k = line.slice(0, idx).trim().toLowerCase();
-    const v = line.slice(idx + 1).trim();
-    if (!k) continue;
-    if (k === "set-cookie") {
-      // Preserve multiple Set-Cookie headers (cookie jar needs them split).
-      headers[k] = headers[k] ? `${headers[k]}\n${v}` : v;
-    } else {
-      headers[k] = headers[k] ? `${headers[k]}, ${v}` : v;
-    }
-  }
-  return { statusCode, headers };
-}
+import { headersFromDump } from "../curl/headers-dump";
 
 /** Whether curl needs an explicit `--request` / `-X` (avoids verbose "already inferred" notes). */
 export function curlNeedsRequestFlag(
@@ -403,7 +370,7 @@ export async function curlHttpRequest(
 
       const w = parseCurlWriteOut(stdout);
       const dump = await fs.readFile(headerPath, "utf-8");
-      const { statusCode, headers } = headersFromDump(dump);
+      const { statusCode, headers, httpVersion } = headersFromDump(dump);
       const body = await fs.readFile(bodyPath);
       const timings = buildTimings(w);
       return {
@@ -414,6 +381,7 @@ export async function curlHttpRequest(
         url: w.url_effective || currentUrl,
         firstByteTime: 0,
         verboseTrace: stderr,
+        ...(httpVersion ? { httpVersion } : {}),
       };
     } finally {
       await cleanup();
@@ -430,6 +398,7 @@ export async function curlHttpRequest(
       timings: res.timings,
       url: res.url,
       verboseTrace: res.verboseTrace,
+      ...(res.httpVersion ? { httpVersion: res.httpVersion } : {}),
     });
 
     const location = res.headers["location"];

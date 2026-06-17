@@ -340,6 +340,7 @@ const kulalaParser: KulalaParser = {
               {
                 success: true,
                 status: res.statusCode,
+                ...(res.httpVersion ? { httpVersion: res.httpVersion } : {}),
                 headers: res.headers,
                 url: res.url,
                 request: {
