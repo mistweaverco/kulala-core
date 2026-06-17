@@ -11,6 +11,11 @@ export const PROTO_LOADER_OPTIONS = {
   oneofs: true,
 } as const;
 
+type DescriptorRoot = Root & {
+  resolveAll(): void;
+  toDescriptor(syntax: string): { [k: string]: unknown };
+};
+
 type ReflectionClient = {
   listServices(): Promise<string[]>;
   fileContainingSymbol(symbol: string): Promise<Root>;
@@ -23,14 +28,20 @@ export async function createReflectionClient(
 ): Promise<ReflectionClient> {
   const mod = await import("grpc-reflection-js");
   const ReflectionClientCtor = mod.Client ?? mod.default;
-  return new ReflectionClientCtor(address, creds, undefined, metadata);
+  return new ReflectionClientCtor(
+    address,
+    creds,
+    undefined,
+    metadata,
+  ) as unknown as ReflectionClient;
 }
 
 export function packageDefinitionFromRoot(
   root: Root,
 ): protoLoader.PackageDefinition {
-  root.resolveAll();
-  const descriptorSet = root.toDescriptor("proto3");
+  const descriptorRoot = root as DescriptorRoot;
+  descriptorRoot.resolveAll();
+  const descriptorSet = descriptorRoot.toDescriptor("proto3");
   const buf = Buffer.from(
     descriptor.FileDescriptorSet.encode(descriptorSet).finish(),
   );
