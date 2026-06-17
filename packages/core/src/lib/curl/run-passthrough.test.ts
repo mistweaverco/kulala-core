@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { version } from "../../../version.json";
 import {
+  curlArgvHasUserAgent,
+  ensureKulalaUserAgentInCurlArgv,
   runCurlPassthrough,
   stripConflictingCurlFlags,
 } from "./run-passthrough";
@@ -23,6 +26,36 @@ describe("stripConflictingCurlFlags", () => {
     expect(
       stripConflictingCurlFlags(["curl", "-I", "https://example.com"]),
     ).toEqual(["-I", "https://example.com"]);
+  });
+});
+
+describe("ensureKulalaUserAgentInCurlArgv", () => {
+  const ua = `kulala-core/${version}`;
+
+  test("adds default User-Agent when missing", () => {
+    expect(ensureKulalaUserAgentInCurlArgv(["https://example.com"])).toEqual([
+      "-A",
+      ua,
+      "https://example.com",
+    ]);
+  });
+
+  test("does not override -A", () => {
+    const argv = ["-A", "custom/1.0", "https://example.com"];
+    expect(ensureKulalaUserAgentInCurlArgv(argv)).toEqual(argv);
+    expect(curlArgvHasUserAgent(argv)).toBe(true);
+  });
+
+  test("does not override --user-agent", () => {
+    const argv = ["--user-agent=custom/1.0", "https://example.com"];
+    expect(ensureKulalaUserAgentInCurlArgv(argv)).toEqual(argv);
+    expect(curlArgvHasUserAgent(argv)).toBe(true);
+  });
+
+  test("does not override -H User-Agent", () => {
+    const argv = ["-H", "User-Agent: custom/1.0", "https://example.com"];
+    expect(ensureKulalaUserAgentInCurlArgv(argv)).toEqual(argv);
+    expect(curlArgvHasUserAgent(argv)).toBe(true);
   });
 });
 

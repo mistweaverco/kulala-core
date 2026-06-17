@@ -7,6 +7,7 @@ import { spawn } from "node:child_process";
 import { dirname, join } from "node:path";
 import type { HttpRequestTimings } from "../runner/http-client";
 import { resolveCurlPath } from "../runner/embedded-curl";
+import { kulalaUserAgent } from "../runner/headers";
 import { parseCurlCommand } from "./parse";
 import { headersFromDump } from "./headers-dump";
 
@@ -108,6 +109,41 @@ function curlArgvHasFlag(argv: string[], ...flags: string[]): boolean {
     }
     return false;
   });
+}
+
+/** True when argv already sets User-Agent via -A/--user-agent or -H/--header. */
+export function curlArgvHasUserAgent(argv: string[]): boolean {
+  const uaFlags = new Set(["-A", "--user-agent"]);
+  const headerFlags = new Set(["-H", "--header"]);
+
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i]!;
+    const { flag, inlineValue } = splitFlagValue(arg);
+
+    if (uaFlags.has(flag)) {
+      return true;
+    }
+
+    if (headerFlags.has(flag)) {
+      const headerLine = inlineValue ?? argv[i + 1];
+      if (headerLine) {
+        const colon = headerLine.indexOf(":");
+        if (colon !== -1) {
+          const name = headerLine.slice(0, colon).trim().toLowerCase();
+          if (name === "user-agent") return true;
+        }
+        if (inlineValue === undefined) i += 1;
+      }
+    }
+  }
+
+  return false;
+}
+
+/** Prepend kulala-core User-Agent when argv does not already set one. */
+export function ensureKulalaUserAgentInCurlArgv(argv: string[]): string[] {
+  if (curlArgvHasUserAgent(argv)) return argv;
+  return ["-A", kulalaUserAgent(), ...argv];
 }
 
 function splitFlagValue(arg: string): { flag: string; inlineValue?: string } {
@@ -279,7 +315,9 @@ async function runCurl(args: string[]): Promise<{
 export async function runCurlPassthrough(
   argv: string[],
 ): Promise<CurlPassthroughResult> {
-  const userArgv = stripConflictingCurlFlags(argv);
+  const userArgv = ensureKulalaUserAgentInCurlArgv(
+    stripConflictingCurlFlags(argv),
+  );
   const verbose = curlArgvHasFlag(userArgv, "-v", "--verbose");
   const headOnly = curlArgvHasFlag(userArgv, "-I", "--head");
   const request = inferRequest(userArgv);
