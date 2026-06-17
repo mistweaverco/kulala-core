@@ -3,6 +3,11 @@ export {
   parseCurlToHttpSpec,
   curlToHttpFileLines,
 } from "./parse";
+export {
+  runCurlPassthrough,
+  stripConflictingCurlFlags,
+} from "./run-passthrough";
+export type { CurlPassthroughResult } from "./run-passthrough";
 export { formatCurlCommand } from "./format";
 export {
   curlArgvFromOperators,

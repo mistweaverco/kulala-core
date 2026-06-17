@@ -27,6 +27,7 @@ import {
   inspectRequestAtCursor,
   toCurlAtCursor,
 } from "../runner/request-cursor";
+import { runCurlPassthrough } from "../curl/run-passthrough";
 import {
   lspCompletion,
   lspDiagnostics,
@@ -320,6 +321,60 @@ const kulalaParser: KulalaParser = {
       case "from_curl": {
         const result = fromCurlCommand(stdIn.curl);
         writeToStdout(result);
+        break;
+      }
+      case "curl": {
+        try {
+          const res = await runCurlPassthrough(stdIn.argv);
+          const { buildRunnerResponseBodyFromRaw } =
+            await import("../runner/http-response-body");
+          const contentType = res.headers["content-type"] || "";
+          const { body, rawBodyStr } = await buildRunnerResponseBodyFromRaw(
+            res.body,
+            contentType,
+            stdIn.responseFormat,
+          );
+          const wrapper: KulalaResponseWrapper = {
+            type: "responses",
+            data: [
+              {
+                success: true,
+                status: res.statusCode,
+                headers: res.headers,
+                url: res.url,
+                request: {
+                  method: res.method,
+                  url: res.url,
+                },
+                timings: {
+                  dns: res.timings.phases.dns,
+                  tcp: res.timings.phases.tcp,
+                  tls: res.timings.phases.tls,
+                  request: res.timings.phases.request,
+                  redirect: res.timings.phases.redirect,
+                  firstByte: res.timings.phases.firstByte,
+                  startTransfer: res.timings.phases.startTransfer,
+                  total: res.timings.phases.total,
+                },
+                body,
+                rawBody: rawBodyStr,
+                verboseTrace: res.verboseTrace,
+              },
+            ],
+          };
+          await writeRequestResponseToStdout(wrapper);
+        } catch (error) {
+          const wrapper: KulalaResponseWrapper = {
+            type: "error",
+            data: [
+              {
+                success: false,
+                error: error instanceof Error ? error.message : String(error),
+              },
+            ],
+          };
+          await writeRequestResponseToStdout(wrapper);
+        }
         break;
       }
       case "lsp_completion": {

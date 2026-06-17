@@ -169,6 +169,13 @@ export type KulalaStdinActionFromCurl = {
   curl: string;
 };
 
+/** Run curl with passthrough argv and return a formatted HTTP response. */
+export type KulalaStdinActionCurl = {
+  action: "curl";
+  argv: string[];
+  responseFormat?: KulalaResponseFormatStdinOptions;
+};
+
 export type KulalaLspPosition = {
   /** 1-based line number (vim-style). */
   line: number;
@@ -219,6 +226,7 @@ export type KulalaStdinParsed =
   | KulalaStdinActionInspectRequest
   | KulalaStdinActionToCurl
   | KulalaStdinActionFromCurl
+  | KulalaStdinActionCurl
   | KulalaStdinActionLspCompletion
   | KulalaStdinActionLspHover
   | KulalaStdinActionLspDocumentSymbols
