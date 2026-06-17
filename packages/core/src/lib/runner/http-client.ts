@@ -27,6 +27,8 @@ export type HttpRequestResponse = {
   headers: Record<string, string>;
   body: string | Buffer;
   timings: HttpRequestTimings;
+  /** Protocol version from the response status line (e.g. HTTP/2). */
+  httpVersion?: string;
   /** Final resolved URL (after redirects). */
   url: string;
   /** performance.now() when first byte of this response was received (for startTransfer from wall start). */
@@ -38,6 +40,7 @@ export type HttpRequestResponse = {
     body: string | Buffer;
     timings: HttpRequestTimings;
     url: string;
+    httpVersion?: string;
     /** curl `-v` stderr for this hop (connection, TLS, cert details). */
     verboseTrace?: string;
   }>;

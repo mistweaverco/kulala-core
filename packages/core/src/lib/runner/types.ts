@@ -54,6 +54,8 @@ export type KulalaRequestSuccessResponse = {
   /** `###` block name for this request (for multi-run / `run ./file.http` consumers). */
   blockName?: string;
   status: number;
+  /** Protocol version from the response status line (e.g. HTTP/2). */
+  httpVersion?: string;
   headers: Record<string, string>;
   /** Final resolved URL (after redirects). */
   url: string;
@@ -62,6 +64,7 @@ export type KulalaRequestSuccessResponse = {
   /** Present only when at least one redirect occurred (ordered hops, including the final response). */
   redirectChain?: Array<{
     status: number;
+    httpVersion?: string;
     headers: Record<string, string>;
     url: string;
     body:
@@ -143,6 +146,7 @@ export type KulalaRequestErrorResponse = {
    */
   httpCompleted?: boolean;
   status?: number;
+  httpVersion?: string;
   headers?: Record<string, string>;
   url?: string;
   request?: KulalaRequestSent;

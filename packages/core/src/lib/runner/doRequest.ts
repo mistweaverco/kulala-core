@@ -1107,6 +1107,7 @@ export async function doRequestFromBlock(
           headers: entry.headers,
           url: entry.url,
           body,
+          ...(entry.httpVersion ? { httpVersion: entry.httpVersion } : {}),
           timings: {
             dns: p.dns ?? 0,
             tcp: p.tcp ?? 0,
@@ -1242,6 +1243,7 @@ export async function doRequestFromBlock(
           httpCompleted: true,
           error: error instanceof Error ? error.message : String(error),
           status: res.statusCode,
+          ...(res.httpVersion ? { httpVersion: res.httpVersion } : {}),
           headers: res.headers,
           url: res.url,
           request: buildSentRequestSnapshot(
@@ -1339,6 +1341,7 @@ export async function doRequestFromBlock(
       return {
         success: true,
         status: res.statusCode,
+        ...(res.httpVersion ? { httpVersion: res.httpVersion } : {}),
         headers: res.headers,
         url: res.url,
         request: buildSentRequestSnapshot(

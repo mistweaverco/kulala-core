@@ -30,6 +30,7 @@ describe("runCurlPassthrough", () => {
   test("runs HEAD requests", async () => {
     const res = await runCurlPassthrough(["-I", "https://echo.kulala.app/get"]);
     expect(res.statusCode).toBeGreaterThanOrEqual(200);
+    expect(res.httpVersion).toMatch(/^HTTP\//);
     expect(res.method).toBe("HEAD");
     expect(res.url).toContain("echo.kulala.app");
     expect(res.headers["content-type"]).toBeTruthy();

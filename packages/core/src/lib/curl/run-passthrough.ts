@@ -8,6 +8,7 @@ import { dirname, join } from "node:path";
 import type { HttpRequestTimings } from "../runner/http-client";
 import { resolveCurlPath } from "../runner/embedded-curl";
 import { parseCurlCommand } from "./parse";
+import { headersFromDump } from "./headers-dump";
 
 type CurlWriteOut = {
   http_code: number;
@@ -28,6 +29,7 @@ export type CurlPassthroughResult = {
   url: string;
   method: string;
   timings: HttpRequestTimings;
+  httpVersion?: string;
   verboseTrace?: string;
 };
 
@@ -237,35 +239,6 @@ function buildTimings(w: CurlWriteOut): HttpRequestTimings {
   };
 }
 
-function headersFromDump(dump: string): {
-  statusCode: number;
-  headers: Record<string, string>;
-} {
-  const normalized = dump.replace(/\r\n/g, "\n");
-  const blocks = normalized
-    .split("\n\n")
-    .map((b) => b.trim())
-    .filter((b) => b.startsWith("HTTP/"));
-  const last = blocks.length ? blocks[blocks.length - 1] : "";
-  if (!last) return { statusCode: 0, headers: {} };
-
-  const lines = last.split("\n").filter(Boolean);
-  const statusLine = lines[0] ?? "";
-  const m = statusLine.match(/^HTTP\/\d(?:\.\d)?\s+(\d{3})/);
-  const statusCode = m ? parseInt(m[1], 10) : 0;
-
-  const headers: Record<string, string> = {};
-  for (const line of lines.slice(1)) {
-    const idx = line.indexOf(":");
-    if (idx === -1) continue;
-    const k = line.slice(0, idx).trim().toLowerCase();
-    const v = line.slice(idx + 1).trim();
-    if (!k) continue;
-    headers[k] = headers[k] ? `${headers[k]}, ${v}` : v;
-  }
-  return { statusCode, headers };
-}
-
 async function runCurl(args: string[]): Promise<{
   stdout: string;
   stderr: string;
@@ -349,7 +322,7 @@ export async function runCurlPassthrough(
 
     const w = parseCurlWriteOut(stdout);
     const dump = await fs.readFile(headerPath, "utf-8");
-    const { statusCode, headers } = headersFromDump(dump);
+    const { statusCode, headers, httpVersion } = headersFromDump(dump);
     const body = headOnly ? Buffer.alloc(0) : await fs.readFile(bodyPath);
 
     return {
@@ -360,6 +333,7 @@ export async function runCurlPassthrough(
       method: request.method,
       timings: buildTimings(w),
       verboseTrace: verbose ? stderr : undefined,
+      ...(httpVersion ? { httpVersion } : {}),
     };
   } finally {
     await fs.rm(tempBase, { recursive: true, force: true });
