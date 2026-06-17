@@ -26,13 +26,17 @@ export function buildHeadersFromSection(
   return out;
 }
 
+export function kulalaUserAgent(): string {
+  return "kulala-core/" + version;
+}
+
 export function setUserAgentHeaderIfNotPresent(
   headers: Record<string, string>,
 ): Record<string, string> {
   if (!headers["User-Agent"] && !headers["user-agent"]) {
     return {
       ...headers,
-      "User-Agent": "kulala-core/" + version,
+      "User-Agent": kulalaUserAgent(),
     };
   }
   return headers;
