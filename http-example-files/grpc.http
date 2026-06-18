@@ -1,3 +1,6 @@
+@POSTMAN_ECHO_FOO = HelloService/SayHello
+@POSTMAN_ECHO_URL = grpc.postman-echo.com:443
+
 ### GRPC_ECHO
 
 # @grpc-import-path grpc/echopb
@@ -12,9 +15,9 @@ Content-Type: application/json
 
 ### POSTMAN_GRPC_ECHO
 
-GRPC grpc.postman-echo.com:443 HelloService/SayHello
+GRPC {{grpc.addr}}:{{grpc.port}} HelloService/SayHello
 Content-Type: application/json
 
 {
-  "greeting": "Hello from Kulala!"
+  "greeting": "kulala!"
 }

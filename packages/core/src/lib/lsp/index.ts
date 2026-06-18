@@ -11,6 +11,7 @@ import {
   scriptSymbolAtCursor,
 } from "./script-api-docs";
 import { graphQLLspCompletionItems, graphQLLspHover } from "../graphql";
+import { lspVariableHover } from "./variable-hover";
 import { staticCompletionItems } from "./sources";
 import {
   type LspCompletionItem,
@@ -433,6 +434,15 @@ export async function lspHover(input: {
     env: input.env,
   });
   if (gqlHover) return gqlHover;
+
+  const variableHover = await lspVariableHover({
+    content: input.content,
+    filepath: input.filepath,
+    line: input.line,
+    column: input.column,
+    env: input.env,
+  });
+  if (variableHover) return variableHover;
 
   const res = await inspectRequestAtCursor({
     content: input.content,
