@@ -122,11 +122,10 @@ export const getRequest = (
   }
 
   if (method === "WEBSOCKET") {
-    const urlToken = afterMethod.split(/\s+/)[0] ?? afterMethod;
     return [
       {
         method: "WEBSOCKET",
-        url: urlToken as KulalaHttpURL,
+        url: afterMethod as KulalaHttpURL,
         headerSection: [],
       },
       1,

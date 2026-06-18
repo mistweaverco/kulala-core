@@ -1,6 +1,6 @@
 ### WEBSOCKET_ECHO
 
-WEBSOCKET wss://ws.ifelse.io HTTP/1.1
+WEBSOCKET {{websocket.addr}}
 
 {
   "name": "world"

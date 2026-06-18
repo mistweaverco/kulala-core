@@ -870,7 +870,6 @@ export async function doRequestFromBlock(
       );
       const grpcRes = await grpcNativeRequest({
         target: url,
-        grpcCommand: block.request.grpcCommand,
         metadataFlags: grpcFlags,
         headers,
         body:

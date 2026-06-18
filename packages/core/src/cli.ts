@@ -1,5 +1,6 @@
 import { KulalaParser } from "./lib/parser";
 import { existsSync, readFileSync } from "node:fs";
+import { prepareWebSocketConnect } from "./lib/websocket/prepare-connect";
 import { runWebSocketSession } from "./lib/websocket/websocket-session";
 
 /**
@@ -60,7 +61,7 @@ if (wsFlagIndex !== -1) {
     throw new Error("WebSocket mode requires --input-file with connect JSON");
   }
   const connect = JSON.parse(readFileSync(inputFile, { encoding: "utf-8" }));
-  await runWebSocketSession(connect);
+  await runWebSocketSession(prepareWebSocketConnect(connect));
 } else {
   const inputPayload = await getInputPayload();
   const stdIn = JSON.parse(inputPayload);

@@ -556,6 +556,20 @@ WEBSOCKET wss://echo.websocket.org
   expect(block!.request.url).toBe("wss://echo.websocket.org");
 });
 
+test("parses WEBSOCKET request line with spaced variable placeholder", async () => {
+  const content = `
+### Echo
+
+WEBSOCKET {{ websocket.addr }}
+
+{"hello": true}
+`;
+  const doc = await getDocument(content, "/tmp/ws.http");
+  const block = doc.blocks.find((b) => b.name === "Echo");
+  expect(block).toBeDefined();
+  expect(block!.request.url).toBe("{{ websocket.addr }}");
+});
+
 test("parser: multi-line URL with HTTP version on same continuation line", async () => {
   const content = `GET https://echo.kulala.app/get?foo=echo.kulala.app/get?foo=1
   &bar=1 HTTP/1.1

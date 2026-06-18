@@ -365,7 +365,7 @@ export async function resolveRequestFromBlock(
       ok: true,
       request: {
         kind: "grpc",
-        grpcCommand: block.request.grpcCommand ?? parseGrpcTarget(url),
+        grpcCommand: parseGrpcTarget(url),
         flags: grpcFlags,
         headers,
         body: bodyStr,

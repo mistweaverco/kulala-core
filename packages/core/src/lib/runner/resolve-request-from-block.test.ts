@@ -217,6 +217,48 @@ describe("toCurlAtCursor", () => {
     expect(result.curl).toContain("Hello, world!");
   });
 
+  test("substitutes variables in GRPC target", async () => {
+    const content = readFileSync(grpcExamplePath, "utf8");
+    const doc = await getDocument(content, grpcExamplePath);
+    const block = doc.blocks.find((b) => b.name === "POSTMAN_GRPC_ECHO");
+    expect(block).toBeDefined();
+
+    const result = await resolveRequestFromBlock(
+      block!,
+      grpcExamplePath,
+      {
+        "grpc.addr": "grpc.postman-echo.com",
+        "grpc.port": "443",
+      },
+      undefined,
+    );
+    expect(result).toMatchObject({ ok: true });
+    if (!("ok" in result) || !result.ok) return;
+    if (result.request.kind !== "grpc") return;
+
+    expect(result.request.grpcCommand.address).toBe(
+      "grpc.postman-echo.com:443",
+    );
+    expect(result.request.grpcCommand.symbol).toBe("HelloService/SayHello");
+  });
+
+  test("substitutes file-header @ variables in GRPC target", async () => {
+    const content = readFileSync(grpcExamplePath, "utf8");
+    const result = await toCurlAtCursor({
+      content,
+      filepath: grpcExamplePath,
+      line: 18,
+      column: 1,
+      env: "default",
+    });
+    expect(result).toMatchObject({ ok: true });
+    if (!("ok" in result) || !result.ok) return;
+
+    expect(result.curl).toContain("grpc.postman-echo.com:443");
+    expect(result.curl).toContain("HelloService/SayHello");
+    expect(result.curl).not.toContain("{{");
+  });
+
   test("formats WEBSOCKET requests as websocat", async () => {
     const content = readFileSync(websocketExamplePath, "utf8");
     const result = await toCurlAtCursor({
@@ -231,5 +273,48 @@ describe("toCurlAtCursor", () => {
     expect(result.curl).toContain("websocat");
     expect(result.curl).toContain("wss://ws.ifelse.io");
     expect(result.curl).toContain('"name":"world"');
+  });
+
+  test("substitutes variables in WEBSOCKET target", async () => {
+    const content = `@WS_URL = wss://ws.ifelse.io
+
+### WS_TEST
+
+WEBSOCKET {{ WS_URL }}
+
+{"name": "world"}
+`;
+    const doc = await getDocument(content, "/test.http");
+    const block = doc.blocks.find((b) => b.name === "WS_TEST");
+    expect(block).toBeDefined();
+    expect(block!.request.url).toBe("{{ WS_URL }}");
+
+    const result = await resolveRequestFromBlock(
+      block!,
+      "/test.http",
+      { WS_URL: "wss://ws.ifelse.io" },
+      undefined,
+    );
+    expect(result).toMatchObject({ ok: true });
+    if (!("ok" in result) || !result.ok) return;
+    if (result.request.kind !== "websocket") return;
+
+    expect(result.request.url).toBe("wss://ws.ifelse.io");
+  });
+
+  test("substitutes env variables in WEBSOCKET target from websocket.http", async () => {
+    const content = readFileSync(websocketExamplePath, "utf8");
+    const result = await toCurlAtCursor({
+      content,
+      filepath: websocketExamplePath,
+      line: 3,
+      column: 1,
+      env: "default",
+    });
+    expect(result).toMatchObject({ ok: true });
+    if (!("ok" in result) || !result.ok) return;
+
+    expect(result.curl).toContain("wss://ws.ifelse.io");
+    expect(result.curl).not.toContain("{{");
   });
 });
