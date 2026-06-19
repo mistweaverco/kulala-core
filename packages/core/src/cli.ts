@@ -1,5 +1,6 @@
-import { KulalaParser } from "./lib/parser";
+import { KulalaParser, writeErrorToStderr } from "./lib/parser";
 import { existsSync, readFileSync } from "node:fs";
+import { closeDb } from "./lib/persistence";
 import { prepareWebSocketConnect } from "./lib/websocket/prepare-connect";
 import { runWebSocketSession } from "./lib/websocket/websocket-session";
 
@@ -60,12 +61,26 @@ if (wsFlagIndex !== -1) {
   if (!inputFile) {
     throw new Error("WebSocket mode requires --input-file with connect JSON");
   }
-  const connect = JSON.parse(readFileSync(inputFile, { encoding: "utf-8" }));
-  await runWebSocketSession(prepareWebSocketConnect(connect));
+  try {
+    const connect = JSON.parse(readFileSync(inputFile, { encoding: "utf-8" }));
+    await runWebSocketSession(prepareWebSocketConnect(connect));
+  } finally {
+    closeDb();
+  }
 } else {
-  const inputPayload = await getInputPayload();
-  const stdIn = JSON.parse(inputPayload);
+  let exitCode = 0;
+  try {
+    const inputPayload = await getInputPayload();
+    const stdIn = JSON.parse(inputPayload);
 
-  KulalaParser.setInput(stdIn);
-  await KulalaParser.parse();
+    KulalaParser.setInput(stdIn);
+    await KulalaParser.parse();
+  } catch (error) {
+    exitCode = 1;
+    const message = error instanceof Error ? error.message : String(error);
+    writeErrorToStderr(message);
+  } finally {
+    closeDb();
+    process.exit(exitCode);
+  }
 }

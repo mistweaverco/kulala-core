@@ -33,13 +33,15 @@ GET {{baseUrl}}/ping HTTP/1.1
     filepath: "/tmp/test.http",
     env: "default",
     line: 4,
-    column: 8,
+    column: 7,
     filetype: "http",
   });
   const labels = new Set(res.items.map((i) => i.label));
   expect(labels.has("baseUrl")).toBe(true);
   expect(labels.has("X_GLOBAL")).toBe(true);
   expect(labels.has("$timestamp")).toBe(true);
+  const baseUrl = res.items.find((i) => i.label === "baseUrl");
+  expect(baseUrl?.detail).toBe("https://example.com");
 });
 
 test("lspDiagnostics surfaces parser errors", async () => {
@@ -348,4 +350,60 @@ GET https://example.com HTTP/1.1
   });
   const labels = new Set(res.items.map((i) => i.label));
   expect(labels.has("X_GLOBAL")).toBe(true);
+});
+
+test("lspCompletion on header line suggests header names only", async () => {
+  const content = `### One
+GET https://example.com HTTP/1.1
+Cont
+`;
+  const res = await lspCompletion({
+    content,
+    filepath: "/tmp/header.http",
+    env: "default",
+    line: 3,
+    column: 4,
+    filetype: "http",
+  });
+  const labels = new Set(res.items.map((i) => i.label));
+  expect(labels.has("Content-Type")).toBe(true);
+  expect(labels.has("GET")).toBe(false);
+  expect(labels.has("POST")).toBe(false);
+});
+
+test("lspCompletion on request line does not suggest header names", async () => {
+  const content = `### One
+GET 
+`;
+  const res = await lspCompletion({
+    content,
+    filepath: "/tmp/request.http",
+    env: "default",
+    line: 2,
+    column: 5,
+    filetype: "http",
+  });
+  const labels = new Set(res.items.map((i) => i.label));
+  expect(labels.has("Content-Type")).toBe(false);
+  expect(labels.has("http")).toBe(true);
+  expect(labels.has("https")).toBe(true);
+});
+
+test("lspCompletion filters variables by template prefix", async () => {
+  setVariable("global", "baseUrl", "https://example.com");
+  setVariable("global", "token", "secret");
+  const content = `### One
+GET {{bas
+`;
+  const res = await lspCompletion({
+    content,
+    filepath: "/tmp/prefix.http",
+    env: "default",
+    line: 2,
+    column: 9,
+    filetype: "http",
+  });
+  const labels = res.items.map((i) => i.label);
+  expect(labels).toContain("baseUrl");
+  expect(labels).not.toContain("token");
 });

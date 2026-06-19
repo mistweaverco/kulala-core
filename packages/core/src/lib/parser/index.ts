@@ -8,6 +8,7 @@ import {
 } from "./lib/helpers";
 import { getDocument } from "./parser";
 import { formatHttp } from "./format";
+import { serializeHttp } from "./serde";
 export { deserializeHttp, serializeHttp } from "./serde";
 export type { KulalaHttpSerdeSerializeOptions } from "./serde";
 export { formatHttp } from "./format";
@@ -73,6 +74,18 @@ const kulalaParser: KulalaParser = {
           defaults: stdIn.defaults,
         });
         writeToStdout(result);
+        break;
+      }
+      case "serialize": {
+        const doc = stdIn.doc;
+        if (stdIn.filepath) {
+          doc.filepath = stdIn.filepath;
+        }
+        const content = serializeHttp(doc, {
+          includeExpandedBlocks: stdIn.includeExpandedBlocks,
+          preserveBodyText: stdIn.preserveBodyText,
+        });
+        writeToStdout({ success: true, content });
         break;
       }
       case "run": {
