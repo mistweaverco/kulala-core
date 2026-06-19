@@ -22,6 +22,14 @@ export type KulalaStdinActionFormat = {
   };
 };
 
+export type KulalaStdinActionSerialize = {
+  action: "serialize";
+  doc: import("./document").KulalaDocument;
+  filepath?: string;
+  includeExpandedBlocks?: boolean;
+  preserveBodyText?: boolean;
+};
+
 export type KulalaStdinActionRunLimit =
   | {
       /* The cursor position is 1-based index
@@ -214,6 +222,7 @@ export type KulalaStdinActionLspDiagnostics = {
 export type KulalaStdinParsed =
   | KulalaStdinActionParse
   | KulalaStdinActionFormat
+  | KulalaStdinActionSerialize
   | KulalaStdinActionRun
   | KulalaStdinActionApplyJqFilter
   | KulalaStdinActionContinue

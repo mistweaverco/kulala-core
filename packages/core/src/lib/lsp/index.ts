@@ -11,6 +11,10 @@ import {
   scriptSymbolAtCursor,
 } from "./script-api-docs";
 import { graphQLLspCompletionItems, graphQLLspHover } from "../graphql";
+import {
+  structuralCompletionSources,
+  templateVarPrefix,
+} from "./completion-context";
 import { lspVariableHover } from "./variable-hover";
 import { staticCompletionItems } from "./sources";
 import {
@@ -94,6 +98,14 @@ function completionContextForScriptVarKey(
   return null;
 }
 
+function formatVariablePreview(value: unknown): string {
+  if (value == null) return "";
+  const text = typeof value === "string" ? value : JSON.stringify(value);
+  const oneLine = text.replace(/\s+/g, " ").trim();
+  if (oneLine.length <= 120) return oneLine;
+  return `${oneLine.slice(0, 119)}…`;
+}
+
 function mkItem(opts: {
   label: string;
   description?: string;
@@ -144,6 +156,7 @@ function completionSourceTypes(opts: {
   lineToCursor: string;
   line1: number;
   filetype?: LspSupportedFiletypeAll;
+  doc: KulalaDocument;
 }): string[] {
   // Mirrors kulala.nvim `source_type` matching order, simplified.
   const matches: Array<[RegExp, string | string[]]> = [
@@ -172,15 +185,51 @@ function completionSourceTypes(opts: {
   for (const [re, src] of matches) {
     if (re.test(opts.lineToCursor)) return Array.isArray(src) ? src : [src];
   }
-  return [
-    "commands",
-    "methods",
-    "schemes",
-    "request_urls",
-    "header_names",
-    "snippets_in",
-    "snippets_out",
-  ];
+
+  return structuralCompletionSources(
+    opts.doc,
+    opts.content,
+    opts.line1,
+    opts.lineToCursor,
+  );
+}
+
+function filterCompletionItemsByPrefix(
+  items: LspCompletionItem[],
+  prefix: string,
+): LspCompletionItem[] {
+  const p = prefix.trim();
+  if (!p) return items;
+  const lower = p.toLowerCase();
+  return items.filter((item) => {
+    const label = item.label.toLowerCase();
+    const insert = (item.insertText ?? item.label).toLowerCase();
+    return label.startsWith(lower) || insert.startsWith(lower);
+  });
+}
+
+function shouldSkipWordPrefixFilter(
+  sources: string[],
+  wordPrefix: string,
+): boolean {
+  if (!wordPrefix) return true;
+  if (sources.includes("scripts")) return true;
+  // URL/path fragments: strict prefix filter hides schemes and request URLs.
+  if (/[/:.]/.test(wordPrefix)) return true;
+  if (
+    sources.some((s) =>
+      [
+        "request_urls",
+        "schemes",
+        "document_variables",
+        "env_variables",
+        "dynamic_variables",
+      ].includes(s),
+    )
+  ) {
+    return true;
+  }
+  return false;
 }
 
 function headerNameItems(): LspCompletionItem[] {
@@ -266,6 +315,7 @@ export async function lspCompletion(input: {
     lineToCursor: before,
     line1: input.line,
     filetype: input.filetype,
+    doc,
   });
 
   const out: LspCompletionItem[] = [];
@@ -314,8 +364,8 @@ export async function lspCompletion(input: {
             label: k,
             description: "Var",
             kind: LspCompletionItemKind.Variable,
-            detail: k,
-            documentation: vars[k],
+            detail: formatVariablePreview(vars[k]),
+            documentation: String(vars[k] ?? ""),
             insertText: k,
             sortText: "0.50",
           }),
@@ -367,8 +417,8 @@ export async function lspCompletion(input: {
             label: k,
             description: "Var",
             kind: LspCompletionItemKind.Variable,
-            detail: k,
-            documentation: v,
+            detail: formatVariablePreview(v),
+            documentation: String(v ?? ""),
             insertText: k,
             sortText: "1.02",
           }),
@@ -401,7 +451,31 @@ export async function lspCompletion(input: {
     return { isIncomplete: false, items: applyEdits(gql.items) };
   }
 
-  return { isIncomplete: false, items: applyEdits(out) };
+  const templatePrefix = templateVarPrefix(before);
+  const { prefix: wordPrefix } = completionPrefixAtCursor(line, input.column);
+  const isExternalScript =
+    input.filetype != null &&
+    input.filetype in LspSupportedExternalScriptFiletypes;
+  const skipPrefixFilter =
+    isExternalScript ||
+    sources.includes("scripts") ||
+    shouldSkipWordPrefixFilter(sources, wordPrefix);
+
+  let filtered = out;
+  if (!skipPrefixFilter) {
+    const filterPrefix = templatePrefix ?? wordPrefix;
+    filtered = filterCompletionItemsByPrefix(out, filterPrefix);
+    if (filterPrefix && filtered.length === 0 && out.length > 0) {
+      filtered = out;
+    }
+  } else if (templatePrefix) {
+    filtered = filterCompletionItemsByPrefix(out, templatePrefix);
+    if (templatePrefix && filtered.length === 0 && out.length > 0) {
+      filtered = out;
+    }
+  }
+
+  return { isIncomplete: false, items: applyEdits(filtered) };
 }
 
 export async function lspHover(input: {

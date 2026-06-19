@@ -3,6 +3,7 @@ import { dirname, join } from "path";
 import { flattenToDotPaths } from "./flatten-json";
 
 const KUBA_YAML = "kuba.yaml";
+const KUBA_SPAWN_TIMEOUT_MS = 10_000;
 
 /**
  * Traverse upward from startDir to find a directory containing kuba.yaml.
@@ -42,6 +43,7 @@ export async function listKubaEnvNames(dir: string): Promise<string[]> {
     stdout: "pipe",
     stderr: "pipe",
     stdin: "ignore",
+    timeout: KUBA_SPAWN_TIMEOUT_MS,
   });
   const exitCode = await proc.exited;
   if (exitCode !== 0) {
@@ -74,6 +76,7 @@ export async function getKubaEnv(
     stdout: "pipe",
     stderr: "pipe",
     stdin: "ignore",
+    timeout: KUBA_SPAWN_TIMEOUT_MS,
   });
   const exitCode = await proc.exited;
   if (exitCode !== 0) {
