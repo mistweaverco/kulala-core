@@ -6,7 +6,11 @@ import {
   writeRequestResponseToStderr,
   writeRequestResponseToStdout,
 } from "../parser/lib/helpers";
-import { getStableDocumentId, resolveVariables } from "../variables";
+import {
+  getStableDocumentId,
+  resolveVariables,
+  substituteInString,
+} from "../variables";
 import {
   filterExecutableBlocks,
   findBlocksAtCursor,
@@ -159,7 +163,7 @@ export async function runDocument(
       for (const [key, value] of Object.entries(
         runDirective.variableOverrides,
       )) {
-        vars[key] = value;
+        vars[key] = substituteInString(value, vars, resolver);
       }
     }
 

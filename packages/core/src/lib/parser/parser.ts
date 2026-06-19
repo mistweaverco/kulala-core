@@ -340,56 +340,65 @@ function extractDirectives(content: string): {
   const lines = content.split("\n");
   const directives: KulalaDirective[] = [];
   const errors: KulalaError[] = [];
-  let directiveEndIdx = 0;
+  const linesToRemove = new Set<number>();
 
-  // Find directives at the top (before first block)
+  const isBlockStart = (line: string): boolean => {
+    const trimmed = line.trim();
+    return (
+      trimmed.startsWith("###") ||
+      isRequestLine(line) ||
+      isPreRequestScriptLine(line)
+    );
+  };
+
+  const firstBlockIdx = lines.findIndex(isBlockStart);
+
+  // Find import/run directives at the top (before first block).
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
     const trimmed = line.trim();
 
-    // Stop at first request, pre-request script, or block marker.
-    if (
-      trimmed.startsWith("###") ||
-      isRequestLine(line) ||
-      isPreRequestScriptLine(line)
-    ) {
+    if (isBlockStart(line)) {
       break;
     }
 
-    // Skip empty lines and comments
-    if (!trimmed || trimmed.startsWith("#")) {
+    if (!trimmed || !isDirective(line)) {
       continue;
     }
 
-    if (isDirective(line)) {
-      directiveEndIdx = i + 1;
-      if (trimmed.startsWith("import ")) {
-        const result = parseImportDirective(line, i);
-        if ("errorMessage" in result) {
-          errors.push(result);
-        } else {
-          directives.push(result);
-        }
-      } else if (trimmed.startsWith("run ")) {
-        const result = parseRunDirective(line, i);
-        if ("errorMessage" in result) {
-          errors.push(result);
-        } else {
-          directives.push(result);
-        }
+    linesToRemove.add(i);
+    if (trimmed.startsWith("import ")) {
+      const result = parseImportDirective(line, i);
+      if ("errorMessage" in result) {
+        errors.push(result);
+      } else {
+        directives.push(result);
+      }
+    } else if (trimmed.startsWith("run ")) {
+      const result = parseRunDirective(line, i);
+      if ("errorMessage" in result) {
+        errors.push(result);
+      } else {
+        directives.push(result);
       }
     }
   }
 
-  // Remove directive lines from content
-  const contentWithoutDirectives =
-    directiveEndIdx > 0 ? lines.slice(directiveEndIdx).join("\n") : content;
+  const contentWithoutDirectives = lines
+    .filter((_, i) => !linesToRemove.has(i))
+    .join("\n");
+
+  let directiveLinesRemoved = 0;
+  const headerEnd = firstBlockIdx === -1 ? lines.length : firstBlockIdx;
+  for (let i = 0; i < headerEnd; i++) {
+    if (linesToRemove.has(i)) directiveLinesRemoved++;
+  }
 
   return {
     directives,
     contentWithoutDirectives,
     errors,
-    directiveLinesRemoved: directiveEndIdx,
+    directiveLinesRemoved,
   };
 }
 
