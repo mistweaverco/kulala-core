@@ -35,6 +35,7 @@ import {
 import {
   buildCustomPromptResponse,
   consumeRequestPromptVariable,
+  parseKulalaPromptOperatorArgs,
 } from "./custom-prompt";
 import { ScriptPromptError } from "./script-prompt-error";
 import {
@@ -327,48 +328,7 @@ export async function doRequestFromBlock(
     return n;
   };
 
-  const parsePromptArgs = (
-    raw: string,
-  ): { varName: string; label?: string } | null => {
-    const s = raw.trim();
-    if (!s) return null;
-
-    // Back-compat: "@prompt NAME"
-    if (!s.startsWith(`"`) && !s.startsWith(`'`)) {
-      const parts = s.split(/\s+/).filter(Boolean);
-      if (parts.length === 1) return { varName: parts[0]! };
-      if (parts.length >= 2) {
-        const varName = parts[parts.length - 1]!;
-        const label = parts.slice(0, -1).join(" ");
-        return { varName, label };
-      }
-      return null;
-    }
-
-    // Quoted label: @"What is your name?" NAME
-    const quote = s[0]!;
-    let i = 1;
-    let label = "";
-    while (i < s.length) {
-      const ch = s[i]!;
-      if (ch === "\\") {
-        const next = s[i + 1];
-        if (next !== undefined) {
-          label += next;
-          i += 2;
-          continue;
-        }
-      }
-      if (ch === quote) break;
-      label += ch;
-      i += 1;
-    }
-    if (i >= s.length || s[i] !== quote) return null;
-    const rest = s.slice(i + 1).trim();
-    const varName = rest.split(/\s+/).filter(Boolean)[0];
-    if (!varName) return null;
-    return { varName, label };
-  };
+  const parsePromptArgs = parseKulalaPromptOperatorArgs;
 
   // Pre-request scripts may set variables that affect substitution.
   // Keep `vars` mutable within this block.
@@ -436,6 +396,7 @@ export async function doRequestFromBlock(
         blockName: block.name,
         varName,
         label,
+        inputType: parsed?.inputType,
       });
     }
   }

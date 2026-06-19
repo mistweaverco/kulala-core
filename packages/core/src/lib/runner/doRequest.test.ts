@@ -341,6 +341,40 @@ test("doRequestFromBlock: @kulala-prompt supports quoted label + var name (conti
   }
 });
 
+test("doRequestFromBlock: @kulala-prompt supports password type option", async () => {
+  const block = makeBlock({
+    operators: [
+      testOperator(
+        "kulala-prompt",
+        `"What is your prompt?" MY_VAR_NAME_PROMPT { type: "password" }`,
+      ),
+    ],
+    request: {
+      method: "GET",
+      url: `${baseUrl}/get?prompt={{MY_VAR_NAME_PROMPT}}` as KulalaHttpURL,
+      headerSection: [],
+    },
+  });
+
+  const result = await doRequestFromBlock(
+    block,
+    "/tmp/example.http",
+    undefined,
+    "stable-doc",
+    undefined,
+    "default",
+    { globalHeaders: {} },
+  );
+
+  expect(result).toHaveProperty("success", false);
+  if (!Array.isArray(result) && "prompt" in result && result.prompt) {
+    expect(result.promptType).toBe("custom");
+    expect(result.inputs[0]?.id).toBe("MY_VAR_NAME_PROMPT");
+    expect(result.inputs[0]?.label).toBe("What is your prompt?");
+    expect(result.inputs[0]?.type).toBe("password");
+  }
+});
+
 test("doRequestFromBlock: pre-request script error aborts HTTP (JetBrains parity)", async () => {
   preScriptAbortProbeHits = 0;
   const block = makeBlock({
