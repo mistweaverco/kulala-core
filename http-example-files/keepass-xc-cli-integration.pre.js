@@ -34,6 +34,9 @@ if (cache && cache.expiresOnUnixTimestamp > Date.now()) {
   );
 }
 
+// INFO: Password is
+// 'Kulala is family'
+// without the single quotes.
 const KEEPASS_XC_PASSWORD_FROM_PROMPT = $kulala.prompt(
   "Password for KeePassXC database",
   "keepassxc_password",
