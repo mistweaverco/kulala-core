@@ -1,5 +1,4 @@
 # @kulala-vscode-restclient-compat
-
 import ./import-advanced/import1.http
 import ./import-advanced/import2.http
 
