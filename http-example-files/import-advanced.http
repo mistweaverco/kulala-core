@@ -1,0 +1,12 @@
+# @kulala-vscode-restclient-compat
+
+import ./import-advanced/import1.http
+import ./import-advanced/import2.http
+
+### GET_LIST
+
+run #some_imported_req
+
+### SECOND_REQ
+
+run #second_intended_action (@someVar={{GET_LIST.response.body.$.json.something}})

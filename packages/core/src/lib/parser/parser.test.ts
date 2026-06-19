@@ -402,6 +402,17 @@ GET https://example.com HTTP/1.1
   expect(doc.vscodeRestclientCompat).toBe(true);
 });
 
+test("parser: # @kulala-vscode-restclient-compat before import keeps file flag", async () => {
+  const content = `# @kulala-vscode-restclient-compat
+import ./other.http
+
+### REQUEST_ONE
+GET https://example.com HTTP/1.1
+`;
+  const doc = await getDocument(content.trim());
+  expect(doc.vscodeRestclientCompat).toBe(true);
+});
+
 test("parser: parses JetBrains # @name operator", async () => {
   const content = `### AUTH_REQUEST
 # @name LOGIN_REQUEST

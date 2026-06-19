@@ -1,0 +1,4 @@
+### second_intended_action
+
+GET https://echo.kulala.app/get?somevar={{ someVar }} HTTP/1.1
+Accept: application/json
