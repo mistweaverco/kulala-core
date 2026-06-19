@@ -8,6 +8,7 @@
   "type": "module",
   "scripts": {
     "format": "prettier --write .",
+    "fmt": "prettier --write .",
     "lint": "tsc --noEmit && prettier --check . && eslint .",
     "test": "bun test --randomize --only-failures",
     "db:migrate": "bun run packages/core/scripts/db-migrate.ts",
