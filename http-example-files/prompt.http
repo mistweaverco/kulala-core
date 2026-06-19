@@ -1,21 +1,21 @@
 ### normal-prompt
 
-# @kulala-prompt "What is your prompt?" MY_VAR_NAME_PROMPT
+# @kulala-prompt "What is your name?" MY_VAR_NAME
 
 POST https://echo.kulala.app/post HTTP/1.1
 Content-Type: application/json
 
 {
-  "prompt": "{{ MY_VAR_NAME_PROMPT }}"
+  "name": "{{ MY_VAR_NAME }}"
 }
 
 ### password-prompt
 
-# @kulala-prompt "What is your prompt?" MY_VAR_NAME_PROMPT { type: "password" }
+# @kulala-prompt "What is your password?" MY_VAR_PASSWORD { type: "password" }
 
 POST https://echo.kulala.app/post HTTP/1.1
 Content-Type: application/json
 
 {
-  "prompt": "{{ MY_VAR_NAME_PROMPT }}"
+  "password": "{{ MY_VAR_PASSWORD }}"
 }
