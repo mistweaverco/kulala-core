@@ -2,6 +2,14 @@ import { expect, test } from "bun:test";
 import { resolveVariables, substituteInString } from "../variables";
 import { getDocument } from "./parser";
 
+test("parser: CRLF line endings parse ### blocks", async () => {
+  const content = "### GET_example\r\nGET https://example.com\r\n";
+  const doc = await getDocument(content, "/test.http");
+  expect(doc.blocks).toHaveLength(1);
+  expect(doc.blocks[0]?.name).toBe("GET_example");
+  expect(doc.blocks[0]?.request.method).toBe("GET");
+});
+
 test("parser: first request does not require a block delimiter", async () => {
   const content = `GRAPHQL https://api.github.com/graphql HTTP/1.1
 Accept: application/json

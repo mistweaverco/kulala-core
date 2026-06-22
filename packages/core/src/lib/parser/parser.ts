@@ -5,7 +5,7 @@ import type {
   KulalaSeenBlockLineTypes,
 } from "./types/block";
 
-import { pad } from "./lib/helpers";
+import { normalizeLineEndings, pad } from "./lib/helpers";
 import type { KulalaOperator } from "./types/operator";
 import {
   extractFileHeaderOperators,
@@ -546,6 +546,7 @@ export const getDocument = async (
   filepath?: string,
   visitedFiles: Set<string> = new Set(),
 ): Promise<KulalaDocument> => {
+  content = normalizeLineEndings(content);
   const {
     directives,
     contentWithoutDirectives,

@@ -1,5 +1,10 @@
 import type { KulalaDocument, KulalaStdinParsed } from "../../types";
 
+/** Normalize CRLF and lone CR to LF so block regexes and line splitting work consistently. */
+export function normalizeLineEndings(content: string): string {
+  return content.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+}
+
 export const writeRequestResponseToStderr = async (
   res: unknown,
 ): Promise<void> => {

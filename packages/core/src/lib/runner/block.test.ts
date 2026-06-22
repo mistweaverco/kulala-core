@@ -299,6 +299,34 @@ test("findBlocksAtCursor expands top-level run ./file.http", async () => {
   ]);
 });
 
+test("findBlockAtCursor works with CRLF line endings", async () => {
+  const content = "### GET_example\r\nGET https://example.com\r\n";
+  const doc = await getDocument(content, "/test.http");
+  expect(findBlockAtCursor(doc, { line: 1, column: 1 })?.name).toBe(
+    "GET_example",
+  );
+  expect(findBlockAtCursor(doc, { line: 2, column: 1 })?.name).toBe(
+    "GET_example",
+  );
+  expect(findBlocksAtCursor(doc, { line: 2, column: 1 }).length).toBe(1);
+});
+
+test("findBlockAtCursor works with mixed LF/CRLF line endings", async () => {
+  const content =
+    "### GET_example\nGET https://example.com\r\nAccept: application/json\r\n";
+  const doc = await getDocument(content, "/test.http");
+  expect(findBlockAtCursor(doc, { line: 1, column: 1 })?.name).toBe(
+    "GET_example",
+  );
+  expect(findBlockAtCursor(doc, { line: 2, column: 1 })?.name).toBe(
+    "GET_example",
+  );
+  expect(findBlockAtCursor(doc, { line: 3, column: 1 })?.name).toBe(
+    "GET_example",
+  );
+  expect(findBlocksAtCursor(doc, { line: 2, column: 1 }).length).toBe(1);
+});
+
 test("findBlockAtCursor on ### line of second block does not match first block", async () => {
   const content =
     "### HTTP_1_0\nGET http://example.com HTTP/1.0\n### HTTP_1_1_REQUEST\nGET http://example.com HTTP/1.1\n";
