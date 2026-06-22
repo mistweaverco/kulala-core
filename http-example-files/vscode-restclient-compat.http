@@ -17,7 +17,7 @@ Accept: application/json
 Content-Type: application/json
 
 {
-  "token": "{{REQUEST_ONE.response.body.$.body.token}}"
+  "token": "{{REQUEST_ONE.response.body.$.json.token}}"
 }
 
 ### REQUEST_THREE
