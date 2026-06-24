@@ -35,7 +35,6 @@ import type { Lua } from "wasmoon-lua5.1";
 
 import type { KulalaGrpcFlag } from "../grpc/types";
 import {
-  buildScriptCookies,
   buildScriptRequestApi,
   buildScriptRequestContextFromBlock,
   type ScriptRequestContext,
@@ -43,10 +42,17 @@ import {
 import { buildKulalaScriptApi } from "./kulala-script-api";
 import { ScriptPromptError } from "./script-prompt-error";
 import { ScriptReplayError, ScriptSkipError } from "./script-control-error";
+import { makeResponseForScripts, type ScriptResponse } from "./script-response";
+
+export type { ScriptContentType } from "./script-response";
 
 export type ScriptRunScope = {
   /** Stable document id for request-scoped variables and prompts. */
   stableDocId: string;
+  doc?: import("../parser/types").KulalaDocument;
+  env?: string;
+  resolver?: import("./types").VariableResolver;
+  runRequestStack?: string[];
 };
 
 export type ScriptFlowContext = {
@@ -65,33 +71,6 @@ export type ScriptFlowContext = {
     string,
     import("../variables/request-vars").PreviousResponse
   >;
-};
-
-type ScriptHeaders = {
-  valueOf: (name: string) => string | undefined;
-  get: (name: string) => string | undefined;
-  valuesOf: (name: string) => string[];
-};
-
-/** Mirrors JetBrains ContentType (Content-Type header). */
-export type ScriptContentType = {
-  mimeType: string;
-  charset: string;
-};
-
-type ScriptResponse = {
-  status: number;
-  headers: ScriptHeaders;
-  /**
-   * JetBrains HTTP Client: string for plain text, or parsed JSON value (object, array, etc.)
-   * when the response is JSON. See https://www.jetbrains.com/help/idea/http-response-reference.html
-   */
-  body: string | unknown;
-  contentType: ScriptContentType;
-  cookies: () => import("./script-request-context").ScriptCookie[];
-  cookiesByName: (
-    name: string,
-  ) => import("./script-request-context").ScriptCookie[];
 };
 
 /** JetBrains HTTP Client request object (shape varies by script phase). */
@@ -126,66 +105,8 @@ function formatScriptConsoleArgs(args: unknown[]): string {
     .join(" ");
 }
 
-function makeHeaders(
-  headers: Record<string, string> | undefined,
-): ScriptHeaders {
-  const lc: Record<string, string> = {};
-  for (const [k, v] of Object.entries(headers ?? {})) lc[k.toLowerCase()] = v;
-  const get = (name: string) => lc[name.toLowerCase()];
-  const valuesOf = (name: string) => {
-    const v = get(name);
-    if (v === undefined || v === "") return [];
-    return v.includes("\n")
-      ? v
-          .split("\n")
-          .map((s) => s.trim())
-          .filter(Boolean)
-      : [v];
-  };
-  return { get, valueOf: get, valuesOf };
-}
-
-function parseContentTypeHeader(header: string | undefined): ScriptContentType {
-  if (!header || !header.trim()) return { mimeType: "", charset: "" };
-  const main = header.split(";")[0]?.trim() ?? "";
-  const mimeType = main || "";
-  const m = header.match(/charset\s*=\s*([^;]+)/i);
-  const raw = m?.[1]?.trim() ?? "";
-  const charset = raw.replace(/^["']|["']$/g, "");
-  return { mimeType, charset };
-}
-
-function isLikelyJsonContentType(ct: string): boolean {
-  const c = ct.toLowerCase();
-  return c.includes("json") || c.includes("+json");
-}
-
-function resolveScriptBody(
-  text: string,
-  contentTypeHeader: string | undefined,
-): string | unknown {
-  const ct = contentTypeHeader ?? "";
-  const tryParse = (): unknown => {
-    try {
-      return JSON.parse(text);
-    } catch {
-      return undefined;
-    }
-  };
-  if (isLikelyJsonContentType(ct) && text.trim().length > 0) {
-    const parsed = tryParse();
-    if (parsed !== undefined) return parsed;
-    return text;
-  }
-  const t = text.trim();
-  if (
-    (t.startsWith("{") && t.endsWith("}")) ||
-    (t.startsWith("[") && t.endsWith("]"))
-  ) {
-    const parsed = tryParse();
-    if (parsed !== undefined) return parsed;
-  }
-  return text;
+class ScriptExitError extends Error {
+  override name = "ScriptExitError";
 }
 
 type ParsedTempCallsite = { tempLine: number; column: number };
@@ -282,42 +203,6 @@ function buildConsoleOrigin(args: {
   }
   origin.column = tempCallsite.column;
   return origin;
-}
-
-function makeResponseForScripts(
-  response?: RunnerResponseLike,
-  responseUrl?: string,
-): ScriptResponse {
-  if (!response) {
-    return {
-      status: 0,
-      headers: makeHeaders({}),
-      body: "",
-      contentType: { mimeType: "", charset: "" },
-      cookies: () => [],
-      cookiesByName: () => [],
-    };
-  }
-  const bodyRaw = response.body;
-  const text = typeof bodyRaw === "string" ? bodyRaw : String(bodyRaw ?? "");
-  const ctHeader = response.headers["content-type"];
-  const body = resolveScriptBody(text, ctHeader);
-  const urlForCookies = responseUrl ?? "";
-  const allCookies = () =>
-    urlForCookies ? buildScriptCookies(response.headers, urlForCookies) : [];
-  return {
-    status: response.statusCode,
-    headers: makeHeaders(response.headers),
-    body,
-    contentType: parseContentTypeHeader(ctHeader),
-    cookies: allCookies,
-    cookiesByName: (name: string) =>
-      allCookies().filter((c) => c.name === name),
-  };
-}
-
-class ScriptExitError extends Error {
-  override name = "ScriptExitError";
 }
 
 function normalizeHeaderName(name: string): string {
@@ -943,6 +828,12 @@ export const runScripts = async (
         blockName: block.name,
         mutableVars,
         phase: type,
+        doc: scope?.doc,
+        filePath,
+        flow,
+        env: scope?.env ?? "default",
+        resolver: scope?.resolver,
+        runRequestStack: scope?.runRequestStack,
       });
 
       if (script.lang === "lua") {

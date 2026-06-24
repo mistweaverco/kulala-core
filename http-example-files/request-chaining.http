@@ -1,0 +1,23 @@
+### channing-tatum-one
+
+POST https://echo.kulala.app HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+
+{
+  "name": "Channing Tatum",
+  "age": 42,
+  "occupation": "Actor"
+}
+
+### channing-tatum-two
+
+POST https://echo.kulala.app HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+
+{
+  "name": "Channing Tatum",
+  "age": 42,
+  "occupation": "Actor"
+}

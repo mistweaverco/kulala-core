@@ -489,7 +489,7 @@ const getBlocks = async (
 /**
  * Resolve a file path relative to the current file.
  */
-async function resolveImportPath(
+export async function resolveHttpFilePath(
   importPath: string,
   currentFilepath?: string,
 ): Promise<string> {
@@ -501,6 +501,17 @@ async function resolveImportPath(
 }
 
 /**
+ * Load and parse an `.http` file from disk (imports, `$kulala.runRequest`, etc.).
+ */
+export async function loadHttpDocument(
+  importPath: string,
+  currentFilepath?: string,
+  visitedFiles: Set<string> = new Set(),
+): Promise<KulalaDocument | KulalaError> {
+  return loadImportedFile(importPath, currentFilepath, visitedFiles);
+}
+
+/**
  * Load and parse an imported file.
  */
 async function loadImportedFile(
@@ -508,7 +519,7 @@ async function loadImportedFile(
   currentFilepath?: string,
   visitedFiles: Set<string> = new Set(),
 ): Promise<KulalaDocument | KulalaError> {
-  const resolvedPath = await resolveImportPath(importPath, currentFilepath);
+  const resolvedPath = await resolveHttpFilePath(importPath, currentFilepath);
   const normalizedPath = resolve(resolvedPath);
 
   // Prevent circular imports

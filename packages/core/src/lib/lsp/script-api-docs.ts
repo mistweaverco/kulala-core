@@ -43,6 +43,16 @@ export const SCRIPT_API_DOCS: Record<string, ScriptApiDoc> = {
     signature: "$kulala.request.replay()",
     notes: 'In Lua: `_G["$kulala"].request.replay()`.',
   },
+  "$kulala.runRequest": {
+    summary:
+      "Run another named HTTP request from the current or an external `.http` file and return its response (Bruno-style request chaining).",
+    signature:
+      "$kulala.runRequest(name: string, filePath?: string): Promise<ScriptResponse>",
+    example:
+      'const res = await $kulala.runRequest("Login");\nclient.global.set("authToken", res.body.access_token);',
+    notes:
+      'Lookup uses `###` block names. Without `filePath`, imported files are searched first. In Lua: `local res = _G["$kulala"].runRequest("Login")` (await the returned promise if your runtime supports it).',
+  },
   "$kulala.client.global.headers.set": {
     summary:
       "Set a default HTTP header persisted across runs (merged into outgoing requests unless overridden). Case-insensitive header names.",
