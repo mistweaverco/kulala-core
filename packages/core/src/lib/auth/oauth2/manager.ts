@@ -21,6 +21,24 @@ import type {
 import { isMockConfig, isOAuth2Config } from "./types";
 import { OAuth2PromptError } from "./prompt-error";
 
+export type GetAccessTokenOptions = {
+  /**
+   * When false, only returns a cached valid token (refresh may still be attempted).
+   * Does not start interactive OAuth flows or acquire new tokens.
+   * @default true
+   */
+  acquire?: boolean;
+};
+
+function shouldAcquireToken(
+  config: OAuth2Config,
+  options?: GetAccessTokenOptions,
+): boolean {
+  if (options?.acquire === false) return false;
+  if (config["Acquire Automatically"] === false) return false;
+  return true;
+}
+
 function substituteConfigValue(
   value: unknown,
   vars: Record<string, string>,
@@ -175,7 +193,10 @@ export class OAuth2Manager {
   /**
    * Get access token for auth-id. Acquires or refreshes token if needed.
    */
-  async getAccessToken(authId: string): Promise<string | undefined> {
+  async getAccessToken(
+    authId: string,
+    options?: GetAccessTokenOptions,
+  ): Promise<string | undefined> {
     const config = this.configs.get(authId);
     if (!config) {
       return undefined;
@@ -187,13 +208,16 @@ export class OAuth2Manager {
       return cached;
     }
 
-    return this.getOAuth2AccessToken(authId, config);
+    return this.getOAuth2AccessToken(authId, config, options);
   }
 
   /**
    * Get ID token for auth-id.
    */
-  async getIdToken(authId: string): Promise<string | undefined> {
+  async getIdToken(
+    authId: string,
+    options?: GetAccessTokenOptions,
+  ): Promise<string | undefined> {
     const config = this.configs.get(authId);
     if (!config) {
       return undefined;
@@ -205,9 +229,11 @@ export class OAuth2Manager {
 
     let tokenData = this.tokens.get(authId);
 
-    // Ensure we have a valid token
     if (!tokenData || isTokenExpired(tokenData)) {
-      await this.getOAuth2AccessToken(authId, config);
+      const token = await this.getOAuth2AccessToken(authId, config, options);
+      if (token !== undefined && config["Use ID Token"]) {
+        return token;
+      }
       tokenData = this.tokens.get(authId);
     }
 
@@ -217,8 +243,10 @@ export class OAuth2Manager {
   private async getOAuth2AccessToken(
     authId: string,
     config: OAuth2Config,
+    options?: GetAccessTokenOptions,
   ): Promise<string | undefined> {
     let tokenData = this.tokens.get(authId);
+    const acquire = shouldAcquireToken(config, options);
 
     // Check if token needs refresh
     if (tokenData && tokenData.refresh_token && isTokenExpired(tokenData)) {
@@ -234,6 +262,9 @@ export class OAuth2Manager {
 
     // Check if token is expired or missing
     if (!tokenData || isTokenExpired(tokenData)) {
+      if (!acquire) {
+        return undefined;
+      }
       try {
         // Acquire new token based on grant type
         switch (config["Grant Type"]) {
