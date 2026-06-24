@@ -6,7 +6,7 @@
 
 GET https://echo.kulala.app/get HTTP/1.1
 Accept: application/json
-Authorization: Bearer {{ $auth.token("default-mock-name") }}
+Authorization: Bearer {{ $auth.token("default") }}
 
 > {%
   const token = response.body.headers.authorization;
@@ -16,3 +16,13 @@ Authorization: Bearer {{ $auth.token("default-mock-name") }}
   const decoded = JSON.parse(atob(accessToken));
   client.log(`${tokenType} decoded value is`, JSON.stringify(decoded, null, 2));
 %}
+
+### get-data-with-scopes-from-mock
+
+# Step 3: Use Refresh Token (automatic)
+# If the access token expires, Kulala will automatically refresh it
+# using the refresh_token (if available) before making this request
+
+GET https://echo.kulala.app/get HTTP/1.1
+Accept: application/json
+Authorization: Bearer {{ $auth.token("mock") }}
