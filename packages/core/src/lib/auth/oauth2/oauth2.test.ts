@@ -1,8 +1,12 @@
 import { expect, test, beforeAll, afterAll } from "bun:test";
 import { writeFileSync, unlinkSync, mkdirSync, existsSync } from "fs";
 import { join } from "path";
-import { OAuth2Manager, resolveOAuth2Config } from "./manager";
-import { loadOAuth2Configs } from "./config";
+import {
+  OAuth2Manager,
+  resolveAuthConfig,
+  resolveOAuth2Config,
+} from "./manager";
+import { loadAuthConfigs, loadMockConfigs, loadOAuth2Configs } from "./config";
 import {
   acquireClientCredentialsToken,
   exchangeAuthorizationCode,
@@ -595,6 +599,122 @@ test("OAuth2: Manager throws error for unsupported grant type", async () => {
   await expect(manager.getAccessToken("test-device-auth")).rejects.toThrow(
     "Device Authorization",
   );
+});
+
+test("Mock: loadAuthConfigs merges token-only private override", () => {
+  const envFile = join(testDir, "http-client.env.json");
+  const privateFile = join(testDir, "http-client.private.env.json");
+  writeFileSync(
+    envFile,
+    JSON.stringify(
+      {
+        dev: {
+          Security: {
+            Auth: {
+              "mock-auth": {
+                Type: "Mock",
+                Token: "",
+              },
+            },
+          },
+        },
+      },
+      null,
+      2,
+    ),
+  );
+  writeFileSync(
+    privateFile,
+    JSON.stringify(
+      {
+        dev: {
+          Security: {
+            Auth: {
+              "mock-auth": {
+                Token: "private-mock-token",
+                "ID Token": "private-id-token",
+              },
+            },
+          },
+        },
+      },
+      null,
+      2,
+    ),
+  );
+
+  const configs = loadAuthConfigs("dev", testDir);
+  const config = configs.get("mock-auth");
+  expect(config).toBeDefined();
+  expect(config?.Type).toBe("Mock");
+  if (config?.Type !== "Mock") return;
+  expect(config.Token).toBe("private-mock-token");
+  expect(config["ID Token"]).toBe("private-id-token");
+
+  const mockOnly = loadMockConfigs("dev", testDir);
+  expect(mockOnly.get("mock-auth")?.Token).toBe("private-mock-token");
+});
+
+test("Mock: OAuth2Manager returns static tokens", async () => {
+  const envFile = join(testDir, "http-client.env.json");
+  writeFileSync(
+    envFile,
+    JSON.stringify(
+      {
+        default: {
+          Security: {
+            Auth: {
+              "mock-auth": {
+                Type: "Mock",
+                Token: "static-access-token",
+                "ID Token": "static-id-token",
+              },
+            },
+          },
+        },
+      },
+      null,
+      2,
+    ),
+  );
+
+  const manager = new OAuth2Manager("default", testDir, {});
+  expect(await manager.getAccessToken("mock-auth")).toBe("static-access-token");
+  expect(await manager.getIdToken("mock-auth")).toBe("static-id-token");
+});
+
+test("Mock: resolveAuthConfig picks up token from flattened env vars", () => {
+  const envFile = join(testDir, "http-client.env.json");
+  const privateFile = join(testDir, "http-client.private.env.json");
+  if (existsSync(privateFile)) unlinkSync(privateFile);
+  writeFileSync(
+    envFile,
+    JSON.stringify(
+      {
+        dev: {
+          Security: {
+            Auth: {
+              "mock-auth": {
+                Type: "Mock",
+                Token: "{{MOCK_TOKEN}}",
+              },
+            },
+          },
+        },
+      },
+      null,
+      2,
+    ),
+  );
+
+  const vars = {
+    ...loadEnvVars("dev", testDir),
+    MOCK_TOKEN: "resolved-mock-token",
+  };
+  const config = resolveAuthConfig("mock-auth", "dev", testDir, vars);
+  expect(config?.Type).toBe("Mock");
+  if (config?.Type !== "Mock") return;
+  expect(config.Token).toBe("resolved-mock-token");
 });
 
 test("OAuth2: PKCE generation works", async () => {

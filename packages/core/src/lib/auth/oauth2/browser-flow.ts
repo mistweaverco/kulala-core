@@ -1,4 +1,8 @@
 import { spawn } from "child_process";
+import {
+  applyOAuth2CustomRequestParameters,
+  pkceMethodQueryValue,
+} from "./request-builders";
 import type { OAuth2Config } from "./types";
 
 /**
@@ -286,38 +290,16 @@ export function buildAuthorizationUrl(
   // PKCE
   if (pkce) {
     authUrl.searchParams.set("code_challenge", pkce.challenge);
-    authUrl.searchParams.set("code_challenge_method", pkce.method);
+    authUrl.searchParams.set(
+      "code_challenge_method",
+      pkceMethodQueryValue(pkce.method),
+    );
   }
 
-  // Custom request parameters for auth request
-  if (config["Custom Request Parameters"]) {
-    for (const [key, value] of Object.entries(
-      config["Custom Request Parameters"],
-    )) {
-      let shouldInclude = false;
-      let paramValue: string | string[] | undefined;
-
-      if (typeof value === "string") {
-        shouldInclude = true;
-        paramValue = value;
-      } else if (Array.isArray(value)) {
-        shouldInclude = true;
-        paramValue = value;
-      } else if (typeof value === "object" && value !== null) {
-        const param = value as { Value: string | string[]; Use: string };
-        shouldInclude =
-          param.Use === "In Auth Request" || param.Use === "Everywhere";
-        paramValue = param.Value;
-      }
-
-      if (shouldInclude && paramValue !== undefined) {
-        if (typeof paramValue === "string") {
-          authUrl.searchParams.set(key, paramValue);
-        } else if (Array.isArray(paramValue)) {
-          authUrl.searchParams.set(key, paramValue.join(" "));
-        }
-      }
-    }
+  const authParams: Record<string, string> = {};
+  applyOAuth2CustomRequestParameters(config, "In Auth Request", authParams);
+  for (const [key, value] of Object.entries(authParams)) {
+    authUrl.searchParams.set(key, value);
   }
 
   return authUrl.toString();

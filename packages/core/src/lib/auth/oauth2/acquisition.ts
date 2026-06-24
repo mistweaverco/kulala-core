@@ -2,6 +2,11 @@ import { httpRequest } from "../../runner/http-client";
 import { setUserAgentHeaderIfNotPresent } from "./../../runner/headers";
 import type { OAuth2Config, OAuth2TokenData } from "./types";
 import {
+  applyOAuth2CustomRequestParameters,
+  buildOAuth2CustomHeaders,
+  normalizePkceConfigMethod,
+} from "./request-builders";
+import {
   buildAuthorizationUrl,
   generatePKCE,
   generatePKCEPlain,
@@ -39,7 +44,7 @@ export async function acquireClientCredentialsToken(
   const clientCredentialsLocation = config["Client Credentials"] ?? "basic";
   const headers: Record<string, string> = setUserAgentHeaderIfNotPresent({
     "Content-Type": "application/x-www-form-urlencoded",
-    ...(config["Custom Headers"] ?? {}),
+    ...buildOAuth2CustomHeaders(config, "In Token Request"),
   });
 
   const bodyParams: Record<string, string> = {
@@ -47,27 +52,7 @@ export async function acquireClientCredentialsToken(
     ...(config.Scope ? { scope: config.Scope } : {}),
   };
 
-  // Add custom request parameters that should be used "In Token Request" or "Everywhere"
-  if (config["Custom Request Parameters"]) {
-    for (const [key, value] of Object.entries(
-      config["Custom Request Parameters"],
-    )) {
-      if (typeof value === "string") {
-        bodyParams[key] = value;
-      } else if (Array.isArray(value)) {
-        bodyParams[key] = value.join(" ");
-      } else if (typeof value === "object" && value !== null) {
-        const param = value as { Value: string | string[]; Use: string };
-        if (param.Use === "In Token Request" || param.Use === "Everywhere") {
-          if (typeof param.Value === "string") {
-            bodyParams[key] = param.Value;
-          } else if (Array.isArray(param.Value)) {
-            bodyParams[key] = param.Value.join(" ");
-          }
-        }
-      }
-    }
-  }
+  applyOAuth2CustomRequestParameters(config, "In Token Request", bodyParams);
 
   // Handle client credentials location
   if (clientCredentialsLocation === "basic") {
@@ -88,8 +73,7 @@ export async function acquireClientCredentialsToken(
       bodyParams.client_assertion_type =
         "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
     } else if (config.JWT) {
-      // Generate JWT token
-      const jwt = await generateJWT(config.JWT, config["Client Secret"] ?? "");
+      const jwt = await generateJWT(config, config.JWT);
       bodyParams.client_assertion = jwt;
       bodyParams.client_assertion_type =
         "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
@@ -150,8 +134,8 @@ function parseTokenResponse(response: {
  * Generate JWT token for OAuth2 client credentials.
  */
 async function generateJWT(
+  config: OAuth2Config,
   jwtConfig: NonNullable<OAuth2Config["JWT"]>,
-  secret: string,
 ): Promise<string> {
   const header = jwtConfig.Header;
   const payload = { ...jwtConfig.Payload };
@@ -164,8 +148,13 @@ async function generateJWT(
     payload.exp = (payload.iat as number) + 50;
   }
 
+  const signingKey =
+    header.alg === "RS256"
+      ? (config.private_key ?? "")
+      : (config["Client Secret"] ?? "");
+
   const { jwtEncode } = await import("../../crypto");
-  return jwtEncode(header, payload, secret);
+  return jwtEncode(header, payload, signingKey);
 }
 
 /**
@@ -195,7 +184,7 @@ export async function exchangeAuthorizationCode(
   // Exchange code for token
   const headers: Record<string, string> = {
     "Content-Type": "application/x-www-form-urlencoded",
-    ...(config["Custom Headers"] ?? {}),
+    ...buildOAuth2CustomHeaders(config, "In Token Request"),
   };
 
   const bodyParams: Record<string, string> = {
@@ -218,36 +207,7 @@ export async function exchangeAuthorizationCode(
     }
   }
 
-  // Add custom request parameters for token request
-  if (config["Custom Request Parameters"]) {
-    for (const [key, value] of Object.entries(
-      config["Custom Request Parameters"],
-    )) {
-      let shouldInclude = false;
-      let paramValue: string | string[] | undefined;
-
-      if (typeof value === "string") {
-        shouldInclude = true;
-        paramValue = value;
-      } else if (Array.isArray(value)) {
-        shouldInclude = true;
-        paramValue = value;
-      } else if (typeof value === "object" && value !== null) {
-        const param = value as { Value: string | string[]; Use: string };
-        shouldInclude =
-          param.Use === "In Token Request" || param.Use === "Everywhere";
-        paramValue = param.Value;
-      }
-
-      if (shouldInclude && paramValue !== undefined) {
-        if (typeof paramValue === "string") {
-          bodyParams[key] = paramValue;
-        } else if (Array.isArray(paramValue)) {
-          bodyParams[key] = paramValue.join(" ");
-        }
-      }
-    }
-  }
+  applyOAuth2CustomRequestParameters(config, "In Token Request", bodyParams);
 
   const formBody = new URLSearchParams(bodyParams).toString();
 
@@ -311,11 +271,12 @@ export async function acquireAuthorizationCodeToken(
       if (config.PKCE["Code Verifier"]) {
         // Use provided verifier
         const verifier = config.PKCE["Code Verifier"];
-        const method = config.PKCE["Code Challenge Method"] ?? "S256";
+        const method = normalizePkceConfigMethod(
+          config.PKCE["Code Challenge Method"],
+        );
         if (method === "Plain") {
           pkceValue = { verifier, challenge: verifier, method: "Plain" };
         } else {
-          // S256: hash the verifier
           const cryptoModule = await import("crypto");
           const hash = cryptoModule.createHash("sha256");
           hash.update(verifier, "utf8");
@@ -323,8 +284,9 @@ export async function acquireAuthorizationCodeToken(
           pkceValue = { verifier, challenge, method: "S256" };
         }
       } else {
-        // Generate new PKCE
-        const method = config.PKCE["Code Challenge Method"] ?? "S256";
+        const method = normalizePkceConfigMethod(
+          config.PKCE["Code Challenge Method"],
+        );
         pkceValue =
           method === "Plain" ? generatePKCEPlain() : await generatePKCE();
       }
@@ -536,7 +498,7 @@ export async function acquirePasswordToken(
 
   const headers: Record<string, string> = {
     "Content-Type": "application/x-www-form-urlencoded",
-    ...(config["Custom Headers"] ?? {}),
+    ...buildOAuth2CustomHeaders(config, "In Token Request"),
   };
 
   const bodyParams: Record<string, string> = {
@@ -559,36 +521,7 @@ export async function acquirePasswordToken(
     }
   }
 
-  // Add custom request parameters
-  if (config["Custom Request Parameters"]) {
-    for (const [key, value] of Object.entries(
-      config["Custom Request Parameters"],
-    )) {
-      let shouldInclude = false;
-      let paramValue: string | string[] | undefined;
-
-      if (typeof value === "string") {
-        shouldInclude = true;
-        paramValue = value;
-      } else if (Array.isArray(value)) {
-        shouldInclude = true;
-        paramValue = value;
-      } else if (typeof value === "object" && value !== null) {
-        const param = value as { Value: string | string[]; Use: string };
-        shouldInclude =
-          param.Use === "In Token Request" || param.Use === "Everywhere";
-        paramValue = param.Value;
-      }
-
-      if (shouldInclude && paramValue !== undefined) {
-        if (typeof paramValue === "string") {
-          bodyParams[key] = paramValue;
-        } else if (Array.isArray(paramValue)) {
-          bodyParams[key] = paramValue.join(" ");
-        }
-      }
-    }
-  }
+  applyOAuth2CustomRequestParameters(config, "In Token Request", bodyParams);
 
   const formBody = new URLSearchParams(bodyParams).toString();
 
@@ -624,7 +557,7 @@ export async function refreshOAuth2Token(
 
   const headers: Record<string, string> = {
     "Content-Type": "application/x-www-form-urlencoded",
-    ...(config["Custom Headers"] ?? {}),
+    ...buildOAuth2CustomHeaders(config, "In Token Request"),
   };
 
   const bodyParams: Record<string, string> = {
@@ -635,6 +568,8 @@ export async function refreshOAuth2Token(
       ? { client_secret: config["Client Secret"] }
       : {}),
   };
+
+  applyOAuth2CustomRequestParameters(config, "In Token Request", bodyParams);
 
   const formBody = new URLSearchParams(bodyParams).toString();
 
