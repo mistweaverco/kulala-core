@@ -144,8 +144,12 @@ export async function resolveRequestFromBlock(
     func: "token" | "idToken",
     authId: string,
   ): Promise<string | undefined> => {
-    if (func === "token") return oauth2Manager.getAccessToken(authId);
-    return oauth2Manager.getIdToken(authId);
+    // Preview/inspect paths must not start OAuth flows (e.g. LSP hover).
+    const authOptions = { acquire: false as const };
+    if (func === "token") {
+      return oauth2Manager.getAccessToken(authId, authOptions);
+    }
+    return oauth2Manager.getIdToken(authId, authOptions);
   };
 
   let effectiveBody: typeof block.request.body = block.request.body;

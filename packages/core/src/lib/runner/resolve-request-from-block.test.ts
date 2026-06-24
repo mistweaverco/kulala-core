@@ -1,5 +1,11 @@
-import { describe, expect, test } from "bun:test";
-import { readFileSync } from "fs";
+import { describe, expect, test, beforeAll, afterAll } from "bun:test";
+import {
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  existsSync,
+  unlinkSync,
+} from "fs";
 import { join } from "path";
 import { getDocument } from "../parser/parser";
 import { findBlockAtCursor } from "./block";
@@ -316,5 +322,111 @@ WEBSOCKET {{ WS_URL }}
 
     expect(result.curl).toContain("wss://ws.ifelse.io");
     expect(result.curl).not.toContain("{{");
+  });
+});
+
+describe("resolveRequestFromBlock OAuth preview", () => {
+  let testDir: string;
+  let server: ReturnType<typeof Bun.serve>;
+  let tokenUrl: string;
+  let tokenRequests = 0;
+
+  beforeAll(() => {
+    testDir = join(process.cwd(), ".test-resolve-oauth-preview");
+    if (!existsSync(testDir)) {
+      mkdirSync(testDir, { recursive: true });
+    }
+
+    server = Bun.serve({
+      port: 0,
+      async fetch(req) {
+        const url = new URL(req.url);
+        if (url.pathname === "/token" && req.method === "POST") {
+          tokenRequests += 1;
+          return Response.json({
+            access_token: "should-not-be-used",
+            token_type: "Bearer",
+            expires_in: 3600,
+          });
+        }
+        return new Response("Not Found", { status: 404 });
+      },
+    });
+    if (server.port === undefined) {
+      throw new Error("Test server did not expose a listening port");
+    }
+    tokenUrl = `http://localhost:${server.port}/token`;
+  });
+
+  afterAll(() => {
+    server.stop();
+    try {
+      for (const name of [
+        "http-client.env.json",
+        "http-client.private.env.json",
+      ]) {
+        const file = join(testDir, name);
+        if (existsSync(file)) unlinkSync(file);
+      }
+    } catch {
+      // ignore
+    }
+  });
+
+  test("does not acquire OAuth tokens when resolving request preview", async () => {
+    tokenRequests = 0;
+    writeFileSync(
+      join(testDir, "http-client.env.json"),
+      JSON.stringify(
+        {
+          default: {
+            Security: {
+              Auth: {
+                "preview-auth": {
+                  Type: "OAuth2",
+                  "Grant Type": "Client Credentials",
+                  "Token URL": tokenUrl,
+                  "Client ID": "test-client-id",
+                  "Client Secret": "test-client-secret",
+                  "Client Credentials": "basic",
+                },
+              },
+            },
+          },
+        },
+        null,
+        2,
+      ),
+    );
+
+    const httpFile = join(testDir, "oauth-preview.http");
+    const content = `### OAuth preview
+
+GET https://example.com/api HTTP/1.1
+Authorization: Bearer {{$auth.token("preview-auth")}}
+
+`;
+    writeFileSync(httpFile, content);
+
+    const doc = await getDocument(content, httpFile);
+    const block = doc.blocks[0];
+    expect(block).toBeDefined();
+
+    const result = await resolveRequestFromBlock(
+      block!,
+      httpFile,
+      {},
+      undefined,
+      "default",
+    );
+    expect(result).toMatchObject({ ok: true });
+    if (!("ok" in result) || !result.ok) return;
+    if (result.request.kind !== "http") return;
+
+    expect(result.request.headers.Authorization).toBe("Bearer ");
+    expect(tokenRequests).toBe(0);
+    expect(existsSync(join(testDir, "http-client.private.env.json"))).toBe(
+      false,
+    );
   });
 });

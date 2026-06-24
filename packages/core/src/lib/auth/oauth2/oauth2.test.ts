@@ -683,6 +683,133 @@ test("Mock: OAuth2Manager returns static tokens", async () => {
   expect(await manager.getIdToken("mock-auth")).toBe("static-id-token");
 });
 
+test("OAuth2: acquire false returns undefined without token request", async () => {
+  const envFile = join(testDir, "http-client.env.json");
+  writeFileSync(
+    envFile,
+    JSON.stringify(
+      {
+        default: {
+          Security: {
+            Auth: {
+              "preview-auth": {
+                Type: "OAuth2",
+                "Grant Type": "Client Credentials",
+                "Token URL": tokenUrl,
+                "Client ID": "test-client-id",
+                "Client Secret": "test-client-secret",
+                "Client Credentials": "basic",
+              },
+            },
+          },
+        },
+      },
+      null,
+      2,
+    ),
+  );
+
+  const privateFile = join(testDir, "http-client.private.env.json");
+  if (existsSync(privateFile)) unlinkSync(privateFile);
+
+  const manager = new OAuth2Manager("default", testDir, {});
+  const token = await manager.getAccessToken("preview-auth", {
+    acquire: false,
+  });
+  expect(token).toBeUndefined();
+  expect(existsSync(privateFile)).toBe(false);
+});
+
+test('OAuth2: "Acquire Automatically": false skips token acquisition', async () => {
+  const envFile = join(testDir, "http-client.env.json");
+  writeFileSync(
+    envFile,
+    JSON.stringify(
+      {
+        default: {
+          Security: {
+            Auth: {
+              "manual-auth": {
+                Type: "OAuth2",
+                "Grant Type": "Client Credentials",
+                "Token URL": tokenUrl,
+                "Client ID": "test-client-id",
+                "Client Secret": "test-client-secret",
+                "Client Credentials": "basic",
+                "Acquire Automatically": false,
+              },
+            },
+          },
+        },
+      },
+      null,
+      2,
+    ),
+  );
+
+  const privateFile = join(testDir, "http-client.private.env.json");
+  if (existsSync(privateFile)) unlinkSync(privateFile);
+
+  const manager = new OAuth2Manager("default", testDir, {});
+  const token = await manager.getAccessToken("manual-auth");
+  expect(token).toBeUndefined();
+  expect(existsSync(privateFile)).toBe(false);
+});
+
+test("OAuth2: acquire false still returns cached token", async () => {
+  const privateFile = join(testDir, "http-client.private.env.json");
+  const futureExpiry = Math.floor(Date.now() / 1000) + 3600;
+  writeFileSync(
+    privateFile,
+    JSON.stringify(
+      {
+        default: {
+          auth_data: {
+            "preview-cached-auth": {
+              access_token: "cached-preview-token",
+              token_type: "Bearer",
+              expires_at: futureExpiry,
+            },
+          },
+        },
+      },
+      null,
+      2,
+    ),
+  );
+
+  const envFile = join(testDir, "http-client.env.json");
+  writeFileSync(
+    envFile,
+    JSON.stringify(
+      {
+        default: {
+          Security: {
+            Auth: {
+              "preview-cached-auth": {
+                Type: "OAuth2",
+                "Grant Type": "Client Credentials",
+                "Token URL": tokenUrl,
+                "Client ID": "test-client-id",
+                "Client Secret": "test-client-secret",
+                "Client Credentials": "basic",
+              },
+            },
+          },
+        },
+      },
+      null,
+      2,
+    ),
+  );
+
+  const manager = new OAuth2Manager("default", testDir, {});
+  const token = await manager.getAccessToken("preview-cached-auth", {
+    acquire: false,
+  });
+  expect(token).toBe("cached-preview-token");
+});
+
 test("Mock: resolveAuthConfig picks up token from flattened env vars", () => {
   const envFile = join(testDir, "http-client.env.json");
   const privateFile = join(testDir, "http-client.private.env.json");

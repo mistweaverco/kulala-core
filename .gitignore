@@ -45,6 +45,7 @@ http-client.private.env.json
 
 # Test redirects
 http-example-files/*.tmp*
+.test**
 
 # Generated embeds
 /packages/core/src/lib/runner/vendored-*
