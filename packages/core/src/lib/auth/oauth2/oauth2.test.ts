@@ -1,8 +1,13 @@
 import { expect, test, beforeAll, afterAll } from "bun:test";
 import { writeFileSync, unlinkSync, mkdirSync, existsSync } from "fs";
 import { join } from "path";
-import { OAuth2Manager } from "./manager";
-import { acquireClientCredentialsToken } from "./acquisition";
+import { OAuth2Manager, resolveOAuth2Config } from "./manager";
+import { loadOAuth2Configs } from "./config";
+import {
+  acquireClientCredentialsToken,
+  exchangeAuthorizationCode,
+} from "./acquisition";
+import { loadEnvVars } from "../../variables/env-files";
 import { generatePKCE, generatePKCEPlain } from "./browser-flow";
 import type { OAuth2Config } from "./types";
 
@@ -124,6 +129,245 @@ test("OAuth2: Client Credentials with credentials in body", async () => {
 
   const tokenData = await acquireClientCredentialsToken(config);
   expect(tokenData.access_token).toBe("test-access-token-123");
+});
+
+test("OAuth2: loadOAuth2Configs merges secret-only private override", () => {
+  const envFile = join(testDir, "http-client.env.json");
+  const privateFile = join(testDir, "http-client.private.env.json");
+  writeFileSync(
+    envFile,
+    JSON.stringify(
+      {
+        dev: {
+          Security: {
+            Auth: {
+              "entra-code": {
+                Type: "OAuth2",
+                "Grant Type": "Authorization Code",
+                "Token URL": tokenUrl,
+                "Client ID": "test-client-id",
+                "Client Credentials": "in body",
+              },
+            },
+          },
+        },
+      },
+      null,
+      2,
+    ),
+  );
+  writeFileSync(
+    privateFile,
+    JSON.stringify(
+      {
+        dev: {
+          Security: {
+            Auth: {
+              "entra-code": {
+                "Client Secret": "test-client-secret",
+              },
+            },
+          },
+          auth_data: {},
+        },
+      },
+      null,
+      2,
+    ),
+  );
+
+  const configs = loadOAuth2Configs("dev", testDir);
+  const config = configs.get("entra-code");
+  expect(config).toBeDefined();
+  expect(config?.Type).toBe("OAuth2");
+  expect(config?.["Client ID"]).toBe("test-client-id");
+  expect(config?.["Client Secret"]).toBe("test-client-secret");
+});
+
+test("OAuth2: resolveOAuth2Config picks up secret from flattened env vars", () => {
+  const envFile = join(testDir, "http-client.env.json");
+  const privateFile = join(testDir, "http-client.private.env.json");
+  writeFileSync(
+    envFile,
+    JSON.stringify(
+      {
+        dev: {
+          Security: {
+            Auth: {
+              "entra-code": {
+                Type: "OAuth2",
+                "Grant Type": "Client Credentials",
+                "Token URL": tokenUrl,
+                "Client ID": "test-client-id",
+                "Client Credentials": "in body",
+              },
+            },
+          },
+        },
+      },
+      null,
+      2,
+    ),
+  );
+  writeFileSync(
+    privateFile,
+    JSON.stringify(
+      {
+        dev: {
+          Security: {
+            Auth: {
+              "entra-code": {
+                "Client Secret": "test-client-secret",
+              },
+            },
+          },
+        },
+      },
+      null,
+      2,
+    ),
+  );
+
+  const vars = loadEnvVars("dev", testDir);
+  const config = resolveOAuth2Config("entra-code", "dev", testDir, vars);
+  expect(config?.["Client Secret"]).toBe("test-client-secret");
+});
+
+test("OAuth2: Manager acquires token with secret-only private override", async () => {
+  const envFile = join(testDir, "http-client.env.json");
+  const privateFile = join(testDir, "http-client.private.env.json");
+  writeFileSync(
+    envFile,
+    JSON.stringify(
+      {
+        default: {
+          Security: {
+            Auth: {
+              "split-secret-auth": {
+                Type: "OAuth2",
+                "Grant Type": "Client Credentials",
+                "Token URL": tokenUrl,
+                "Client ID": "test-client-id",
+                "Client Credentials": "in body",
+              },
+            },
+          },
+        },
+      },
+      null,
+      2,
+    ),
+  );
+  writeFileSync(
+    privateFile,
+    JSON.stringify(
+      {
+        default: {
+          Security: {
+            Auth: {
+              "split-secret-auth": {
+                "Client Secret": "test-client-secret",
+              },
+            },
+          },
+        },
+      },
+      null,
+      2,
+    ),
+  );
+
+  const vars = loadEnvVars("default", testDir);
+  const manager = new OAuth2Manager("default", testDir, vars);
+  const token = await manager.getAccessToken("split-secret-auth");
+  expect(token).toBe("test-access-token-123");
+});
+
+test("OAuth2: exchangeAuthorizationCode sends client_secret from resolved config", async () => {
+  const authCodeServer = Bun.serve({
+    port: 0,
+    async fetch(req) {
+      const url = new URL(req.url);
+      if (url.pathname === "/auth-code-token" && req.method === "POST") {
+        const body = await req.text();
+        const params = new URLSearchParams(body);
+        if (
+          params.get("grant_type") === "authorization_code" &&
+          params.get("code") === "test-code" &&
+          params.get("client_id") === "test-client-id" &&
+          params.get("client_secret") === "test-client-secret"
+        ) {
+          return Response.json({
+            access_token: "auth-code-token",
+            token_type: "Bearer",
+            expires_in: 3600,
+          });
+        }
+        return new Response(
+          JSON.stringify({
+            error: "invalid_request",
+            error_description: "Missing required parameter: client_secret",
+          }),
+          { status: 400, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return new Response("Not Found", { status: 404 });
+    },
+  });
+
+  const authCodeTokenUrl = `http://localhost:${authCodeServer.port}/auth-code-token`;
+  const envFile = join(testDir, "http-client.env.json");
+  const privateFile = join(testDir, "http-client.private.env.json");
+  writeFileSync(
+    envFile,
+    JSON.stringify(
+      {
+        dev: {
+          Security: {
+            Auth: {
+              "entra-code": {
+                Type: "OAuth2",
+                "Grant Type": "Authorization Code",
+                "Token URL": authCodeTokenUrl,
+                "Client ID": "test-client-id",
+                "Redirect URL": "http://localhost:8081/",
+                "Client Credentials": "in body",
+              },
+            },
+          },
+        },
+      },
+      null,
+      2,
+    ),
+  );
+  writeFileSync(
+    privateFile,
+    JSON.stringify(
+      {
+        dev: {
+          Security: {
+            Auth: {
+              "entra-code": {
+                "Client Secret": "test-client-secret",
+              },
+            },
+          },
+        },
+      },
+      null,
+      2,
+    ),
+  );
+
+  const vars = loadEnvVars("dev", testDir);
+  const config = resolveOAuth2Config("entra-code", "dev", testDir, vars);
+  expect(config?.["Client Secret"]).toBe("test-client-secret");
+
+  const tokenData = await exchangeAuthorizationCode(config!, "test-code");
+  expect(tokenData.access_token).toBe("auth-code-token");
+
+  authCodeServer.stop();
 });
 
 test("OAuth2: Manager loads config and acquires token", async () => {

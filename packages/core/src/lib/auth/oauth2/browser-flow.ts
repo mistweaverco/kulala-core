@@ -154,14 +154,12 @@ export function parseRedirectInput(
   }
 
   if (grantType === "Authorization Code") {
-    if (!code) {
-      // If we couldn't parse as URL and user just pasted the code, we already returned it above
-      // This shouldn't happen, but handle it gracefully
-      throw new Error(
-        "No authorization code found. Please paste the full redirect URL (including ?code=...) or just the authorization code.",
-      );
+    if (code) {
+      return { code };
     }
-    return { code };
+    // Providers (e.g. Microsoft Entra) may issue codes containing '='. When URL
+    // parsing did not yield ?code=, treat the whole pasted value as the code.
+    return { code: trimmed };
   } else {
     // Implicit grant
     if (!access_token) {

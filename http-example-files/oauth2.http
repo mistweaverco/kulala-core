@@ -1,9 +1,9 @@
-### GET_DATA_WITH_SCOPES
+### get-data-with-scopes
 
 # Step 3: Use Refresh Token (automatic)
 # If the access token expires, Kulala will automatically refresh it
 # using the refresh_token (if available) before making this request
 
-POST https://echo.kulala.app/post HTTP/1.1
+GET https://echo.kulala.app/get HTTP/1.1
 Accept: application/json
-Authorization: Bearer {{ $auth.token("playground-oauth2") }}
+Authorization: Bearer {{ $auth.token("default-mock-name") }}

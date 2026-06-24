@@ -35,6 +35,52 @@ function substituteConfigValue(
   return value;
 }
 
+/** OAuth2 auth fields that may live only in http-client.private.env.json. */
+const PRIVATE_OVERRIDE_FIELDS = [
+  "Client Secret",
+  "Password",
+  "Assertion",
+] as const;
+
+/**
+ * Fill OAuth2 secrets from flattened env vars (same paths as loadEnvVars).
+ * Matches kulala.nvim env merging when private overrides omit `"Type": "OAuth2"`.
+ */
+function enrichOAuth2ConfigFromEnvVars(
+  authId: string,
+  config: OAuth2Config,
+  vars: Record<string, string>,
+): OAuth2Config {
+  const enriched = { ...config };
+  for (const field of PRIVATE_OVERRIDE_FIELDS) {
+    const current = enriched[field];
+    if (typeof current === "string" && current.length > 0) continue;
+    const fromVars = vars[`Security.Auth.${authId}.${field}`];
+    if (fromVars) {
+      enriched[field] = fromVars;
+    }
+  }
+  return enriched;
+}
+
+/**
+ * Load, substitute, and enrich one OAuth2 config entry.
+ */
+export function resolveOAuth2Config(
+  authId: string,
+  env: string,
+  startDir: string,
+  substitutionVars: Record<string, string>,
+): OAuth2Config | undefined {
+  const raw = loadOAuth2Configs(env, startDir).get(authId);
+  if (!raw) return undefined;
+  const substituted = substituteConfigValue(
+    raw,
+    substitutionVars,
+  ) as OAuth2Config;
+  return enrichOAuth2ConfigFromEnvVars(authId, substituted, substitutionVars);
+}
+
 /**
  * OAuth2 token manager. Handles token acquisition, refresh, and storage.
  */
@@ -58,15 +104,24 @@ export class OAuth2Manager {
   }
 
   private loadConfigs(): void {
-    this.configs = new Map(
-      Array.from(
-        loadOAuth2Configs(this.env, this.startDir),
-        ([authId, config]) => [
+    this.configs = new Map();
+    const rawConfigs = loadOAuth2Configs(this.env, this.startDir);
+    for (const authId of rawConfigs.keys()) {
+      const raw = rawConfigs.get(authId);
+      if (!raw) continue;
+      const substituted = substituteConfigValue(
+        raw,
+        this.substitutionVars,
+      ) as OAuth2Config;
+      this.configs.set(
+        authId,
+        enrichOAuth2ConfigFromEnvVars(
           authId,
-          substituteConfigValue(config, this.substitutionVars) as OAuth2Config,
-        ],
-      ),
-    );
+          substituted,
+          this.substitutionVars,
+        ),
+      );
+    }
   }
 
   private loadTokens(): void {

@@ -11,6 +11,7 @@ import {
   generatePKCE,
   generatePKCEPlain,
   isLocalhostRedirect,
+  parseRedirectInput,
   startRedirectServer,
 } from "./browser-flow";
 import type { OAuth2Config } from "./types";
@@ -303,6 +304,30 @@ test("OAuth2: PKCE generation", async () => {
   expect(pkcePlain.challenge).toBeDefined();
   expect(pkcePlain.method).toBe("Plain");
   expect(pkcePlain.challenge).toBe(pkcePlain.verifier); // Plain should be same
+});
+
+test("OAuth2: parseRedirectInput accepts bare authorization codes", () => {
+  expect(parseRedirectInput("abc123plain", "Authorization Code")).toEqual({
+    code: "abc123plain",
+  });
+  expect(parseRedirectInput("1.AXkAtestcode", "Authorization Code")).toEqual({
+    code: "1.AXkAtestcode",
+  });
+  expect(parseRedirectInput("M.R3_BAY.c0xxx==", "Authorization Code")).toEqual({
+    code: "M.R3_BAY.c0xxx==",
+  });
+  expect(parseRedirectInput("code=abc123", "Authorization Code")).toEqual({
+    code: "abc123",
+  });
+  expect(
+    parseRedirectInput(
+      "http://localhost:8081/?code=abc123",
+      "Authorization Code",
+    ),
+  ).toEqual({ code: "abc123" });
+  expect(
+    parseRedirectInput("localhost:8081/?code=abc123", "Authorization Code"),
+  ).toEqual({ code: "abc123" });
 });
 
 test("OAuth2: isLocalhostRedirect detects localhost URLs", () => {

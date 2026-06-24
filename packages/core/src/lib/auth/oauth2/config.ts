@@ -37,7 +37,11 @@ export function loadOAuth2Configs(
                 config !== null &&
                 (config as { Type?: unknown }).Type === "OAuth2"
               ) {
-                configs.set(authId, config as OAuth2Config);
+                const existing = configs.get(authId);
+                configs.set(authId, {
+                  ...existing,
+                  ...(config as OAuth2Config),
+                } as OAuth2Config);
               }
             }
           }
@@ -57,17 +61,19 @@ export function loadOAuth2Configs(
           const auth = (security as Record<string, unknown>).Auth;
           if (typeof auth === "object" && auth !== null) {
             for (const [authId, config] of Object.entries(auth)) {
-              if (
-                typeof config === "object" &&
-                config !== null &&
-                (config as { Type?: unknown }).Type === "OAuth2"
-              ) {
-                // Merge with existing config (private overrides)
-                const existing = configs.get(authId);
-                configs.set(authId, {
-                  ...existing,
-                  ...(config as OAuth2Config),
-                } as OAuth2Config);
+              if (typeof config === "object" && config !== null) {
+                const isOAuth2Entry =
+                  (config as { Type?: unknown }).Type === "OAuth2";
+                const hasExistingOAuth2 = configs.has(authId);
+                // Merge partial private overrides (e.g. Client Secret only) into
+                // the public OAuth2 config, or full private OAuth2 entries.
+                if (isOAuth2Entry || hasExistingOAuth2) {
+                  const existing = configs.get(authId);
+                  configs.set(authId, {
+                    ...existing,
+                    ...(config as OAuth2Config),
+                  } as OAuth2Config);
+                }
               }
             }
           }

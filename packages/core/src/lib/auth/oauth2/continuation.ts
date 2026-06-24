@@ -3,6 +3,8 @@ import { getPrompt, deletePrompt } from "../../persistence";
 import { exchangeAuthorizationCode } from "./acquisition";
 import { parseRedirectInput } from "./browser-flow";
 import { saveOAuth2AuthData } from "./config";
+import { resolveOAuth2Config } from "./manager";
+import { loadEnvVars } from "../../variables/env-files";
 
 /**
  * Continue OAuth2 flow from a prompt.
@@ -27,10 +29,13 @@ export async function continueOAuth2Flow(
   }
 
   const context = prompt.context;
-  const config = context.config as OAuth2Config;
   const authId = context.authId as string;
   const env = context.env as string;
   const startDir = context.startDir as string;
+  const envVars = loadEnvVars(env, startDir);
+  const config =
+    resolveOAuth2Config(authId, env, startDir, envVars) ??
+    (context.config as OAuth2Config);
   const grantType = config["Grant Type"];
 
   // Convert array of inputs to a map for easier lookup
