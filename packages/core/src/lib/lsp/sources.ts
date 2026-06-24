@@ -250,6 +250,12 @@ export function staticCompletionItems(sourceName: string): LspCompletionItem[] {
       documentation: "Re-run the current request",
     },
     {
+      label: "$kulala.runRequest",
+      insertText:
+        'await $kulala.runRequest(${1:"BlockName"}, ${2:"./other.http"})$0',
+      documentation: "Run a named HTTP request and return its response",
+    },
+    {
       label: "$kulala.client.global.headers.set",
       insertText:
         '$kulala.client.global.headers.set(${1:"headerName"}, ${2:"headerValue"})$0',

@@ -49,7 +49,11 @@ import {
   responseBodyDisplayText,
   type KulalaResponseFormatOptions,
 } from "./http-response-body";
-import { runScripts, type ScriptFlowContext } from "./scripts";
+import {
+  runScripts,
+  type ScriptFlowContext,
+  type ScriptRunScope,
+} from "./scripts";
 import {
   isSharedBlockName,
   isSharedEachBlockName,
@@ -136,6 +140,8 @@ export type DoRequestFromBlockOptions = {
   responseFormat?: KulalaResponseFormatOptions;
   /** Optional jq filter override (block `# @kulala-jq` still wins). */
   jqFilter?: string;
+  /** Nested `$kulala.runRequest()` call stack for recursion detection. */
+  runRequestStack?: string[];
 };
 
 /** `### KULALA_SHARED` pre/post scripts wrap each request in the file. */
@@ -160,6 +166,8 @@ async function runSharedScriptsForPhase(
     responseUrl?: string;
     responseHeaders?: Record<string, string>;
     stableDocId: string;
+    doc?: KulalaDocument;
+    runRequestStack?: string[];
   },
 ): Promise<void> {
   for (const shared of opts.flow?.sharedBlocks ?? []) {
@@ -194,7 +202,13 @@ async function runSharedScriptsForPhase(
       opts.flow,
       opts.scriptConsole,
       ctx,
-      { stableDocId: opts.stableDocId },
+      {
+        stableDocId: opts.stableDocId,
+        doc: opts.doc,
+        env: opts.env,
+        resolver: opts.resolver,
+        runRequestStack: opts.runRequestStack,
+      },
     );
   }
 }
@@ -351,6 +365,13 @@ export async function doRequestFromBlock(
   };
 
   const stableDocId = stableDocIdForReplay ?? filePath ?? "";
+  const scriptRunScope: ScriptRunScope = {
+    stableDocId,
+    doc: iterationOptions?.doc,
+    env,
+    resolver,
+    runRequestStack: iterationOptions?.runRequestStack ?? [],
+  };
   const effectiveOperators = getEffectiveOperators(
     iterationOptions?.doc,
     block,
@@ -457,6 +478,8 @@ export async function doRequestFromBlock(
             collectionPlan: iterationOptions?.collectionPlan,
             scriptConsole,
             stableDocId,
+            doc: iterationOptions?.doc,
+            runRequestStack: scriptRunScope.runRequestStack,
           });
 
           await runSharedBlockHttpRequests({
@@ -495,7 +518,7 @@ export async function doRequestFromBlock(
           flow,
           scriptConsole,
           preScriptRequestCtx,
-          { stableDocId },
+          scriptRunScope,
         );
 
         // When running a single expanded collection request, force the per-iteration
@@ -624,6 +647,10 @@ export async function doRequestFromBlock(
       headerStr.includes("$auth.") ||
       bodyStr.includes("$auth.") ||
       (graphqlRawText?.includes("$auth.") ?? false);
+    const shouldSubstituteRequestFields =
+      needsAsyncSubstitution ||
+      Object.keys(mutableVars).length > 0 ||
+      resolver !== undefined;
 
     let url: string;
     try {
@@ -684,7 +711,7 @@ export async function doRequestFromBlock(
         if (!explicitLc.has(k.toLowerCase())) headers[k] = v;
       }
     }
-    if (needsAsyncSubstitution || Object.keys(mutableVars).length > 0) {
+    if (shouldSubstituteRequestFields) {
       try {
         const substitutedHeaders: Record<string, string> = {};
         for (const [k, v] of Object.entries(headers)) {
@@ -1163,7 +1190,7 @@ export async function doRequestFromBlock(
           flow,
           scriptConsole,
           postScriptRequestCtx,
-          { stableDocId },
+          scriptRunScope,
         );
 
         if (!iterationOptions?.skipSharedHooks) {
@@ -1186,6 +1213,8 @@ export async function doRequestFromBlock(
             responseUrl: url,
             responseHeaders: res.headers,
             stableDocId,
+            doc: iterationOptions?.doc,
+            runRequestStack: scriptRunScope.runRequestStack,
           });
         }
       } catch (error) {

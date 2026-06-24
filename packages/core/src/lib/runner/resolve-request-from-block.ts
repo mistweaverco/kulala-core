@@ -44,7 +44,11 @@ import {
   detectCollectionIterationPlan,
   varsForCollectionIndex,
 } from "./collection-iteration";
-import { runScripts, type ScriptFlowContext } from "./scripts";
+import {
+  runScripts,
+  type ScriptFlowContext,
+  type ScriptRunScope,
+} from "./scripts";
 import { buildScriptRequestContextFromBlock } from "./script-request-context";
 import {
   applyDefaultHeaders,
@@ -129,6 +133,13 @@ export async function resolveRequestFromBlock(
     ? (await import("path")).dirname(filePath)
     : process.cwd();
   const stableDocId = filePath ?? "";
+  const scriptRunScope: ScriptRunScope = {
+    stableDocId,
+    doc,
+    env,
+    resolver,
+    runRequestStack: [],
+  };
   const mutableVars = { ...(vars ?? {}) };
   const effectiveOperators = getEffectiveOperators(doc, block);
   const extraCurlArgv = getEffectiveCurlArgv(doc, block, env, startDir);
@@ -193,7 +204,7 @@ export async function resolveRequestFromBlock(
         flow,
         scriptConsole,
         preScriptRequestCtx,
-        { stableDocId },
+        scriptRunScope,
       );
     } catch (error) {
       if (error instanceof ScriptPromptError) {

@@ -7,6 +7,10 @@ import {
 import { getVariable, setVariable } from "../persistence";
 import { ScriptPromptError } from "./script-prompt-error";
 import { ScriptReplayError, ScriptSkipError } from "./script-control-error";
+import type { ScriptFlowContext } from "./scripts";
+import type { ScriptResponse } from "./script-response";
+import type { VariableResolver } from "./types";
+import type { KulalaDocument } from "../parser/types";
 
 export type KulalaPromptOptions = {
   type?: KulalaPromptInputType;
@@ -72,6 +76,11 @@ export type KulalaScriptApi = {
       };
     };
   };
+  /**
+   * Run another named HTTP request and return its response (Bruno-style request chaining).
+   * Lookup uses `###` block names; optional `filePath` loads an external `.http` file.
+   */
+  runRequest: (name: string, filePath?: string) => Promise<ScriptResponse>;
 };
 
 export function buildKulalaScriptApi(ctx: {
@@ -79,6 +88,12 @@ export function buildKulalaScriptApi(ctx: {
   blockName: string;
   mutableVars: Record<string, string>;
   phase: "preRequest" | "postRequest";
+  doc?: KulalaDocument;
+  filePath?: string;
+  flow?: ScriptFlowContext;
+  env?: string;
+  resolver?: VariableResolver;
+  runRequestStack?: string[];
 }): KulalaScriptApi {
   return {
     prompt(label: string, varName: string, opts?: KulalaPromptOptions) {
@@ -183,6 +198,35 @@ export function buildKulalaScriptApi(ctx: {
           },
         },
       },
+    },
+    runRequest(name: string, filePath?: string) {
+      if (typeof name !== "string" || name.trim().length === 0) {
+        throw new Error("$kulala.runRequest: name must be a non-empty string");
+      }
+      if (
+        filePath !== undefined &&
+        (typeof filePath !== "string" || filePath.trim().length === 0)
+      ) {
+        throw new Error(
+          "$kulala.runRequest: filePath must be a non-empty string when provided",
+        );
+      }
+      return import("./run-request-from-script").then((mod) =>
+        mod.runRequestFromScript(
+          {
+            doc: ctx.doc,
+            filePath: ctx.filePath,
+            mutableVars: ctx.mutableVars,
+            flow: ctx.flow,
+            env: ctx.env ?? "default",
+            resolver: ctx.resolver,
+            stableDocId: ctx.stableDocId,
+            runRequestStack: ctx.runRequestStack ?? [],
+          },
+          name.trim(),
+          filePath?.trim(),
+        ),
+      );
     },
   };
 }
