@@ -7,3 +7,12 @@
 GET https://echo.kulala.app/get HTTP/1.1
 Accept: application/json
 Authorization: Bearer {{ $auth.token("default-mock-name") }}
+
+> {%
+  const token = response.body.headers.authorization;
+  const split = token.split(" ");
+  const tokenType = split[0];
+  const accessToken = split[1];
+  const decoded = JSON.parse(atob(accessToken));
+  client.log(`${tokenType} decoded value is`, JSON.stringify(decoded, null, 2));
+%}
