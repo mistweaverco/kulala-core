@@ -77,7 +77,7 @@ Discussions about the Kulala take place on:
 
 - This repository's [Issues](https://github.com/mistweaverco/kulala-core/issues) and
   [Pull Requests](https://github.com/mistweaverco/kulala-core/pulls) sections
-- The [Kulala Discord server](https://discord.gg/QyVQmfY4Rt)
+- The [mistweaverco Discord server](https://mistweaverco.com/discord)
 
 Anybody is welcome to join these conversations.
 
