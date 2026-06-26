@@ -1,0 +1,21 @@
+### get-users
+
+POST https://echo.kulala.app/post HTTP/1.1
+Accept: application/json
+Authorization: Bearer {{ request-chaining-token }}
+Content-Type: application/json
+
+{
+  "data": [
+    {
+      "id": 1,
+      "name": "Alice",
+      "age": 30
+    },
+    {
+      "id": 2,
+      "name": "Bob",
+      "age": 25
+    }
+  ]
+}

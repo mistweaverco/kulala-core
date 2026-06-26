@@ -1,23 +1,16 @@
-### channing-tatum-one
+### update-user
 
-POST https://echo.kulala.app HTTP/1.1
+< ./request-chaining.http.js
+
+POST https://echo.kulala.app/post HTTP/1.1
 Accept: application/json
+Authorization: Bearer {{ request-chaining-token }}
 Content-Type: application/json
 
 {
-  "name": "Channing Tatum",
-  "age": 42,
-  "occupation": "Actor"
-}
-
-### channing-tatum-two
-
-POST https://echo.kulala.app HTTP/1.1
-Accept: application/json
-Content-Type: application/json
-
-{
-  "name": "Channing Tatum",
-  "age": 42,
-  "occupation": "Actor"
+  "userId": {{ request-chaining-users-userId }},
+  "data": {
+    "name": "Charlie",
+    "age": 31
+  }
 }
