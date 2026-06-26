@@ -1,9 +1,0 @@
-### Login
-POST https://httpbin.org/post HTTP/1.1
-Content-Type: application/json
-
-{
-  "username": "demo",
-  "password": "demo123",
-  "access_token": "demo-access-token-from-login"
-}
