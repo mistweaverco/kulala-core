@@ -36,6 +36,7 @@
     "fast-xml-parser": "5.8.0",
     "form-data-encoder": "4.1.0",
     "grpc-reflection-js": "0.3.0",
+    "open": "11.0.0",
     "picocolors": "1.1.1",
     "prettier": "3.8.3",
     "typescript-eslint": "8.44.1",

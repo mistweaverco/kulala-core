@@ -1,4 +1,5 @@
 import { spawn } from "child_process";
+import open from "open";
 import {
   applyOAuth2CustomRequestParameters,
   pkceMethodQueryValue,
@@ -54,24 +55,7 @@ export async function openBrowser(
     const [cmd, ...args] = browserCmd.split(" ");
     spawn(cmd, [...args, url], { detached: true, stdio: "ignore" });
   } else {
-    // Use system default browser
-    const platform = process.platform;
-    let command: string;
-    let args: string[];
-
-    if (platform === "darwin") {
-      command = "open";
-      args = [url];
-    } else if (platform === "win32") {
-      command = "cmd";
-      args = ["/c", "start", "", url];
-    } else {
-      // Linux and others
-      command = "xdg-open";
-      args = [url];
-    }
-
-    spawn(command, args, { detached: true, stdio: "ignore" });
+    await open(url);
   }
 }
 
