@@ -359,7 +359,7 @@ export async function curlHttpRequest(
       args.push("--data-binary", `@${uploadPath}`);
     }
 
-    args.push(currentUrl);
+    args.push(decodeURI(encodeURI(currentUrl)));
 
     try {
       const { stdout, stderr, exitCode } = await runCurl(args);
