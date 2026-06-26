@@ -22,6 +22,24 @@ describe("curl parse", () => {
     expect(p?.url).toBe("https://echo.kulala.app/post");
   });
 
+  test("parses -u into Basic Authorization header", () => {
+    const p = parseCurlCommand("curl -u alice:secret 'http://example.com/get'");
+    expect(p?.headers["authorization"]).toBe("Basic alice:secret");
+    expect(p?.url).toBe("http://example.com/get");
+  });
+
+  test("parses --user into Basic Authorization header", () => {
+    const p = parseCurlCommand(
+      "curl --user alice:secret 'http://example.com/get'",
+    );
+    expect(p?.headers["authorization"]).toBe("Basic alice:secret");
+  });
+
+  test("parses -u without password into Basic header with trailing colon", () => {
+    const p = parseCurlCommand("curl -u alice 'http://example.com/get'");
+    expect(p?.headers["authorization"]).toBe("Basic alice:");
+  });
+
   test("parseCurlToHttpSpec returns http spec", () => {
     const r = parseCurlToHttpSpec("curl -X GET 'http://example.com' --http1.1");
     expect(r?.spec.method).toBe("GET");
