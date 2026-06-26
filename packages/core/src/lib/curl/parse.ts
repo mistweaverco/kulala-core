@@ -60,6 +60,7 @@ export function parseCurlCommand(curl: string): CurlParsedRequest | null {
   const uaFlags = new Set(["-A", "--user-agent"]);
   const cookieFlags = new Set(["-b", "--cookie"]);
   const headerFlags = new Set(["-H", "--header"]);
+  const userFlags = new Set(["-u", "--user"]);
   const bodyFlags = new Set([
     "-d",
     "--data",
@@ -99,6 +100,9 @@ export function parseCurlCommand(curl: string): CurlParsedRequest | null {
       cmd.body.push(part);
     } else if (flag && cookieFlags.has(flag)) {
       cmd.cookie = part;
+    } else if (flag && userFlags.has(flag)) {
+      const credentials = part.includes(":") ? part : `${part}:`;
+      setHeader(cmd.headers, "authorization", `Basic ${credentials}`);
     } else if (flag && methodFlags.has(flag)) {
       cmd.method = part.toUpperCase();
     } else if (flag) {
