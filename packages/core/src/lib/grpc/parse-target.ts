@@ -2,7 +2,7 @@ import type { KulalaGrpcCommand, KulalaGrpcFlag } from "./types";
 
 /**
  * Parse the request target after `GRPC` (grpcurl-compatible tokenization).
- * @see https://neovim.getkulala.net/docs/usage/grpc
+ * @see https://kulala.app/usage/grpc
  */
 export function parseGrpcTarget(target: string): KulalaGrpcCommand {
   const cmd: KulalaGrpcCommand = { inlineFlags: [] };

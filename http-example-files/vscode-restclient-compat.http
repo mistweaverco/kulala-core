@@ -2,7 +2,7 @@
 
 ### REQUEST_ONE
 
-POST https://echo.getkulala.net/post HTTP/1.1
+POST https://echo.kulala.app/post HTTP/1.1
 Accept: application/json
 Content-Type: application/json
 
@@ -12,7 +12,7 @@ Content-Type: application/json
 
 ### REQUEST_TWO
 
-POST https://echo.getkulala.net/post HTTP/1.1
+POST https://echo.kulala.app/post HTTP/1.1
 Accept: application/json
 Content-Type: application/json
 
@@ -22,7 +22,7 @@ Content-Type: application/json
 
 ### REQUEST_THREE
 
-POST https://echo.getkulala.net/post HTTP/1.1
+POST https://echo.kulala.app/post HTTP/1.1
 Accept: application/json
 Content-Type: application/json
 

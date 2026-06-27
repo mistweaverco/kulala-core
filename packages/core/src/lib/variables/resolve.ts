@@ -19,8 +19,8 @@ export type HttpFileVariableSources = {
  * Order (later overrides earlier): @-lines from .http (file header + block preamble) →
  * system/env files (http-client.env.json, .env) → persistence (global → document → request) →
  * magic variables ($uuid, $timestamp, etc.).
- * See https://neovim.getkulala.net/docs/usage/magic-variables and
- * https://neovim.getkulala.net/docs/usage/dotenv-and-http-client.env.json-support
+ * See https://kulala.app/usage/magic-variables and
+ * https://kulala.app/usage/environments
  */
 export async function resolveVariables(
   env: string,

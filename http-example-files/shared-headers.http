@@ -17,12 +17,12 @@
 # we set the header "X-Kulala" with the value "Family" for all requests in
 # the file using $kulala.client.global.headers.set().
 
-GET https://echo.getkulala.net/get HTTP/1.1
+GET https://echo.kulala.app/get HTTP/1.1
 
 ### Second
 
-GET https://echo.getkulala.net/get HTTP/1.1
+GET https://echo.kulala.app/get HTTP/1.1
 
 ### Third
 
-GET https://echo.getkulala.net/get HTTP/1.1
+GET https://echo.kulala.app/get HTTP/1.1

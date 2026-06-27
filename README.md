@@ -14,7 +14,7 @@
 Kulala is swahili for "rest" or "relax."
 
 A straightforwarded, powerful, and extendable HTTP client library.
-It powers the [Kulala toolchain](https://getkulala.net),
+It powers the [Kulala toolchain](https://kulala.app),
 and can be used as a standalone library.
 
 <p></p>

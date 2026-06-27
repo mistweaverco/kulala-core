@@ -1,6 +1,6 @@
 /**
  * Request variable resolution: {{REQUEST_NAME.response.body.$.path}} and {{REQUEST_NAME.response.headers.HeaderName}}.
- * See https://neovim.getkulala.net/docs/usage/request-variables
+ * See https://kulala.app/usage/variables
  */
 
 import { evaluateJsonPath, formatJsonPathResults } from "./jsonpath";

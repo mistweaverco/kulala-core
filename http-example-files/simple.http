@@ -71,7 +71,7 @@ X-Custom-Header: Kulala-Named-Request
 
 ### NAMED_REQUEST
 
-GET https://echo.getkulala.net/get HTTP/1.1
+GET https://echo.kulala.app/get HTTP/1.1
 X-Custom-Header: Kulala-Named-Request
 
 ### NAMED_REQUEST_INSECURE
