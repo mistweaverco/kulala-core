@@ -37,6 +37,30 @@ test("createRequestVarContext loads persisted named request responses", () => {
   );
 });
 
+test("createRequestVarContext resolves JSONPath array index on response body", () => {
+  const stableDocId = "/tmp/vscode-compat.http";
+  saveRequestVarResult(stableDocId, "REQUEST_ONE", {
+    body: {
+      type: "json",
+      content: { json: { token: ["saved-earlier"] } },
+    },
+    headers: {},
+  });
+
+  const doc: KulalaDocument = {
+    filepath: stableDocId,
+    directives: [],
+    blocks: [],
+    vscodeRestclientCompat: true,
+  };
+  const block = { name: "REQUEST_TWO" } as KulalaBlock;
+
+  const { resolver } = createRequestVarContext(doc, block, stableDocId);
+  expect(resolver!("REQUEST_ONE.response.body.$.json.token[0]")).toBe(
+    "saved-earlier",
+  );
+});
+
 test("createRequestVarContext returns no resolver without compat operator", () => {
   const doc: KulalaDocument = { directives: [], blocks: [] };
   const block = { name: "A" } as KulalaBlock;

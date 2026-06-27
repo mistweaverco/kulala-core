@@ -3,6 +3,8 @@
  * See https://neovim.getkulala.net/docs/usage/request-variables
  */
 
+import { evaluateJsonPath, formatJsonPathResults } from "./jsonpath";
+
 export type PreviousResponse = {
   body:
     | { type: "text"; content: string; mediaType?: string }
@@ -11,17 +13,18 @@ export type PreviousResponse = {
 };
 
 /**
- * Get a value from an object by dot path (e.g. "token" from { token: "x" }).
+ * Resolve a JetBrains-style JSONPath on a response body (supports [n], [*], .['key'], etc.).
  */
-function getByPath(obj: unknown, path: string): unknown {
-  if (path === "" || path === "$") return obj;
-  const parts = path.replace(/^\$\.?/, "").split(".");
-  let current: unknown = obj;
-  for (const p of parts) {
-    if (current == null || typeof current !== "object") return undefined;
-    current = (current as Record<string, unknown>)[p];
-  }
-  return current;
+function resolveBodyJsonPath(
+  content: unknown,
+  path: string,
+): string | undefined {
+  if (path === "" || path === "$") return formatResolvedValue(content);
+  const suffix = path.replace(/^\$\.?/, "");
+  if (suffix === "") return formatResolvedValue(content);
+  const jsonPath =
+    suffix.startsWith(".") || suffix.startsWith("[") ? suffix : `.${suffix}`;
+  return formatJsonPathResults(evaluateJsonPath(content, jsonPath));
 }
 
 type ParsedRequestVarRef = {
@@ -111,10 +114,12 @@ export function resolveRequestVariable(
     const body = result.body;
     const content =
       body.type === "json" ? body.content : (body.content as unknown);
-    const value = pathPart.startsWith("$")
-      ? getByPath(content, pathPart)
-      : getByPath(content, pathPart ? "$." + pathPart : "$");
-    return formatResolvedValue(value);
+    const jsonPath = pathPart
+      ? pathPart.startsWith("$")
+        ? pathPart
+        : `$.${pathPart}`
+      : "$";
+    return resolveBodyJsonPath(content, jsonPath);
   }
   if (parsed.part === "headers" && parsed.headerName) {
     return resolveHeaderValue(result.headers, parsed.headerName);
