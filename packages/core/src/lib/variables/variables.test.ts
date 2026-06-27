@@ -241,6 +241,51 @@ test("resolveRequestVariable resolves nested JSONPath ($.json.token)", () => {
   ).toBe("foobar");
 });
 
+test("resolveRequestVariable resolves JSONPath array index ($.json.token[0])", () => {
+  const map = new Map([
+    [
+      "REQUEST_ONE",
+      {
+        body: {
+          type: "json" as const,
+          content: { json: { token: ["foobar"] } },
+        },
+        headers: {},
+      },
+    ],
+  ]);
+  expect(
+    resolveRequestVariable("REQUEST_ONE.response.body.$.json.token[0]", map),
+  ).toBe("foobar");
+});
+
+test("resolveRequestVariable resolves nested JSONPath with array index", () => {
+  const map = new Map([
+    [
+      "REQUEST_ONE",
+      {
+        body: {
+          type: "json" as const,
+          content: {
+            json: {
+              deep: {
+                nested: [{ key: "first" }, { key: "second" }],
+              },
+            },
+          },
+        },
+        headers: {},
+      },
+    ],
+  ]);
+  expect(
+    resolveRequestVariable(
+      "REQUEST_ONE.response.body.$.json.deep.nested[1].key",
+      map,
+    ),
+  ).toBe("second");
+});
+
 test("isRequestVariableKey detects request variable references", () => {
   expect(isRequestVariableKey("LOGIN.response.body.$.token")).toBe(true);
   expect(isRequestVariableKey("REQ.response.headers['Date']")).toBe(true);
