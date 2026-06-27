@@ -111,7 +111,7 @@ export const getBody = async (
   }
 
   // GraphQL requests: query as plain text, optional variables JSON after blank line
-  // Format per https://neovim.getkulala.net/docs/usage/graphql
+  // Format per https://kulala.app/usage/graphql
   if (method === "GRAPHQL") {
     return {
       type: "graphql",
