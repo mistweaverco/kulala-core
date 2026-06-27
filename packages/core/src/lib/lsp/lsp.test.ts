@@ -14,6 +14,7 @@ import {
   lspDiagnostics,
   lspDocumentSymbols,
   lspHover,
+  lspInlayHints,
 } from "./index";
 
 beforeEach(() => {
@@ -463,4 +464,49 @@ GET {{bas
   const labels = res.items.map((i) => i.label);
   expect(labels).toContain("baseUrl");
   expect(labels).not.toContain("token");
+});
+
+test("lspInlayHints shows resolved variable values after template refs", async () => {
+  const content = `@baseUrl=https://example.com
+
+### One
+GET {{baseUrl}}/ping HTTP/1.1
+`;
+  const hints = await lspInlayHints({
+    content,
+    filepath: "/tmp/inlay.http",
+    env: "default",
+  });
+  expect(hints).toHaveLength(1);
+  expect(hints[0]!.label).toBe(": https://example.com");
+  expect(hints[0]!.position).toEqual({ line: 3, character: 15 });
+});
+
+test("lspInlayHints omits unresolved variables", async () => {
+  const content = `GET https://example.com/{{UNKNOWN}} HTTP/1.1`;
+  const hints = await lspInlayHints({
+    content,
+    filepath: "/tmp/inlay-unknown.http",
+    env: "default",
+  });
+  expect(hints).toHaveLength(0);
+});
+
+test("lspInlayHints respects requested range", async () => {
+  const content = `@a=1
+GET {{a}}/one HTTP/1.1
+
+GET {{a}}/two HTTP/1.1
+`;
+  const hints = await lspInlayHints({
+    content,
+    filepath: "/tmp/inlay-range.http",
+    env: "default",
+    range: {
+      start: { line: 1, character: 0 },
+      end: { line: 2, character: 0 },
+    },
+  });
+  expect(hints).toHaveLength(1);
+  expect(hints[0]!.position.line).toBe(1);
 });

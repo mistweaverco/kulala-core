@@ -16,6 +16,7 @@ import {
   structuralCompletionSources,
   templateVarPrefix,
 } from "./completion-context";
+import { lspInlayHints } from "./inlay-hints";
 import { lspVariableHover } from "./variable-hover";
 import { staticCompletionItems } from "./sources";
 import {
@@ -32,6 +33,7 @@ import {
 } from "./types";
 
 export * from "./types";
+export { lspInlayHints } from "./inlay-hints";
 
 function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
