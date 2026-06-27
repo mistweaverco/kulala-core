@@ -1,3 +1,4 @@
+import { encodeRequestUrl } from "./encode-url";
 import { httpRequest } from "./http-client";
 import { grpcNativeRequest } from "../grpc";
 import { grpcFlagsFromOperators } from "../grpc/collect-flags";
@@ -734,6 +735,9 @@ export async function doRequestFromBlock(
     }
     headers = normalizeAuthorizationHeader(headers);
     ({ headers, url } = resolveUrlFromHostHeader({ headers, url }));
+    if (!hasOp(["no-auto-encoding"])) {
+      url = encodeRequestUrl(url, block.request.method);
+    }
 
     let body: typeof block.request.body;
     try {

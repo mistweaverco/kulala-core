@@ -388,6 +388,22 @@ GET https://example.com HTTP/1.1
   expect(labels.has("kulala-curl--")).toBe(true);
 });
 
+test("lspCompletion suggests no-auto-encoding in # @ comments", async () => {
+  const content = `# @no-auto
+GET https://example.com HTTP/1.1
+`;
+  const res = await lspCompletion({
+    content,
+    filepath: "/tmp/no-auto-encoding.http",
+    env: "default",
+    line: 1,
+    column: 11,
+    filetype: "http",
+  });
+  const labels = new Set(res.items.map((i) => i.label));
+  expect(labels.has("no-auto-encoding")).toBe(true);
+});
+
 test('lspCompletion suggests variable keys in request.variables.get("...")', async () => {
   setVariable("global", "X_GLOBAL", "abc");
   const content = `### One

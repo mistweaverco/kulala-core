@@ -1,3 +1,4 @@
+import { encodeRequestUrl } from "./encode-url";
 import type { KulalaDocument } from "../parser/types";
 import type { KulalaBlock } from "../parser/types/block";
 import {
@@ -328,6 +329,9 @@ export async function resolveRequestFromBlock(
   }
   headers = normalizeAuthorizationHeader(headers);
   ({ headers, url } = resolveUrlFromHostHeader({ headers, url }));
+  if (!hasOp(["no-auto-encoding"])) {
+    url = encodeRequestUrl(url, block.request.method);
+  }
 
   let body: typeof block.request.body;
   try {

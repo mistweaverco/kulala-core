@@ -111,6 +111,12 @@ export function staticCompletionItems(sourceName: string): LspCompletionItem[] {
       insertText: "kulala-curl--",
       documentation: "Curl flag",
     },
+    {
+      label: "no-auto-encoding",
+      insertText: "no-auto-encoding",
+      documentation:
+        "Send URL query parameters and form-urlencoded body without percent-encoding",
+    },
   ];
 
   const grpc: SourceItem[] = [

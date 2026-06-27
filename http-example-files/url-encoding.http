@@ -1,0 +1,13 @@
+### default-encoding
+
+GET https://echo.kulala.app/get?name=John Doe
+  &age=30 HTTP/1.1
+Accept: application/json
+
+### no-encoding
+
+# @no-auto-encoding
+
+GET https://echo.kulala.app/get?name=John+Doe
+  &age=30 HTTP/1.1
+Accept: application/json
