@@ -129,3 +129,12 @@ export type LspDiagnostic = {
   source?: string;
   message: string;
 };
+
+export type LspInlayHint = {
+  position: LspPosition;
+  label: string;
+  kind?: 1 | 2;
+  paddingLeft?: boolean;
+  paddingRight?: boolean;
+  tooltip?: LspMarkupContent;
+};

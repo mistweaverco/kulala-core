@@ -34,6 +34,7 @@ import {
   lspDiagnostics,
   lspDocumentSymbols,
   lspHover,
+  lspInlayHints,
 } from "../lsp";
 import { clearGraphQLSchemaCache, introspectGraphQLAtCursor } from "../graphql";
 import {
@@ -427,6 +428,16 @@ const kulalaParser: KulalaParser = {
         const result = await lspDiagnostics({
           content: stdIn.content,
           filepath: stdIn.filepath,
+        });
+        writeToStdout(result);
+        break;
+      }
+      case "lsp_inlay_hints": {
+        const result = await lspInlayHints({
+          content: stdIn.content,
+          filepath: stdIn.filepath,
+          env: stdIn.env ?? "default",
+          range: stdIn.range,
         });
         writeToStdout(result);
         break;

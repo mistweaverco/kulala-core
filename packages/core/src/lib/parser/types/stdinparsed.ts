@@ -219,6 +219,17 @@ export type KulalaStdinActionLspDiagnostics = {
   filepath?: string;
 };
 
+export type KulalaStdinActionLspInlayHints = {
+  action: "lsp_inlay_hints";
+  content: string;
+  filepath?: string;
+  env?: string;
+  range?: {
+    start: { line: number; character: number };
+    end: { line: number; character: number };
+  };
+};
+
 export type KulalaStdinParsed =
   | KulalaStdinActionParse
   | KulalaStdinActionFormat
@@ -239,4 +250,5 @@ export type KulalaStdinParsed =
   | KulalaStdinActionLspCompletion
   | KulalaStdinActionLspHover
   | KulalaStdinActionLspDocumentSymbols
-  | KulalaStdinActionLspDiagnostics;
+  | KulalaStdinActionLspDiagnostics
+  | KulalaStdinActionLspInlayHints;

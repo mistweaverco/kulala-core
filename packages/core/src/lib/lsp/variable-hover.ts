@@ -38,7 +38,15 @@ export function variableReferenceAtCursor(
   return null;
 }
 
-async function resolveVariableHoverValue(
+export function formatVariablePreview(value: unknown): string {
+  if (value == null) return "";
+  const text = typeof value === "string" ? value : JSON.stringify(value);
+  const oneLine = text.replace(/\s+/g, " ").trim();
+  if (oneLine.length <= 120) return oneLine;
+  return `${oneLine.slice(0, 119)}…`;
+}
+
+export async function resolveVariableValue(
   varName: string,
   doc: KulalaDocument,
   content: string,
@@ -99,7 +107,7 @@ export async function lspVariableHover(input: {
     column: input.column,
   });
 
-  const value = await resolveVariableHoverValue(
+  const value = await resolveVariableValue(
     varName,
     doc,
     input.content,
