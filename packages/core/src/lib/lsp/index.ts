@@ -16,7 +16,6 @@ import {
   structuralCompletionSources,
   templateVarPrefix,
 } from "./completion-context";
-import { lspInlayHints } from "./inlay-hints";
 import { lspVariableHover } from "./variable-hover";
 import { staticCompletionItems } from "./sources";
 import {

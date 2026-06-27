@@ -29,6 +29,11 @@ const websocketExamplePath = join(
   "../../../../../http-example-files/websocket.http",
 );
 
+const operatorsExamplePath = join(
+  import.meta.dir,
+  "../../../../../http-example-files/operators.http",
+);
+
 const graphqlContent = `### GQL_TEST
 
 GRAPHQL https://example.com/graphql HTTP/1.1
@@ -427,6 +432,62 @@ Authorization: Bearer {{$auth.token("preview-auth")}}
     expect(tokenRequests).toBe(0);
     expect(existsSync(join(testDir, "http-client.private.env.json"))).toBe(
       false,
+    );
+  });
+
+  test("encodes query parameters in URL by default", async () => {
+    const content = `### ENCODE_QUERY
+
+GET https://example.com/get?
+  name=@#$somebody&
+  qwerty=%40%23%24
+  HTTP/1.1
+
+`;
+    const httpFile = join(import.meta.dir, "encode-query-default.http");
+    writeFileSync(httpFile, content);
+    const doc = await getDocument(content, httpFile);
+    const block = doc.blocks[0];
+    expect(block).toBeDefined();
+
+    const result = await resolveRequestFromBlock(
+      block!,
+      httpFile,
+      {},
+      undefined,
+      "default",
+    );
+    unlinkSync(httpFile);
+
+    expect(result).toMatchObject({ ok: true });
+    if (!("ok" in result) || !result.ok) return;
+    if (result.request.kind !== "http") return;
+
+    expect(result.request.url).toBe(
+      "https://example.com/get?name=%40%23%24somebody&qwerty=%40%23%24",
+    );
+  });
+
+  test("operators.http NO_AUTO_ENCODING_REQUEST preserves URL without encoding", async () => {
+    const content = readFileSync(operatorsExamplePath, "utf8");
+    const doc = await getDocument(content, operatorsExamplePath);
+    const block = doc.blocks.find((b) => b.name === "NO_AUTO_ENCODING_REQUEST");
+    expect(block).toBeDefined();
+
+    const result = await resolveRequestFromBlock(
+      block!,
+      operatorsExamplePath,
+      block!.preambleVariables,
+      undefined,
+      "default",
+    );
+
+    expect(result).toMatchObject({ ok: true });
+    if (!("ok" in result) || !result.ok) return;
+    if (result.request.kind !== "http") return;
+
+    expect(result.request.url).toBe(
+      "https://echo.kulala.app/get?name=@#$somebody&qwerty=%40%23%24",
     );
   });
 });

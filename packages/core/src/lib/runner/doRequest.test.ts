@@ -857,6 +857,87 @@ test("doRequestFromBlock: // @no-auto-encoding sends form-urlencoded body withou
   }
 });
 
+test("doRequestFromBlock: encodes query parameters in URL by default", async () => {
+  const urlServer = Bun.serve({
+    port: 0,
+    fetch(req) {
+      return Response.json({ url: req.url });
+    },
+  });
+  if (urlServer.port === undefined) {
+    throw new Error("URL server did not expose a listening port");
+  }
+  const base = `http://localhost:${urlServer.port}`;
+
+  const block = makeBlock({
+    request: {
+      method: "GET",
+      url: `${base}/get?name=@#$somebody&qwerty=%40%23%24` as KulalaHttpURL,
+      headerSection: [],
+    },
+  });
+
+  const result = await httpDoRequestFromBlock(
+    block,
+    "/tmp/example.http",
+    undefined,
+    "stable-doc",
+    undefined,
+    "default",
+    { globalHeaders: {} },
+  );
+  urlServer.stop();
+
+  expect(result.success).toBe(true);
+  if (result.success && result.body.type === "json") {
+    const sentUrl = String(result.body.content.url ?? "");
+    expect(sentUrl).toContain("name=%40%23%24somebody");
+    expect(sentUrl).toContain("qwerty=%40%23%24");
+    expect(sentUrl).not.toContain("name=@");
+  }
+});
+
+test("doRequestFromBlock: // @no-auto-encoding leaves URL query parameters unencoded", async () => {
+  const urlServer = Bun.serve({
+    port: 0,
+    fetch(req) {
+      return Response.json({ url: req.url });
+    },
+  });
+  if (urlServer.port === undefined) {
+    throw new Error("URL server did not expose a listening port");
+  }
+  const base = `http://localhost:${urlServer.port}`;
+
+  const block = makeBlock({
+    operators: [testOperator("no-auto-encoding")],
+    request: {
+      method: "GET",
+      url: `${base}/get?name=@$somebody&status=ok` as KulalaHttpURL,
+      headerSection: [],
+    },
+  });
+
+  const result = await httpDoRequestFromBlock(
+    block,
+    "/tmp/example.http",
+    undefined,
+    "stable-doc",
+    undefined,
+    "default",
+    { globalHeaders: {} },
+  );
+  urlServer.stop();
+
+  expect(result.success).toBe(true);
+  if (result.success && result.body.type === "json") {
+    const sentUrl = String(result.body.content.url ?? "");
+    expect(sentUrl).toContain("name=@$somebody");
+    expect(sentUrl).toContain("status=ok");
+    expect(sentUrl).not.toContain("name=%40");
+  }
+});
+
 test("doRequestFromBlock: cookie jar stores Set-Cookie and sends Cookie on subsequent request (unless @no-cookie-jar)", async () => {
   const cookieServer = Bun.serve({
     port: 0,
