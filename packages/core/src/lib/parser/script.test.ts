@@ -54,6 +54,14 @@ describe("getScript", () => {
     expect(r.lang).toBe("lua");
     expect(r.content.trim()).toBe('request.variables.set("X", "1")');
   });
+
+  test("returns error for incomplete external script path", async () => {
+    const r = await getScript("> ", ["> "], 0, "/tmp/foo.http");
+    expect(r).toMatchObject({
+      errorMessage: "Missing postRequest script file path",
+      lineNumber: 0,
+    });
+  });
 });
 
 describe("getDocument + Lua scripts", () => {

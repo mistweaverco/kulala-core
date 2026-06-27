@@ -5,6 +5,7 @@ import type { KulalaDocument } from "../parser/types";
 import { getStableDocumentId, resolveVariables } from "../variables";
 import {
   completionPrefixAtCursor,
+  completionReplaceRange,
   completionTextEdit,
   resolveScriptApiLabel,
   scriptApiHoverForLabel,
@@ -436,10 +437,15 @@ export async function lspCompletion(input: {
     env: input.env,
   });
 
-  const { startCol0, endCol0 } = completionPrefixAtCursor(line, input.column);
   const applyEdits = (items: LspCompletionItem[]) =>
     uniqueByLabel(items).map((item) => {
       const newText = item.insertText ?? item.label;
+      const { startCol0, endCol0 } = completionReplaceRange(
+        line,
+        input.column,
+        newText,
+        item.label,
+      );
       return {
         ...item,
         textEdit: completionTextEdit(input.line, startCol0, endCol0, newText),

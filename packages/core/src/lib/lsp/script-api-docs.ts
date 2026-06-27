@@ -236,8 +236,50 @@ const SCRIPT_SYMBOL_RE =
 /** Script / `$kulala` token immediately before the cursor (includes `$`). */
 const COMPLETION_PREFIX_RE = /[$\w.]+$/;
 
+function longestSuffixPrefixMatch(before: string, candidate: string): number {
+  const maxLen = Math.min(before.length, candidate.length);
+  for (let len = maxLen; len > 0; len--) {
+    const suffix = before.slice(before.length - len);
+    if (candidate.startsWith(suffix)) return len;
+  }
+  return 0;
+}
+
 /**
- * Text to replace when accepting a completion.
+ * 0-based range of text to replace when accepting a completion item.
+ * Prefers the longest typed suffix that matches the start of `newText` (covers
+ * `> ` → `> {%` snippets), then `{{var` template identifiers, then word tokens.
+ * @param column1 1-based cursor column (Vim); the character under the cursor is included.
+ */
+export function completionReplaceRange(
+  line: string,
+  column1: number,
+  newText: string,
+  label?: string,
+): { startCol0: number; endCol0: number } {
+  const endCol0 = Math.max(0, Math.min(column1, line.length));
+  const before = line.slice(0, endCol0);
+
+  let matchLen = longestSuffixPrefixMatch(before, newText);
+  if (matchLen === 0 && label && label !== newText) {
+    matchLen = longestSuffixPrefixMatch(before, label);
+  }
+  if (matchLen > 0) {
+    return { startCol0: endCol0 - matchLen, endCol0 };
+  }
+
+  const templateMatch = before.match(/\{\{([^}]*)$/);
+  if (templateMatch) {
+    const prefix = templateMatch[1] ?? "";
+    return { startCol0: endCol0 - prefix.length, endCol0 };
+  }
+
+  const word = before.match(COMPLETION_PREFIX_RE)?.[0] ?? "";
+  return { startCol0: endCol0 - word.length, endCol0 };
+}
+
+/**
+ * Word/token prefix at the cursor (used for filtering, not snippet replace ranges).
  * @param column1 1-based cursor column (Vim); the character under the cursor is included.
  */
 export function completionPrefixAtCursor(
