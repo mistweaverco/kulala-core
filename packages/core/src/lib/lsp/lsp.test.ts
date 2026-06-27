@@ -5,7 +5,10 @@ import {
   setDbForTesting,
   setVariable,
 } from "../persistence";
-import { completionPrefixAtCursor } from "./script-api-docs";
+import {
+  completionPrefixAtCursor,
+  completionReplaceRange,
+} from "./script-api-docs";
 import {
   lspCompletion,
   lspDiagnostics,
@@ -242,6 +245,42 @@ test("completionPrefixAtCursor includes leading $ for $kulala", () => {
   });
 });
 
+test("completionReplaceRange replaces typed snippet prefix for > {% %}", () => {
+  const line = "> ";
+  const insert = "> {%\n\t${0}\n%}\n";
+  expect(completionReplaceRange(line, line.length, insert, "> {% %}")).toEqual({
+    startCol0: 0,
+    endCol0: line.length,
+  });
+});
+
+test("completionReplaceRange replaces only the > suffix on a longer line", () => {
+  const line = "foo> ";
+  const insert = "> {%\n\t${0}\n%}\n";
+  expect(completionReplaceRange(line, line.length, insert, "> {% %}")).toEqual({
+    startCol0: 3,
+    endCol0: line.length,
+  });
+});
+
+test("completionReplaceRange replaces template variable identifier inside {{", () => {
+  const line = "GET http://{{AD";
+  expect(
+    completionReplaceRange(line, line.length, "ADDRESS", "ADDRESS"),
+  ).toEqual({
+    startCol0: 13,
+    endCol0: line.length,
+  });
+});
+
+test("completionReplaceRange replaces partial method prefix", () => {
+  const line = "GE";
+  expect(completionReplaceRange(line, line.length, "GET ", "GET")).toEqual({
+    startCol0: 0,
+    endCol0: line.length,
+  });
+});
+
 test("lspCompletion textEdit replaces full $kulala prefix", async () => {
   const line = "$kulala";
   const res = await lspCompletion({
@@ -259,6 +298,23 @@ test("lspCompletion textEdit replaces full $kulala prefix", async () => {
   expect(item!.textEdit!.newText).toContain("$kulala.prompt");
   expect(item!.insertText).toContain("$kulala.prompt(");
   expect(item!.insertTextFormat).toBe(1); // PlainText — blink.cmp strips `$` from Snippet prefixes
+});
+
+test("lspCompletion textEdit replaces typed > before post-request script snippet", async () => {
+  const line = "> ";
+  const res = await lspCompletion({
+    content: `### One\nGET https://example.com\n\n${line}`,
+    filepath: "/tmp/snippet.http",
+    env: "default",
+    line: 4,
+    column: line.length + 1,
+    filetype: "http",
+  });
+  const item = res.items.find((i) => i.label === "> {% %}");
+  expect(item?.textEdit).toBeDefined();
+  expect(item!.textEdit!.range.start.character).toBe(0);
+  expect(item!.textEdit!.range.end.character).toBe(line.length);
+  expect(item!.textEdit!.newText).toMatch(/^> \{%/);
 });
 
 test("lspCompletion includes $kulala API items with documentation", async () => {

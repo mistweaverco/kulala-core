@@ -77,6 +77,13 @@ export const getScript = async (
       };
     }
     const scriptFilePath = line.slice(line.indexOf(marker) + marker.length);
+    if (!scriptFilePath.trim()) {
+      return {
+        errorMessage: `Missing ${type} script file path`,
+        lineNumber: lineIdx,
+        filepath,
+      };
+    }
     const scriptFileDir = dirname(filepath);
     const resolvedPath = resolve(scriptFileDir, scriptFilePath);
     filepath = relative(process.cwd(), resolvedPath);
