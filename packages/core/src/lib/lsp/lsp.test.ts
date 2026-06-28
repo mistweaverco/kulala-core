@@ -73,6 +73,29 @@ GET https://example.com HTTP/1.1
   expect(syms[1]!.name).toBe("Two");
 });
 
+test("lspDocumentSymbols uses @name directive over generated name", async () => {
+  const content = `###
+# @name GET example from name
+GET https://example.com HTTP/1.1
+
+### GET example from header
+GET https://example.com HTTP/1.1
+
+### GET example from header (misc)
+# @name GET example from name (misc)
+GET https://example.com HTTP/1.1
+
+###
+GET https://example.com HTTP/1.1
+`;
+  const syms = await lspDocumentSymbols({ content, filepath: "/tmp/sym.http" });
+  expect(syms).toHaveLength(4);
+  expect(syms[0]!.name).toBe("GET example from name");
+  expect(syms[1]!.name).toBe("GET example from header");
+  expect(syms[2]!.name).toBe("GET example from name (misc)");
+  expect(syms[3]!.name).toBe("REQUEST_004");
+});
+
 test("lspHover returns plaintext when no request at cursor", async () => {
   const content = `just some text
 still not a request`;

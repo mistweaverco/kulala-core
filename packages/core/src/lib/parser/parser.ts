@@ -51,7 +51,7 @@ type BlockWithRunDirective = KulalaBlock & {
   __runDirectiveLine?: number;
 };
 
-const getBlockName = (rawBlock: string, idx: number): string => {
+const getBlockDefaultName = (rawBlock: string, idx: number): string => {
   return rawBlock.match(nameRegex)?.[1] || `REQUEST_${pad(idx + 1, 3, "0")}`;
 };
 
@@ -168,7 +168,7 @@ const getParsedBlock = async (
     KulalaBlockLineType["name"]
   >();
   const lines = rawBlock.split("\n");
-  const name = getBlockName(rawBlock, idx);
+  const name = getBlockDefaultName(rawBlock, idx);
   const result: KulalaBlock = {
     name,
     errors: [],
@@ -277,6 +277,9 @@ const getParsedBlock = async (
         }
         result.preamble.push(operator);
         result.operators.push(operator);
+        if (operator.name === "name" && operator.args) {
+          result.name = String(operator.args);
+        }
         break;
       case "body":
         if (result.request.body) break;
