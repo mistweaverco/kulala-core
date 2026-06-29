@@ -15,9 +15,23 @@ Content-Type: application/json
 
 ### POSTMAN_GRPC_ECHO
 
+# @grpc-plaintext
+
 GRPC {{grpc.addr}}:{{grpc.port}} HelloService/SayHello
 Content-Type: application/json
 
 {
   "greeting": "kulala!"
 }
+
+### plain
+
+# @grpc-plaintext
+
+GRPC grpcb.in:9000 grpcbin.GRPCBin/Index
+HEADER1: {{header1}}
+
+### tls
+
+GRPC grpcb.in:9001 grpcbin.GRPCBin/Index
+HEADER1: {{header1}}

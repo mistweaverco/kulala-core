@@ -70,9 +70,8 @@ function grpcJsonReplacer(_key: string, v: unknown): unknown {
 function buildCredentials(
   address: string,
   plaintext: boolean,
-  insecure: boolean,
 ): grpc.ChannelCredentials {
-  if (plaintext || insecure) {
+  if (plaintext) {
     return grpc.credentials.createInsecure();
   }
   const { useTls } = parseGrpcAddress(address);
@@ -272,14 +271,13 @@ export async function grpcNativeRequest(
   const flags = mergeGrpcFlags(opts.metadataFlags, parsed.inlineFlags);
   const vars = opts.vars ?? {};
   const { plaintext } = grpcFlagsToLoaderOptions(flags, opts.cwd, vars);
-  const insecure = opts.insecure === true || plaintext;
   const address = parsed.address;
   if (!address) {
     throw new Error("gRPC request is missing server address (host:port)");
   }
 
   const { channelTarget } = parseGrpcAddress(address);
-  const creds = buildCredentials(address, plaintext, insecure);
+  const creds = buildCredentials(address, plaintext);
   const metadata = metadataFromHeaders(opts.headers);
 
   try {

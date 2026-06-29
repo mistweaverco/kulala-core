@@ -2,17 +2,17 @@ import { describe, expect, test } from "bun:test";
 import { parseGrpcAddress } from "./parse-target";
 
 describe("parseGrpcAddress", () => {
-  test("treats bare host:port as plaintext", () => {
+  test("treats bare host:port as TLS by default (grpcurl parity)", () => {
     expect(parseGrpcAddress("grpc.postman-echo.com:443")).toEqual({
       channelTarget: "grpc.postman-echo.com:443",
-      useTls: false,
+      useTls: true,
     });
   });
 
-  test("treats localhost as plaintext without a scheme", () => {
+  test("treats localhost as TLS without a scheme", () => {
     expect(parseGrpcAddress("localhost:50051")).toEqual({
       channelTarget: "localhost:50051",
-      useTls: false,
+      useTls: true,
     });
   });
 

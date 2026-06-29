@@ -1,8 +1,9 @@
 import { encodeRequestUrl } from "./encode-url";
 import { httpRequest } from "./http-client";
 import { grpcNativeRequest } from "../grpc";
+import { formatGrpcurlCommand } from "../grpc/format";
 import { grpcFlagsFromOperators } from "../grpc/collect-flags";
-import { mergeGrpcFlags } from "../grpc/parse-target";
+import { mergeGrpcFlags, parseGrpcTarget } from "../grpc/parse-target";
 import type { KulalaWebSocketPlanResponse } from "./types";
 import type { KulalaDocument } from "../parser/types";
 import type { KulalaBlock } from "../parser/types/block";
@@ -860,27 +861,48 @@ export async function doRequestFromBlock(
         flow?.sharedGrpcFlags ?? [],
         grpcFlagsFromOperators(effectiveOperators),
       );
+      const grpcBodyText =
+        typeof body === "string"
+          ? body
+          : body != null
+            ? JSON.stringify(body)
+            : undefined;
+      const grpcInsecure =
+        curlArgvHasFlag(extraCurlArgv, "--insecure") ||
+        curlArgvHasFlag(extraCurlArgv, "-k");
+      const grpcVerboseTrace = formatGrpcurlCommand({
+        grpcCommand: parseGrpcTarget(url),
+        flags: grpcFlags,
+        headers,
+        body: grpcBodyText,
+        cwd: startDir,
+        vars: mutableVars,
+        insecure: grpcInsecure,
+      });
+      const grpcSentRequest = buildSentRequestSnapshot(
+        "GRPC",
+        url,
+        headers,
+        grpcBodyText,
+      );
       const grpcRes = await grpcNativeRequest({
         target: url,
         metadataFlags: grpcFlags,
         headers,
-        body:
-          typeof body === "string"
-            ? body
-            : body != null
-              ? JSON.stringify(body)
-              : undefined,
+        body: grpcBodyText,
         cwd: startDir,
         vars: mutableVars,
-        insecure:
-          curlArgvHasFlag(extraCurlArgv, "--insecure") ||
-          curlArgvHasFlag(extraCurlArgv, "-k"),
+        insecure: grpcInsecure,
       });
       const ok = grpcRes.statusCode >= 200 && grpcRes.statusCode < 400;
       if (!ok) {
         return {
           success: false,
           error: grpcRes.body || grpcRes.stderr || "gRPC request failed",
+          url,
+          request: grpcSentRequest,
+          verboseTrace: grpcVerboseTrace,
+          ...(scriptConsole.length > 0 ? { scriptConsole } : {}),
         };
       }
       const grpcBodyRaw = grpcRes.body ?? "";
@@ -901,15 +923,12 @@ export async function doRequestFromBlock(
         return {
           success: false,
           error: grpcEnriched.error,
+          url,
+          request: grpcSentRequest,
+          verboseTrace: grpcVerboseTrace,
           ...(scriptConsole.length > 0 ? { scriptConsole } : {}),
         };
       }
-      const grpcBodyText =
-        typeof body === "string"
-          ? body
-          : body != null
-            ? JSON.stringify(body)
-            : undefined;
       return {
         success: true,
         status: grpcRes.statusCode,
@@ -917,7 +936,8 @@ export async function doRequestFromBlock(
           "content-type": ok ? "application/json" : "kulala/grpc_error",
         },
         url,
-        request: buildSentRequestSnapshot("GRPC", url, headers, grpcBodyText),
+        request: grpcSentRequest,
+        verboseTrace: grpcVerboseTrace,
         timings: {
           dns: 0,
           tcp: 0,

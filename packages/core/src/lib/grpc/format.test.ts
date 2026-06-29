@@ -18,7 +18,7 @@ describe("formatGrpcurlCommand", () => {
       cwd: "/project",
     });
     expect(cmd).toContain("grpcurl");
-    expect(cmd).toContain("-plaintext");
+    expect(cmd).not.toContain("-plaintext");
     expect(cmd).toContain("-import-path");
     expect(cmd).toContain("-proto");
     expect(cmd).toContain("-H");
@@ -39,7 +39,7 @@ describe("formatGrpcurlCommand", () => {
       flags: [],
       cwd: "/project",
     });
-    expect(list).toBe("grpcurl -plaintext 'localhost:8080' list");
+    expect(list).toBe("grpcurl 'localhost:8080' list");
 
     const describeCmd = formatGrpcurlCommand({
       grpcCommand: {
@@ -84,7 +84,32 @@ describe("formatGrpcurlCommand", () => {
     expect(explicitPlaintext).not.toContain("-insecure");
   });
 
-  test("omits -insecure for bare host:port even when curl insecure is set", () => {
+  test("adds -plaintext only for # @grpc-plaintext or grpc:// scheme", () => {
+    const withOperator = formatGrpcurlCommand({
+      grpcCommand: {
+        address: "localhost:8080",
+        symbol: "pkg.Service/Method",
+        inlineFlags: [],
+      },
+      flags: [{ flag: "plaintext", value: "" }],
+      cwd: "/project",
+    });
+    expect(withOperator).toContain("-plaintext");
+
+    const grpcScheme = formatGrpcurlCommand({
+      grpcCommand: {
+        address: "grpc://localhost:50051",
+        symbol: "pkg.Service/Method",
+        inlineFlags: [],
+      },
+      flags: [],
+      cwd: "/project",
+    });
+    expect(grpcScheme).toContain("-plaintext");
+    expect(grpcScheme).toContain("localhost:50051");
+  });
+
+  test("adds -insecure for bare host:port when curl insecure is set", () => {
     const cmd = formatGrpcurlCommand({
       grpcCommand: {
         address: "grpc.postman-echo.com:443",
@@ -95,8 +120,37 @@ describe("formatGrpcurlCommand", () => {
       cwd: "/project",
       insecure: true,
     });
-    expect(cmd).toContain("-plaintext");
-    expect(cmd).not.toContain("-insecure");
+    expect(cmd).not.toContain("-plaintext");
+    expect(cmd).toContain("-insecure");
     expect(cmd).toContain("grpc.postman-echo.com:443");
+  });
+
+  test("substitutes variables in address, symbol, body, and proto paths", () => {
+    const cmd = formatGrpcurlCommand({
+      grpcCommand: {
+        address: "{{grpc.addr}}:{{grpc.port}}",
+        symbol: "{{grpc.service}}/SayHello",
+        inlineFlags: [],
+      },
+      flags: [
+        { flag: "import-path", value: "{{grpc.import}}" },
+        { flag: "proto", value: "{{grpc.import}}/echo.proto" },
+      ],
+      headers: { "Content-Type": "application/json" },
+      body: '{\n  "greeting": "{{name}}"\n}',
+      cwd: "/project",
+      vars: {
+        "grpc.addr": "grpc.postman-echo.com",
+        "grpc.port": "443",
+        "grpc.service": "HelloService",
+        "grpc.import": "grpc/echopb",
+        name: "kulala!",
+      },
+    });
+    expect(cmd).toContain("grpc.postman-echo.com:443");
+    expect(cmd).toContain("HelloService/SayHello");
+    expect(cmd).toContain("grpc/echopb/echo.proto");
+    expect(cmd).toContain("kulala!");
+    expect(cmd).not.toContain("{{");
   });
 });

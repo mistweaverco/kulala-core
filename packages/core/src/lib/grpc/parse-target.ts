@@ -113,7 +113,10 @@ export function parseGrpcSymbol(symbol: string): {
   };
 }
 
-/** grpcurl-compatible address parsing: TLS only for `grpcs://` / `https://`. */
+/**
+ * grpcurl-compatible address parsing.
+ * TLS is the default (like grpcurl); only `grpc://` disables TLS without `# @grpc-plaintext`.
+ */
 export function parseGrpcAddress(address: string): {
   channelTarget: string;
   useTls: boolean;
@@ -132,5 +135,5 @@ export function parseGrpcAddress(address: string): {
       useTls: false,
     };
   }
-  return { channelTarget: trimmed, useTls: false };
+  return { channelTarget: trimmed, useTls: true };
 }
