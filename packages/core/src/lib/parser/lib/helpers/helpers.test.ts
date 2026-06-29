@@ -15,6 +15,10 @@ const ITEM_SIZE = 2500;
  * wrappers larger than that are silently truncated when read by a
  * pipe consumer (e.g. kulala.nvim's `vim.system` bridge).
  *
+ * `await Bun.write(Bun.stdout, ...)` fixes truncation for active readers
+ * but deadlocks parents that use `spawnSync` (kulala-fmt) once the pipe
+ * buffer fills. Use synchronous `writeSync` instead.
+ *
  * These tests spawn a child process that calls the helper with a
  * ~500 KB payload, drain its stdio chunk-by-chunk, and assert that
  * every byte the helper intended to write was actually received.
@@ -65,6 +69,37 @@ test("writeRequestResponseToStdout flushes large payloads before exit", async ()
 
   const proc = Bun.spawn({
     cmd: ["bun", "-e", childScript("writeRequestResponseToStdout", "x")],
+    stdout: "pipe",
+    stderr: "inherit",
+  });
+  const received = await drain(proc.stdout);
+  await proc.exited;
+
+  expect(proc.exitCode).toBe(0);
+  expect(received).toBe(expected.length);
+});
+
+test("writeToStdout flushes large payloads before the process exits", async () => {
+  const expected = `${JSON.stringify(buildPayload("document", "z"), null, 2)}\n`;
+
+  expect(expected.length).toBeGreaterThan(65_536);
+
+  const proc = Bun.spawn({
+    cmd: [
+      "bun",
+      "-e",
+      `
+    import { writeToStdout } from "${HELPER_PATH}";
+    const payload = {
+      type: "document",
+      data: Array.from({ length: ${COUNT} }, (_, i) => ({
+        i,
+        pad: "z".repeat(${ITEM_SIZE}),
+      })),
+    };
+    await writeToStdout(payload);
+  `,
+    ],
     stdout: "pipe",
     stderr: "inherit",
   });
