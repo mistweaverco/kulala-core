@@ -1,4 +1,5 @@
 import { shellQuote } from "../shell-quote";
+import { substituteInString } from "../variables/substitute";
 import { resolveGrpcPath } from "./resolve-path";
 import { mergeGrpcFlags, parseGrpcAddress } from "./parse-target";
 import type { KulalaGrpcCommand, KulalaGrpcFlag } from "./types";
@@ -40,13 +41,31 @@ function emitGrpcFlag(
   if (resolved) parts.push(shellQuote(resolved));
 }
 
+function resolveGrpcCommandTemplates(
+  cmd: KulalaGrpcCommand,
+  vars: Record<string, string>,
+): KulalaGrpcCommand {
+  const sub = (s?: string) =>
+    s && s.includes("{{") ? substituteInString(s, vars) : s;
+  return {
+    ...cmd,
+    address: sub(cmd.address),
+    symbol: sub(cmd.symbol),
+    inlineFlags: cmd.inlineFlags.map(({ flag, value }) => ({
+      flag,
+      value:
+        value && value.includes("{{") ? substituteInString(value, vars) : value,
+    })),
+  };
+}
+
 /**
  * Format a resolved gRPC request as a copy-pasteable grpcurl command.
  */
 export function formatGrpcurlCommand(input: GrpcurlFormatInput): string {
-  const parsed = input.grpcCommand;
-  const flags = mergeGrpcFlags(input.flags, parsed.inlineFlags);
   const vars = input.vars ?? {};
+  const parsed = resolveGrpcCommandTemplates(input.grpcCommand, vars);
+  const flags = mergeGrpcFlags(input.flags, parsed.inlineFlags);
   const parts: string[] = ["grpcurl"];
   const address = parsed.address;
   if (!address) {
@@ -55,7 +74,7 @@ export function formatGrpcurlCommand(input: GrpcurlFormatInput): string {
   const { channelTarget, useTls } = parseGrpcAddress(address);
   const hasPlaintextFlag = flags.some(({ flag }) => flag === "plaintext");
 
-  // grpcurl defaults to TLS; bare host:port in Kulala is plaintext (see parseGrpcAddress).
+  // grpcurl defaults to TLS; plaintext only via # @grpc-plaintext or grpc:// scheme.
   if (!useTls && !hasPlaintextFlag) parts.push("-plaintext");
   // curl --insecure maps to grpcurl -insecure (skip cert verify), only for TLS connections.
   if (input.insecure && useTls && !hasPlaintextFlag) parts.push("-insecure");
@@ -73,7 +92,10 @@ export function formatGrpcurlCommand(input: GrpcurlFormatInput): string {
     parts.push("-H", shellQuote(`${k}: ${v}`, true));
   }
 
-  const body = input.body?.trim();
+  let body = input.body?.trim();
+  if (body && body.includes("{{")) {
+    body = substituteInString(body, vars);
+  }
   if (body) parts.push("-d", shellQuote(body, true));
 
   parts.push(shellQuote(channelTarget));
