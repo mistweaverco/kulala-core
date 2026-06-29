@@ -66,7 +66,7 @@ const kulalaParser: KulalaParser = {
     switch (stdIn.action) {
       case "parse":
         doc = await getDocument(stdIn.content, stdIn.filepath);
-        writeToStdout(doc);
+        await writeToStdout(doc);
         break;
       case "format": {
         const result = await formatHttp(stdIn.content, stdIn.filepath, {
@@ -74,7 +74,7 @@ const kulalaParser: KulalaParser = {
           bodyFormat: stdIn.bodyFormat,
           defaults: stdIn.defaults,
         });
-        writeToStdout(result);
+        await writeToStdout(result);
         break;
       }
       case "serialize": {
@@ -86,7 +86,7 @@ const kulalaParser: KulalaParser = {
           includeExpandedBlocks: stdIn.includeExpandedBlocks,
           preserveBodyText: stdIn.preserveBodyText,
         });
-        writeToStdout({ success: true, content });
+        await writeToStdout({ success: true, content });
         break;
       }
       case "run": {
@@ -274,7 +274,7 @@ const kulalaParser: KulalaParser = {
       }
       case "clear_graphql_schema": {
         const result = clearGraphQLSchemaCache(stdIn.host);
-        writeToStdout({
+        await writeToStdout({
           type: "clear_graphql_schema",
           success: true,
           cleared: result.cleared,
@@ -290,7 +290,7 @@ const kulalaParser: KulalaParser = {
           column: stdIn.column,
           env: stdIn.env,
         });
-        writeToStdout({
+        await writeToStdout({
           type: "graphql_introspect",
           ...result,
         });
@@ -306,7 +306,7 @@ const kulalaParser: KulalaParser = {
           }
         }
         const catalog = await loadEnvironmentCatalog(startDir);
-        writeToStdout(catalog);
+        await writeToStdout(catalog);
         break;
       }
       case "inspect_request": {
@@ -317,7 +317,7 @@ const kulalaParser: KulalaParser = {
           column: stdIn.column,
           env: stdIn.env,
         });
-        writeToStdout(result);
+        await writeToStdout(result);
         break;
       }
       case "to_curl": {
@@ -329,12 +329,12 @@ const kulalaParser: KulalaParser = {
           env: stdIn.env,
           userAgent: stdIn.userAgent,
         });
-        writeToStdout(result);
+        await writeToStdout(result);
         break;
       }
       case "from_curl": {
         const result = fromCurlCommand(stdIn.curl);
-        writeToStdout(result);
+        await writeToStdout(result);
         break;
       }
       case "curl": {
@@ -401,7 +401,7 @@ const kulalaParser: KulalaParser = {
           column: stdIn.column,
           filetype: stdIn.filetype ?? "http",
         });
-        writeToStdout(result);
+        await writeToStdout(result);
         break;
       }
       case "lsp_hover": {
@@ -413,7 +413,7 @@ const kulalaParser: KulalaParser = {
           column: stdIn.column,
           filetype: stdIn.filetype ?? "http",
         });
-        writeToStdout(result);
+        await writeToStdout(result);
         break;
       }
       case "lsp_symbols": {
@@ -421,7 +421,7 @@ const kulalaParser: KulalaParser = {
           content: stdIn.content,
           filepath: stdIn.filepath,
         });
-        writeToStdout(result);
+        await writeToStdout(result);
         break;
       }
       case "lsp_diagnostics": {
@@ -429,7 +429,7 @@ const kulalaParser: KulalaParser = {
           content: stdIn.content,
           filepath: stdIn.filepath,
         });
-        writeToStdout(result);
+        await writeToStdout(result);
         break;
       }
       case "lsp_inlay_hints": {
@@ -439,7 +439,7 @@ const kulalaParser: KulalaParser = {
           env: stdIn.env ?? "default",
           range: stdIn.range,
         });
-        writeToStdout(result);
+        await writeToStdout(result);
         break;
       }
       default:
