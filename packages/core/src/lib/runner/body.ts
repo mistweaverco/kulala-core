@@ -301,6 +301,39 @@ export function getJSONRequestBody(
   return undefined;
 }
 
+/**
+ * Build a raw HTTP body payload when Content-Type is omitted (JetBrains parity).
+ * Sets curl's `Content-Type;` sentinel so the wire request has no Content-Type value.
+ */
+export function applyRawBodyWithoutContentType(
+  headers: Record<string, string>,
+  body: unknown,
+): { headers: Record<string, string>; bodyPayload: string | undefined } {
+  if (body === null || body === undefined) {
+    return { headers, bodyPayload: undefined };
+  }
+
+  const nextHeaders = { ...headers };
+  if (
+    !Object.keys(nextHeaders).some((k) => k.toLowerCase() === "content-type")
+  ) {
+    nextHeaders["Content-Type;"] = "";
+  }
+
+  let bodyPayload: string | undefined;
+  try {
+    if (typeof body === "string" && body.trim().length > 0) {
+      bodyPayload = body;
+    } else if (typeof body === "object") {
+      bodyPayload = JSON.stringify(body);
+    }
+  } catch {
+    bodyPayload = String(body);
+  }
+
+  return { headers: nextHeaders, bodyPayload };
+}
+
 export function getGraphQLRequestBody(
   body: unknown,
 ): { query: string; variables?: Record<string, unknown> } | undefined {

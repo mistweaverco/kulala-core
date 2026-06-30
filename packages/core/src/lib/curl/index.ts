@@ -8,7 +8,7 @@ export {
   stripConflictingCurlFlags,
 } from "./run-passthrough";
 export type { CurlPassthroughResult } from "./run-passthrough";
-export { formatCurlCommand } from "./format";
+export { formatCurlCommand, curlHeaderArg } from "./format";
 export {
   curlArgvFromOperators,
   curlPassthroughFlagKey,

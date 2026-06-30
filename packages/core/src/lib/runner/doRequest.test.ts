@@ -1978,6 +1978,7 @@ describe("body with or without content-type", () => {
       (k) => k.toLowerCase() === "content-type",
     );
     expect(contentTypeValue).toBeUndefined();
+    expect(headers["Content-Type;"]).toBe("");
   });
 });
 

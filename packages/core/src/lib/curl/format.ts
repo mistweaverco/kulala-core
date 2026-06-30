@@ -1,6 +1,12 @@
 import { shellQuote } from "../shell-quote";
 import type { CurlFormatInput } from "./types";
 
+/** curl `-H` value for a request header (handles `Content-Type;` omit sentinel). */
+export function curlHeaderArg(name: string, value: string): string {
+  if (name.endsWith(";") && value === "") return name;
+  return `${name}: ${value}`;
+}
+
 function httpVersionFlag(httpVersion: string | undefined): string[] {
   if (!httpVersion) return [];
   const v = httpVersion.replace(/^HTTP\//i, "").trim();
@@ -40,7 +46,7 @@ export function formatCurlCommand(input: CurlFormatInput): string {
 
   for (const [k, v] of Object.entries(headers)) {
     if (k.toLowerCase() === "user-agent") continue;
-    parts.push("-H", shellQuote(`${k}:${v}`, true));
+    parts.push("-H", shellQuote(curlHeaderArg(k, v), true));
   }
 
   const ua = headers["User-Agent"] ?? headers["user-agent"] ?? input.userAgent;

@@ -193,6 +193,27 @@ GET https://echo.kulala.app/get?var={{MY_VAR}} HTTP/1.1`;
 });
 
 describe("toCurlAtCursor", () => {
+  test("includes JSON body without Content-Type header", async () => {
+    const content = `### POST_JSON_NO_CT
+POST https://example.com/post HTTP/1.1
+
+{
+  "foo": "bar"
+}`;
+    const result = await toCurlAtCursor({
+      content,
+      filepath: "/test.http",
+      line: 2,
+      column: 1,
+    });
+    expect(result).toMatchObject({ ok: true });
+    if (!("ok" in result) || !result.ok) return;
+
+    expect(result.curl).toContain('{"foo":"bar"}');
+    expect(result.curl).toContain("Content-Type;");
+    expect(result.curl).not.toContain("application/json");
+  });
+
   test("includes Content-Type for GRAPHQL requests", async () => {
     const result = await toCurlAtCursor({
       content: graphqlContent,
