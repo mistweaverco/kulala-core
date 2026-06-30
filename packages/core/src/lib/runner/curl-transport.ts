@@ -132,6 +132,7 @@ function stripCookieHeader(headers: Record<string, string>): void {
 }
 
 import { headersFromDump } from "../curl/headers-dump";
+import { curlHeaderArg } from "../curl/format";
 
 /** Whether curl needs an explicit `--request` / `-X` (avoids verbose "already inferred" notes). */
 export function curlNeedsRequestFlag(
@@ -346,7 +347,7 @@ export async function curlHttpRequest(
 
     // Headers
     for (const [k, v] of Object.entries(currentHeaders)) {
-      args.push("--header", `${k}: ${v}`);
+      args.push("--header", curlHeaderArg(k, v));
     }
 
     if (hasBody) {

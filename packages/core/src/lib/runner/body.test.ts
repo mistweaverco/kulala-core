@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import {
+  applyRawBodyWithoutContentType,
   ensureMultipartContentTypeHeader,
   getFormRequestBody,
   getGraphQLRequestBody,
@@ -56,6 +57,26 @@ test("getJSONRequestBody returns object as-is", () => {
 test("getJSONRequestBody returns undefined for non-object", () => {
   expect(getJSONRequestBody("string")).toBeUndefined();
   expect(getJSONRequestBody(null)).toBeUndefined();
+});
+
+test("applyRawBodyWithoutContentType stringifies JSON object and sets Content-Type;", () => {
+  const { headers, bodyPayload } = applyRawBodyWithoutContentType(
+    { Accept: "application/json" },
+    { foo: "bar" },
+  );
+  expect(bodyPayload).toBe('{"foo":"bar"}');
+  expect(headers["Content-Type;"]).toBe("");
+  expect(headers.Accept).toBe("application/json");
+});
+
+test("applyRawBodyWithoutContentType skips sentinel when Content-Type is set", () => {
+  const { headers, bodyPayload } = applyRawBodyWithoutContentType(
+    { "Content-Type": "application/json" },
+    { foo: "bar" },
+  );
+  expect(bodyPayload).toBe('{"foo":"bar"}');
+  expect(headers["Content-Type;"]).toBeUndefined();
+  expect(headers["Content-Type"]).toBe("application/json");
 });
 
 test("getGraphQLRequestBody extracts query and variables", () => {

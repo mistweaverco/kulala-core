@@ -242,6 +242,43 @@ describe("curl transport", () => {
     expect(cookieOnFinal).toContain("client=xyz");
     expect(cookieOnFinal).toContain("from_redirect=1");
   });
+
+  test("sends JSON body when Content-Type is omitted", async () => {
+    if (!(await hasCurl())) return;
+
+    let raw = "";
+    const server = createServer(async (req, res) => {
+      const chunks: Buffer[] = [];
+      for await (const c of req) chunks.push(c as Buffer);
+      raw = Buffer.concat(chunks).toString("utf8");
+      res.statusCode = 200;
+      res.setHeader("content-type", "application/json");
+      res.end(
+        JSON.stringify({
+          raw,
+          contentType: req.headers["content-type"] ?? null,
+        }),
+      );
+    });
+    const port = await listenHttp(server);
+
+    const res = await httpRequest({
+      url: `http://127.0.0.1:${port}/`,
+      method: "POST",
+      headers: { "Content-Type;": "" },
+      body: '{"foo":"bar"}',
+    });
+
+    server.close();
+
+    expect(res.statusCode).toBe(200);
+    const parsed = JSON.parse(res.body.toString("utf8")) as {
+      raw: string;
+      contentType: string | null;
+    };
+    expect(parsed.raw).toBe('{"foo":"bar"}');
+    expect(parsed.contentType).toBe("");
+  });
 });
 
 describe("curlNeedsRequestFlag", () => {

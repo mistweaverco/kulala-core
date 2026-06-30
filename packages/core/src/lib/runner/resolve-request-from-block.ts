@@ -15,6 +15,7 @@ import {
   ScriptSkipError,
 } from "./script-control-error";
 import {
+  applyRawBodyWithoutContentType,
   buildMultipartBody,
   ensureMultipartContentTypeHeader,
   getFormRequestBody,
@@ -481,8 +482,8 @@ export async function resolveRequestFromBlock(
         form as Record<string, string>,
       ).toString();
     }
-  } else if (typeof body === "string" && body.length > 0) {
-    bodyPayload = body;
+  } else if (body !== null && body !== undefined) {
+    ({ headers, bodyPayload } = applyRawBodyWithoutContentType(headers, body));
   }
 
   const method = isGraphQL ? "POST" : methodUpper;
