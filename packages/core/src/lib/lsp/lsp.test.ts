@@ -325,6 +325,24 @@ test("completionReplaceRange completes when cursor is on }}", () => {
   });
 });
 
+test("completionReplaceRange keeps JSON closing quote after unclosed {{", () => {
+  const line = '  "password": "{{$da"';
+  expect(completionReplaceRange(line, line.length, "$date", "$date")).toEqual({
+    startCol0: 17,
+    endCol0: 20,
+    closingSuffix: "}}",
+  });
+});
+
+test("completionReplaceRange keeps colon before a later template", () => {
+  const line = "{{$da:{{port}}";
+  expect(completionReplaceRange(line, 6, "$date", "$date")).toEqual({
+    startCol0: 2,
+    endCol0: 5,
+    closingSuffix: "}}",
+  });
+});
+
 test("completionReplaceRange replaces partial method prefix", () => {
   const line = "GE";
   expect(completionReplaceRange(line, line.length, "GET ", "GET")).toEqual({

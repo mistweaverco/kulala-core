@@ -171,6 +171,40 @@ export type TemplateVarCompletionRange = {
   addClosingBraces: boolean;
 };
 
+const TEMPLATE_VAR_CHAR_RE = /[\w$.[\]*-]/;
+
+/** Matching `}}` for `{{` opened at `innerStart - 2`, skipping nested `{{ ... }}`. */
+function findTemplateClose(line: string, innerStart: number): number | null {
+  let i = innerStart;
+  while (i < line.length - 1) {
+    if (line[i] === "{" && line[i + 1] === "{") {
+      const nestedClose = findTemplateClose(line, i + 2);
+      if (nestedClose === null) return null;
+      i = nestedClose + 2;
+      continue;
+    }
+    if (line[i] === "}" && line[i + 1] === "}") {
+      return i;
+    }
+    i++;
+  }
+  return null;
+}
+
+/** End of the variable identifier being typed before `endCol0` (excludes `"`, `:`, etc.). */
+function templateVarReplaceEnd(
+  line: string,
+  innerStart: number,
+  endCol0: number,
+): number {
+  let i = innerStart;
+  while (i < endCol0) {
+    if (!TEMPLATE_VAR_CHAR_RE.test(line[i]!)) break;
+    i++;
+  }
+  return Math.max(innerStart, i);
+}
+
 /**
  * Replace range for variable-name completion inside `{{ ... }}`.
  * Handles an empty `{{}}` with the cursor on `}}`, and unclosed `{{` without trailing braces.
@@ -186,11 +220,10 @@ export function templateVarCompletionRange(
   if (openCol0 < 0) return null;
 
   const innerStart = openCol0 + 2;
-  const closeCol0 = line.indexOf("}}", innerStart);
+  const closeCol0 = findTemplateClose(line, innerStart);
 
-  if (closeCol0 >= 0) {
-    const innerEnd = closeCol0;
-    const replaceEnd = Math.max(innerStart, Math.min(endCol0, innerEnd));
+  if (closeCol0 !== null) {
+    const replaceEnd = Math.max(innerStart, Math.min(endCol0, closeCol0));
     return {
       startCol0: innerStart,
       endCol0: replaceEnd,
@@ -203,7 +236,7 @@ export function templateVarCompletionRange(
 
   return {
     startCol0: innerStart,
-    endCol0: Math.max(innerStart, endCol0),
+    endCol0: templateVarReplaceEnd(line, innerStart, endCol0),
     addClosingBraces: true,
   };
 }
