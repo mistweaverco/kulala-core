@@ -163,3 +163,47 @@ export function templateVarPrefix(lineToCursor: string): string | null {
   const m = lineToCursor.match(/\{\{([^}]*)$/);
   return m ? (m[1] ?? "") : null;
 }
+
+export type TemplateVarCompletionRange = {
+  startCol0: number;
+  endCol0: number;
+  /** Append `}}` when the template is not closed yet (e.g. after typing `{{`). */
+  addClosingBraces: boolean;
+};
+
+/**
+ * Replace range for variable-name completion inside `{{ ... }}`.
+ * Handles an empty `{{}}` with the cursor on `}}`, and unclosed `{{` without trailing braces.
+ * @param column1 1-based Vim column; the character under the cursor is included.
+ */
+export function templateVarCompletionRange(
+  line: string,
+  column1: number,
+): TemplateVarCompletionRange | null {
+  const endCol0 = Math.max(0, Math.min(column1, line.length));
+  const before = line.slice(0, endCol0);
+  const openCol0 = before.lastIndexOf("{{");
+  if (openCol0 < 0) return null;
+
+  const innerStart = openCol0 + 2;
+  const closeCol0 = line.indexOf("}}", innerStart);
+
+  if (closeCol0 >= 0) {
+    const innerEnd = closeCol0;
+    const replaceEnd = Math.max(innerStart, Math.min(endCol0, innerEnd));
+    return {
+      startCol0: innerStart,
+      endCol0: replaceEnd,
+      addClosingBraces: false,
+    };
+  }
+
+  const typed = before.slice(innerStart);
+  if (typed.includes("}")) return null;
+
+  return {
+    startCol0: innerStart,
+    endCol0: Math.max(innerStart, endCol0),
+    addClosingBraces: true,
+  };
+}

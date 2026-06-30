@@ -1,4 +1,5 @@
 import type { LspHover } from "./types";
+import { templateVarCompletionRange } from "./completion-context";
 
 export type ScriptApiDoc = {
   summary: string;
@@ -256,9 +257,18 @@ export function completionReplaceRange(
   column1: number,
   newText: string,
   label?: string,
-): { startCol0: number; endCol0: number } {
+): { startCol0: number; endCol0: number; closingSuffix?: string } {
   const endCol0 = Math.max(0, Math.min(column1, line.length));
   const before = line.slice(0, endCol0);
+
+  const templateRange = templateVarCompletionRange(line, column1);
+  if (templateRange) {
+    return {
+      startCol0: templateRange.startCol0,
+      endCol0: templateRange.endCol0,
+      closingSuffix: templateRange.addClosingBraces ? "}}" : undefined,
+    };
+  }
 
   let matchLen = longestSuffixPrefixMatch(before, newText);
   if (matchLen === 0 && label && label !== newText) {

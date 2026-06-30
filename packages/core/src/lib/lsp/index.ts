@@ -441,15 +441,16 @@ export async function lspCompletion(input: {
   const applyEdits = (items: LspCompletionItem[]) =>
     uniqueByLabel(items).map((item) => {
       const newText = item.insertText ?? item.label;
-      const { startCol0, endCol0 } = completionReplaceRange(
+      const { startCol0, endCol0, closingSuffix } = completionReplaceRange(
         line,
         input.column,
         newText,
         item.label,
       );
+      const editText = newText + (closingSuffix ?? "");
       return {
         ...item,
-        textEdit: completionTextEdit(input.line, startCol0, endCol0, newText),
+        textEdit: completionTextEdit(input.line, startCol0, endCol0, editText),
       };
     });
 
