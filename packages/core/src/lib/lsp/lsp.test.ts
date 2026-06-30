@@ -294,6 +294,34 @@ test("completionReplaceRange replaces template variable identifier inside {{", (
   ).toEqual({
     startCol0: 13,
     endCol0: line.length,
+    closingSuffix: "}}",
+  });
+});
+
+test("completionReplaceRange appends }} for unclosed {{", () => {
+  const line = "GET {{";
+  expect(
+    completionReplaceRange(line, line.length + 1, "ADDRESS", "ADDRESS"),
+  ).toEqual({
+    startCol0: 6,
+    endCol0: 6,
+    closingSuffix: "}}",
+  });
+});
+
+test("completionReplaceRange completes inside empty {{}}", () => {
+  const line = "GET {{}}";
+  expect(completionReplaceRange(line, 7, "ADDRESS", "ADDRESS")).toEqual({
+    startCol0: 6,
+    endCol0: 6,
+  });
+});
+
+test("completionReplaceRange completes when cursor is on }}", () => {
+  const line = "GET {{A}}";
+  expect(completionReplaceRange(line, 8, "ADDRESS", "ADDRESS")).toEqual({
+    startCol0: 6,
+    endCol0: 7,
   });
 });
 
