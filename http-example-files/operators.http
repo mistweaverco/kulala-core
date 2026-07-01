@@ -88,3 +88,36 @@ Content-Type: application/json
   "username": "bar",
   "password": "baz"
 }
+
+### no-redirect
+
+# @no-redirect
+
+GET https://echo.kulala.app/redirect?url=/get HTTP/1.1
+Accept: application/json
+
+### no-log
+
+# @no-log
+
+POST https://echo.kulala.app/post HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+
+{
+  "username": "bar",
+  "password": "baz"
+}
+
+### timeout
+
+# @timeout 5s
+
+POST https://echo.kulala.app/post HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+
+{
+  "username": "bar",
+  "password": "baz"
+}
