@@ -92,7 +92,7 @@ export function staticCompletionItems(sourceName: string): LspCompletionItem[] {
     { label: "grpc", insertText: "grpc", documentation: "Grpc flag" },
     {
       label: "kulala-expect-status-code",
-      insertText: "kulala-expect-status-code ",
+      insertText: "kulala-expect-status-code 404",
       documentation: "Assert response status code",
     },
     {
@@ -110,6 +110,42 @@ export function staticCompletionItems(sourceName: string): LspCompletionItem[] {
       label: "kulala-curl--",
       insertText: "kulala-curl--",
       documentation: "Curl flag",
+    },
+    {
+      label: "no-log",
+      insertText: "no-log",
+      documentation: "Do not store request and response in history",
+    },
+    {
+      label: "kulala-vscode-restclient-compat",
+      insertText: "kulala-vscode-restclient-compat",
+      documentation:
+        "Enable VS Code REST Client request chaining\n\nSee: https://kulala.app/usage/request-variables#vs-code-rest-client-chaining",
+    },
+    {
+      label: "kulala-file-contents-to-variable",
+      insertText: "kulala-file-contents-to-variable my-var file.txt",
+      documentation: "Fail if response status is not in the list (200,201,204)",
+    },
+    {
+      label: "timeout",
+      insertText: "timeout 5s",
+      documentation: "Total request timeout (500 ms, 5 s)",
+    },
+    {
+      label: "no-cookie-jar",
+      insertText: "no-cookie-jar",
+      documentation: "Do not send or store cookies for this request",
+    },
+    {
+      label: "connection-timeout",
+      insertText: "connection-timeout 5 s",
+      documentation: "Connection phase timeout (500 ms, 5 s)",
+    },
+    {
+      label: "no-redirect",
+      insertText: "no-redirect",
+      documentation: "Do not follow HTTP redirects (3xx responses)",
     },
     {
       label: "no-auto-encoding",
