@@ -5,7 +5,11 @@ import {
   loadEnvironmentCatalog,
   mergeHttpClientEnvCatalog,
 } from "./environments";
-import { isKubaInPath } from "./kuba";
+import {
+  findWithsecretsYamlDir,
+  isWithsecretsInPath,
+  resolveWithsecretsCli,
+} from "./withsecrets";
 
 const tmpRoot = join(import.meta.dir, ".tmp-environments-test");
 
@@ -46,22 +50,38 @@ test("mergeHttpClientEnvCatalog: merges env sections closest-wins", () => {
   expect(catalog.environments.staging?.HOST).toBe("staging.example");
 });
 
-test("loadEnvironmentCatalog: includes kuba environments when kuba is available", async () => {
-  const dir = join(tmpRoot, "kuba-project");
+test("findWithsecretsYamlDir: prefers ws.yaml and still finds kuba.yaml", () => {
+  const dir = join(tmpRoot, "legacy-config");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "kuba.yaml"), "default:\n  provider: local\n");
+  expect(findWithsecretsYamlDir(dir)).toBe(dir);
+
+  const wsDir = join(tmpRoot, "ws-config");
+  mkdirSync(wsDir, { recursive: true });
+  writeFileSync(join(wsDir, "ws.yaml"), "default:\n  provider: local\n");
+  writeFileSync(join(wsDir, "kuba.yaml"), "default:\n  provider: local\n");
+  expect(findWithsecretsYamlDir(wsDir)).toBe(wsDir);
+});
+
+test("loadEnvironmentCatalog: includes withsecrets environments when ws/kuba is available", async () => {
+  const dir = join(tmpRoot, "withsecrets-project");
   mkdirSync(dir, { recursive: true });
   writeFileSync(
-    join(dir, "kuba.yaml"),
+    join(dir, "ws.yaml"),
     `default:
   provider: local
   env:
-    KUBA_ONLY:
-      value: "from-kuba"
+    WITHSECRETS_ONLY:
+      value: "from-withsecrets"
 `,
   );
 
   const catalog = await loadEnvironmentCatalog(dir);
-  if (isKubaInPath()) {
-    expect(catalog.environments.default?.KUBA_ONLY).toBe("from-kuba");
+  if (isWithsecretsInPath()) {
+    expect(catalog.environments.default?.WITHSECRETS_ONLY).toBe(
+      "from-withsecrets",
+    );
+    expect(resolveWithsecretsCli()).toBeTruthy();
   } else {
     expect(catalog.environments.default).toBeDefined();
   }

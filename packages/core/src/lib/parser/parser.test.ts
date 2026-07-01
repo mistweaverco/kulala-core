@@ -515,7 +515,7 @@ X-Global-Foo: {{GLOBAL_FOO}}
 {
   "username": "user123",
   "password": "pass123",
-  "kuba_env_test": "{{ SOME_HARD_CODED_ENV }}",
+  "withsecrets_env_test": "{{ SOME_HARD_CODED_ENV }}",
   "doc_env_test": "{{ DOC_ENV_TEST }}",
   "OS_USER": "{{ $env.USER }}"
 }

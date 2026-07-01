@@ -58,7 +58,7 @@ export type KulalaStdinActionRun = {
   content: string;
   /* The path to the file where the contents come from, if any */
   filepath?: string;
-  /** Environment name for variable lookup (kuba, http-client.env.json). Defaults to "default". */
+  /** Environment name for variable lookup (withsecrets, http-client.env.json). Defaults to "default". */
   env?: string;
   limit?: KulalaStdinActionRunLimit[];
   /** Pretty-print response bodies (indentation, tabs vs spaces). */
@@ -142,10 +142,10 @@ export type KulalaStdinActionGraphqlIntrospect = {
   env?: string;
 };
 
-/** Discover http-client.env.json / kuba.yaml environments for UI pickers. */
+/** Discover http-client.env.json / ws.yaml environments for UI pickers. */
 export type KulalaStdinActionEnvironments = {
   action: "environments";
-  /** Working directory to search upward from (http-client.env.json, kuba.yaml). */
+  /** Working directory to search upward from (http-client.env.json, ws.yaml). */
   cwd?: string;
   filepath?: string;
 };

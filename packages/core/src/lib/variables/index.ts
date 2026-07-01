@@ -1,7 +1,7 @@
 /**
  * Variable resolution and substitution for HTTP requests.
  * - Stable document ID (filepath or content hash) so variables don't leak between documents.
- * - Kuba: traverse up for kuba.yaml, run `kuba show --env <env> --output json`.
+ * - withsecrets: traverse up for ws.yaml (also withsecrets.yaml, kuba.yaml), run `ws show --env <env> --output json`.
  * - Env files: system env, http-client.env.json, http-client.private.env.json, .env (by env name).
  * - Persistence: global, document-scoped, and request-scoped variables from SQLite.
  * - System env as {{$env.VAR}}: JetBrains-style (https://www.jetbrains.com/help/idea/http-client-variables.html).
@@ -9,8 +9,8 @@
  * - Request variables (only with `# @kulala-vscode-restclient-compat` in the .http file):
  *   {{REQUEST_NAME.response.body.$.field}}, {{REQUEST_NAME.response.headers.Name}}.
  *   Latest responses are persisted per document so named requests work across separate runs.
- * - JSONPath in {{ }} and scripts (2024.2+): dotted paths, .['key'], [*], [n] — see jsonpath.ts.
- * - Env/kuba nested JSON is also flattened to dotted paths for direct lookup.
+ * - JSONPath in {{ }} and scripts (2024.2+): dotted paths, .['key'], [*], [n] - see jsonpath.ts.
+ * - Env/withsecrets nested JSON is also flattened to dotted paths for direct lookup.
  * - Substitution: {{variableName}} or compound paths; optional spaces {{ var }} in URL, headers, body.
  * - In-file @ variables: @name=value before the first ### or in a block preamble (JetBrains).
  */
@@ -18,10 +18,15 @@
 export { getStableDocumentId } from "./stable-id";
 export {
   findKubaYamlDir,
+  findWithsecretsYamlDir,
   getKubaEnv,
+  getWithsecretsEnv,
   isKubaInPath,
+  isWithsecretsInPath,
   listKubaEnvNames,
-} from "./kuba";
+  listWithsecretsEnvNames,
+  resolveWithsecretsCli,
+} from "./withsecrets";
 export { loadEnvVars } from "./env-files";
 export {
   type KulalaEnvironmentCatalog,

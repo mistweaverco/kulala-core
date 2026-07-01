@@ -38,7 +38,7 @@ export type KulalaRequestSent = {
   body?: string;
 };
 
-/** Returned for WEBSOCKET/WS/WSS — nvim starts a native WebSocket session via kulala-core. */
+/** Returned for WEBSOCKET/WS/WSS - nvim starts a native WebSocket session via kulala-core. */
 export type KulalaWebSocketPlanResponse = {
   success: true;
   protocol: "websocket";
@@ -172,7 +172,7 @@ export type KulalaPromptResponse = {
   }>;
 };
 
-/** Pre-request script called `$kulala.request.skip()` — no HTTP request was sent. */
+/** Pre-request script called `$kulala.request.skip()` - no HTTP request was sent. */
 export type KulalaSkippedResponse = {
   success: true;
   skipped: true;
@@ -207,7 +207,7 @@ export type VariableResolver = (name: string) => string | undefined;
 export type KulalaRunOptions = {
   /** Raw document content (for stable ID when filepath is absent). */
   content?: string;
-  /** Environment name for variable resolution (kuba, etc.). Defaults to "default". */
+  /** Environment name for variable resolution (withsecrets, etc.). Defaults to "default". */
   env?: string;
   /** Pretty-print response bodies (indentation, tabs vs spaces). */
   responseFormat?: KulalaResponseFormatOptions;
