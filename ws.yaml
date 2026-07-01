@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=https://kuba.mwco.app/kuba.schema.json
+# yaml-language-server: $schema=https://withsecrets.com/ws.schema.json
 ---
 default:
   provider: local

@@ -48,7 +48,7 @@ between distributed systems.
 - Document variables
 - Request scoped variables
 - `http-client.env` files
-- Built-in support for [kuba](https://kuba.mwco.app)
+- Built-in support for [withsecrets](https://withsecrets.com) (`ws`; legacy `kuba` alias still works)
 
 ### Scripting
 

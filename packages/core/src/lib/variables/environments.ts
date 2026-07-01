@@ -8,16 +8,16 @@ import {
 import { DEFAULT_CURL_OPTIONS_KEY } from "./default-curl-options";
 import { DEFAULT_HEADERS_KEY, KULALA_SHARED_KEY } from "./default-headers";
 import {
-  findKubaYamlDir,
-  getKubaEnv,
-  isKubaInPath,
-  listKubaEnvNames,
-} from "./kuba";
+  findWithsecretsYamlDir,
+  getWithsecretsEnv,
+  isWithsecretsInPath,
+  listWithsecretsEnvNames,
+} from "./withsecrets";
 
 export type KulalaEnvironmentCatalog = {
   /** Kulala-only: shared variables, `$kulalaDefaultHeaders`, and `$kulalaDefaultCurlOptions`. */
   $kulalaShared?: Record<string, unknown>;
-  /** Environment name → variables (http-client sections + kuba flat vars). */
+  /** Environment name → variables (http-client sections + withsecrets flat vars). */
   environments: Record<string, Record<string, unknown>>;
 };
 
@@ -127,7 +127,7 @@ function flatVarsToSection(
 }
 
 /**
- * Discover environments from http-client.env.json, http-client.private.env.json, and kuba.yaml.
+ * Discover environments from http-client.env.json, http-client.private.env.json, and ws.yaml.
  * Used by editors (kulala.nvim) for environment selection and preview.
  */
 export async function loadEnvironmentCatalog(
@@ -139,11 +139,11 @@ export async function loadEnvironmentCatalog(
     environments: { ...http.environments },
   };
 
-  const kubaDir = findKubaYamlDir(startDir);
-  if (kubaDir !== null && isKubaInPath()) {
-    const names = await listKubaEnvNames(kubaDir);
+  const withsecretsDir = findWithsecretsYamlDir(startDir);
+  if (withsecretsDir !== null && isWithsecretsInPath()) {
+    const names = await listWithsecretsEnvNames(withsecretsDir);
     for (const envName of names) {
-      const vars = await getKubaEnv(envName, kubaDir);
+      const vars = await getWithsecretsEnv(envName, withsecretsDir);
       if (!vars || Object.keys(vars).length === 0) continue;
       catalog.environments[envName] = deepMergeObjects(
         catalog.environments[envName] ?? {},

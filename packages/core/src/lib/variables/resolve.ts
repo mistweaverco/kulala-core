@@ -1,6 +1,6 @@
 import { getVariables } from "../persistence";
 import { loadEnvVars } from "./env-files";
-import { findKubaYamlDir, getKubaEnv } from "./kuba";
+import { findWithsecretsYamlDir, getWithsecretsEnv } from "./withsecrets";
 import { getMagicVariables } from "./magic";
 import { mergeVariableIntoFlat } from "./variable-lookup";
 
@@ -13,8 +13,8 @@ export type HttpFileVariableSources = {
 
 /**
  * Resolve all variables for a request.
- * kuba is put into $env.VAR, since kuba when run on its own
- * injects env vars into the process environment.
+ * withsecrets (`ws`) vars are put into $env.VAR, matching how `ws run` injects
+ * environment variables into the process environment.
  *
  * Order (later overrides earlier): @-lines from .http (file header + block preamble) →
  * system/env files (http-client.env.json, .env) → persistence (global → document → request) →
@@ -31,11 +31,11 @@ export async function resolveVariables(
 ): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
 
-  const kubaDir = findKubaYamlDir(startDir);
-  if (kubaDir !== null) {
-    const kubaVars = await getKubaEnv(env, kubaDir);
-    if (kubaVars) {
-      for (const [k, v] of Object.entries(kubaVars)) {
+  const withsecretsDir = findWithsecretsYamlDir(startDir);
+  if (withsecretsDir !== null) {
+    const withsecretsVars = await getWithsecretsEnv(env, withsecretsDir);
+    if (withsecretsVars) {
+      for (const [k, v] of Object.entries(withsecretsVars)) {
         out["$env." + k] = v;
       }
     }
