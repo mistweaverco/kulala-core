@@ -8,7 +8,7 @@ import {
 
 describe("curlHeaderArg", () => {
   test("passes Content-Type; sentinel without colon for curl", () => {
-    expect(curlHeaderArg("Content-Type;", "")).toBe("Content-Type;");
+    expect(curlHeaderArg("Content-Type;", "")).toBe("Content-Type;:");
     expect(curlHeaderArg("Content-Type", "application/json")).toBe(
       "Content-Type: application/json",
     );

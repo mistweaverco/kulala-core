@@ -277,7 +277,7 @@ describe("curl transport", () => {
       contentType: string | null;
     };
     expect(parsed.raw).toBe('{"foo":"bar"}');
-    expect(parsed.contentType).toBe("");
+    expect(parsed.contentType).toBeNull();
   });
 });
 

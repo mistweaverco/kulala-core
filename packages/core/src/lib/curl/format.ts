@@ -3,7 +3,7 @@ import type { CurlFormatInput } from "./types";
 
 /** curl `-H` value for a request header (handles `Content-Type;` omit sentinel). */
 export function curlHeaderArg(name: string, value: string): string {
-  if (name.endsWith(";") && value === "") return name;
+  if (name.endsWith(";") && value === "") return `${name}:`;
   return `${name}: ${value}`;
 }
 
