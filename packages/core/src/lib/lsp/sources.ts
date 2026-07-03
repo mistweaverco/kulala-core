@@ -497,7 +497,7 @@ export function staticCompletionItems(sourceName: string): LspCompletionItem[] {
           description: "API",
           kind: kindSnippet,
           // blink.cmp treats `$` as non-keyword and `vim.snippet.expand` strips a shared
-          // prefix from Snippet items — use PlainText for `$kulala.*` completions.
+          // prefix from Snippet items - use PlainText for `$kulala.*` completions.
           insertTextFormat: isKulalaApi
             ? LspInsertTextFormat.PlainText
             : formatSnippet,

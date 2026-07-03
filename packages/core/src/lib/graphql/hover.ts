@@ -71,7 +71,7 @@ function formatArgLine(arg: GraphQLInputValue): string {
   const typeName = displayTypeRef(arg.type);
   const defaultVal =
     arg.defaultValue != null && arg.defaultValue !== ""
-      ? ` — default: \`${arg.defaultValue}\``
+      ? ` - default: \`${arg.defaultValue}\``
       : "";
   const desc = arg.description?.trim() ? `\n  ${arg.description.trim()}` : "";
   return `- \`${arg.name}\` (**${typeName}**)${defaultVal}${desc}`;

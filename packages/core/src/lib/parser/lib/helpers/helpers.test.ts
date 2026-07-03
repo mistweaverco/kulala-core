@@ -34,7 +34,7 @@ function buildPayload(type: string, pad: string): unknown {
   };
 }
 
-/** Child script — generates the payload in-process so the parent doesn't have
+/** Child script - generates the payload in-process so the parent doesn't have
  *  to pass it via argv (avoids E2BIG for large payloads). */
 function childScript(helperName: string, pad: string): string {
   return `
