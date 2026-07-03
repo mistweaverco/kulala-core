@@ -783,14 +783,15 @@ export async function doRequestFromBlock(
       !isGraphQL && requestHeaderType === "json"
         ? getJSONRequestBody(body)
         : undefined;
-    // Body-from-file yields a string; parse as JSON when Content-Type is json
+    // Body-from-file yields bytes; parse as JSON when Content-Type is json
     if (
       json === undefined &&
       requestHeaderType === "json" &&
-      typeof body === "string"
+      (typeof body === "string" || Buffer.isBuffer(body))
     ) {
       try {
-        json = JSON.parse(body) as Record<string, unknown>;
+        const text = typeof body === "string" ? body : body.toString("utf-8");
+        json = JSON.parse(text) as Record<string, unknown>;
       } catch {
         // leave json undefined, may fall through to raw body
       }

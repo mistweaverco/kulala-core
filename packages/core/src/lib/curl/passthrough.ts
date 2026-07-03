@@ -76,7 +76,7 @@ function looksLikeCurlFlag(token: string): boolean {
 
 /**
  * Merge curl argv layers; later layers override earlier ones on the same flag token.
- * Pass-through only — no alias mapping or special flags.
+ * Pass-through only - no alias mapping or special flags.
  */
 export function mergeCurlArgv(layers: string[][]): string[] {
   const byFlag = new Map<string, string[]>();

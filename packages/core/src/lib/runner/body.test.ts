@@ -57,6 +57,18 @@ test("getJSONRequestBody returns object as-is", () => {
 test("getJSONRequestBody returns undefined for non-object", () => {
   expect(getJSONRequestBody("string")).toBeUndefined();
   expect(getJSONRequestBody(null)).toBeUndefined();
+  expect(getJSONRequestBody(Buffer.from([0x89, 0x50]))).toBeUndefined();
+});
+
+test("applyRawBodyWithoutContentType passes Buffer through unchanged", () => {
+  const bytes = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+  const { headers, bodyPayload } = applyRawBodyWithoutContentType(
+    { "Content-Type": "image/png" },
+    bytes,
+  );
+  expect(Buffer.isBuffer(bodyPayload)).toBe(true);
+  expect(Buffer.compare(bodyPayload as Buffer, bytes)).toBe(0);
+  expect(headers["Content-Type"]).toBe("image/png");
 });
 
 test("applyRawBodyWithoutContentType stringifies JSON object and sets Content-Type;", () => {
@@ -197,7 +209,20 @@ test("resolveBodyFromFile reads file relative to baseDir", async () => {
   await Bun.write(filePath, "hello from file");
 
   const content = await resolveBodyFromFile("payload.txt", dir);
-  expect(content).toBe("hello from file");
+  expect(content.toString("utf-8")).toBe("hello from file");
+});
+
+test("resolveBodyFromFile preserves binary bytes", async () => {
+  const { mkdtempSync } = await import("fs");
+  const { join } = await import("path");
+  const { tmpdir } = await import("os");
+  const dir = mkdtempSync(join(tmpdir(), "kulala-resolve-body-"));
+  const filePath = join(dir, "image.bin");
+  const bytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0xff, 0xfe]);
+  await Bun.write(filePath, bytes);
+
+  const content = await resolveBodyFromFile("image.bin", dir);
+  expect(Buffer.compare(content, bytes)).toBe(0);
 });
 
 test("resolveBodyFromFile resolves relative path with subdir", async () => {
@@ -213,7 +238,7 @@ test("resolveBodyFromFile resolves relative path with subdir", async () => {
   await Bun.write(filePath, '{"x":1}');
 
   const content = await resolveBodyFromFile("fixtures/data.json", dir);
-  expect(content).toBe('{"x":1}');
+  expect(content.toString("utf-8")).toBe('{"x":1}');
 });
 
 test("getFormRequestBody form-data: raw multipart template returns undefined", () => {
@@ -323,7 +348,7 @@ test("resolveInlineBodyFileRefs: blank line after file ref yields single LF befo
   expect(out).not.toContain("BODY\r\n\r\n--b--\r\n");
 });
 
-test("resolveInlineBodyFileRefs: file with trailing LF then boundary line — one LF before --", async () => {
+test("resolveInlineBodyFileRefs: file with trailing LF then boundary line - one LF before --", async () => {
   const { mkdtempSync } = await import("fs");
   const { join } = await import("path");
   const { tmpdir } = await import("os");
@@ -396,7 +421,7 @@ test("resolveInlineBodyFileRefs: IntelliJ-style multi-part template is busboy-pa
   expect(err).toBeNull();
 });
 
-test("resolveInlineBodyFileRefs: trailing LF in file + blank before boundary — one LF before --", async () => {
+test("resolveInlineBodyFileRefs: trailing LF in file + blank before boundary - one LF before --", async () => {
   const { mkdtempSync } = await import("fs");
   const { join } = await import("path");
   const { tmpdir } = await import("os");

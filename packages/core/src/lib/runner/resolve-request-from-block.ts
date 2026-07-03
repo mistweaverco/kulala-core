@@ -427,10 +427,11 @@ export async function resolveRequestFromBlock(
   if (
     json === undefined &&
     requestHeaderType === "json" &&
-    typeof body === "string"
+    (typeof body === "string" || Buffer.isBuffer(body))
   ) {
     try {
-      json = JSON.parse(body) as Record<string, unknown>;
+      const text = typeof body === "string" ? body : body.toString("utf-8");
+      json = JSON.parse(text) as Record<string, unknown>;
     } catch {
       // ignore
     }

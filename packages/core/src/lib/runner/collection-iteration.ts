@@ -33,7 +33,7 @@ function collectRefsFromBody(body: unknown): string[] {
   return extractVariableRefsFromText(JSON.stringify(body));
 }
 
-/** True for dynamic variables ($uuid, $random.*, …) — not collection-expanded. */
+/** True for dynamic variables ($uuid, $random.*, …) - not collection-expanded. */
 function isDynamicVariableRef(name: string): boolean {
   return name.startsWith("$") && !name.startsWith("$env.");
 }

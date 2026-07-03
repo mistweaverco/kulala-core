@@ -171,6 +171,9 @@ export function substituteInObject(
   vars: Record<string, string>,
   resolver?: (name: string) => string | undefined,
 ): unknown {
+  if (Buffer.isBuffer(obj)) {
+    return obj;
+  }
   if (typeof obj === "string") {
     return substituteInString(obj, vars, resolver);
   }
@@ -199,6 +202,9 @@ export async function substituteInObjectAsync(
     authId: string,
   ) => Promise<string | undefined>,
 ): Promise<unknown> {
+  if (Buffer.isBuffer(obj)) {
+    return obj;
+  }
   if (typeof obj === "string") {
     return await substituteInStringAsync(obj, vars, resolver, authResolver);
   }

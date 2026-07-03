@@ -129,7 +129,7 @@ function parseInlineBodyFileRefTail(tail: string): {
     if (end === -1) return { path: stripQuotesPath(s), suffix: "" };
     return { path: s.slice(1, end), suffix: s.slice(end + 1).trimStart() };
   }
-  // First non-whitespace run is the path; rest is suffix (no artificial leading space — MIME
+  // First non-whitespace run is the path; rest is suffix (no artificial leading space - MIME
   // closing delimiters like `--boundary--` must not be prefixed with a space).
   const m = s.match(/^(\S+)\s*(.*)$/);
   if (!m) return { path: "", suffix: "" };
@@ -152,7 +152,7 @@ function dataEndsWithCrlf(data: Buffer): boolean {
   );
 }
 
-/** File ends with LF but not CRLF — MIME still needs `\r\n` before the next `--` delimiter. */
+/** File ends with LF but not CRLF - MIME still needs `\r\n` before the next `--` delimiter. */
 function dataEndsWithBareLf(data: Buffer): boolean {
   return (
     data.length > 0 &&
@@ -295,7 +295,7 @@ export function getRequestHeaderType(headers: unknown): RequestHeaderType {
 export function getJSONRequestBody(
   body: unknown,
 ): Record<string, unknown> | undefined {
-  if (typeof body === "object" && body !== null) {
+  if (typeof body === "object" && body !== null && !Buffer.isBuffer(body)) {
     return body as Record<string, unknown>;
   }
   return undefined;
@@ -308,7 +308,10 @@ export function getJSONRequestBody(
 export function applyRawBodyWithoutContentType(
   headers: Record<string, string>,
   body: unknown,
-): { headers: Record<string, string>; bodyPayload: string | undefined } {
+): {
+  headers: Record<string, string>;
+  bodyPayload: string | Buffer | undefined;
+} {
   if (body === null || body === undefined) {
     return { headers, bodyPayload: undefined };
   }
@@ -320,9 +323,11 @@ export function applyRawBodyWithoutContentType(
     nextHeaders["Content-Type;"] = "";
   }
 
-  let bodyPayload: string | undefined;
+  let bodyPayload: string | Buffer | undefined;
   try {
-    if (typeof body === "string" && body.trim().length > 0) {
+    if (Buffer.isBuffer(body) && body.length > 0) {
+      bodyPayload = body;
+    } else if (typeof body === "string" && body.trim().length > 0) {
       bodyPayload = body;
     } else if (typeof body === "object") {
       bodyPayload = JSON.stringify(body);
@@ -422,18 +427,17 @@ export function isBodyFromFileRef(
 }
 
 /**
- * Resolve body-from-file: read file at path (relative to baseDir) and return its contents as string.
+ * Resolve body-from-file: read file at path (relative to baseDir) and return raw bytes.
  * @throws if file cannot be read
  */
 export async function resolveBodyFromFile(
   filePath: string,
   baseDir: string,
-): Promise<string> {
+): Promise<Buffer> {
   const path = await import("path");
   const fs = await import("fs/promises");
   const resolved = path.resolve(baseDir, filePath);
-  const content = await fs.readFile(resolved, "utf-8");
-  return content;
+  return await fs.readFile(resolved);
 }
 
 /**
@@ -444,12 +448,12 @@ export async function resolveEffectiveBodyFromFileRef(
   ref: KulalaRequestBodyFromFileContent,
   baseDir: string,
   method?: string,
-): Promise<string | { query: string; variables?: Record<string, unknown> }> {
+): Promise<Buffer | { query: string; variables?: Record<string, unknown> }> {
   const fileContent = await resolveBodyFromFile(ref.__bodyFromFile, baseDir);
   if ((method ?? "").toUpperCase() !== "GRAPHQL") {
     return fileContent;
   }
-  const fromFile = parseGraphQLContent(fileContent);
+  const fromFile = parseGraphQLContent(fileContent.toString("utf-8"));
   const suffixVars = ref.__graphqlVariablesSuffix
     ? parseGraphQLVariablesJson(ref.__graphqlVariablesSuffix)
     : undefined;

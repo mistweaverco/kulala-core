@@ -120,6 +120,15 @@ beforeAll(() => {
         const raw = await req.text();
         return Response.json({ echoed: raw });
       }
+      if (path === "/echo-binary" && method === "PUT") {
+        const raw = Buffer.from(await req.arrayBuffer());
+        return new Response(raw, {
+          headers: {
+            "Content-Type":
+              req.headers.get("content-type") ?? "application/octet-stream",
+          },
+        });
+      }
       if (path === "/graphql" && method === "POST") {
         const contentType = req.headers.get("content-type") ?? "";
         if (!contentType.toLowerCase().includes("application/json")) {
@@ -2018,6 +2027,46 @@ test("doRequestFromBlock: reads request body from file (JetBrains < path syntax)
   ) {
     const content = result.body.content as { echoed?: string };
     expect(content.echoed).toBe(JSON.stringify({ from: "file", n: 42 }));
+  }
+});
+
+test("doRequestFromBlock: reads binary request body from file (< path syntax)", async () => {
+  const { mkdtempSync } = await import("fs");
+  const { join } = await import("path");
+  const { tmpdir } = await import("os");
+  const dir = mkdtempSync(join(tmpdir(), "kulala-body-bin-"));
+  const bodyFile = join(dir, "image.png");
+  const pngBytes = Buffer.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0xff, 0xfe,
+  ]);
+  await Bun.write(bodyFile, pngBytes);
+  const httpFilePath = join(dir, "request.http");
+
+  const block = makeBlock({
+    request: {
+      method: "PUT",
+      url: `${baseUrl}/echo-binary` as KulalaHttpURL,
+      headerSection: [
+        { type: "header", name: "Content-Type", value: "image/png" },
+      ],
+      body: { __bodyFromFile: "image.png" },
+    },
+  });
+
+  const result = await httpDoRequestFromBlock(
+    block,
+    httpFilePath,
+    undefined,
+    undefined,
+    undefined,
+  );
+
+  expect(result).toHaveProperty("success", true);
+  if (result.success && result.body.type === "binary") {
+    const echoed = Buffer.from(result.body.content, "base64");
+    expect(Buffer.compare(echoed, pngBytes)).toBe(0);
+  } else {
+    throw new Error("expected binary response body");
   }
 });
 

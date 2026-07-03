@@ -367,7 +367,7 @@ test("lspCompletion textEdit replaces full $kulala prefix", async () => {
   expect(item!.textEdit!.range.end.character).toBe(line.length);
   expect(item!.textEdit!.newText).toContain("$kulala.prompt");
   expect(item!.insertText).toContain("$kulala.prompt(");
-  expect(item!.insertTextFormat).toBe(1); // PlainText — blink.cmp strips `$` from Snippet prefixes
+  expect(item!.insertTextFormat).toBe(1); // PlainText - blink.cmp strips `$` from Snippet prefixes
 });
 
 test("lspCompletion textEdit replaces typed > before post-request script snippet", async () => {
