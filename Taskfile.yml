@@ -14,6 +14,16 @@ tasks:
     cmds:
       - fd -e ts -e js '\.(test|spec)\.' | xargs wc -l
     silent: true
+  count-loc-without-tests:
+    desc: Count lines of code excluding test files
+    cmds:
+      - fd -e ts -e js --exclude '*.test.*' | xargs wc -l
+    silent: true
+  count-loc:
+    desc: Total lines of code
+    cmds:
+      - fd -e ts -e js | xargs wc -l
+    silent: true
   build:
     desc: Build the project
     cmds:
