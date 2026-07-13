@@ -1,0 +1,36 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: '3'
+
+tasks:
+  default:
+    desc: Nothing to see here
+    cmds:
+      - bun install --frozen-lockfile
+      - bun run build
+    silent: true
+  count-loc-tests:
+    desc: Count lines of code in test files
+    cmds:
+      - fd -e ts -e js '\.(test|spec)\.' | xargs wc -l
+    silent: true
+  build:
+    desc: Build the project
+    cmds:
+      - bun run build
+    silent: true
+  test:
+    desc: Run tests
+    cmds:
+      - bun run test
+    silent: true
+  lint:
+    desc: Run linter
+    cmds:
+      - bun run lint
+    silent: true
+  format:
+    desc: Run formatter
+    cmds:
+      - bun run format
+    silent: true
