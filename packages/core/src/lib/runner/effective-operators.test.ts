@@ -1,7 +1,16 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, writeFileSync } from "fs";
+import { join } from "path";
+import { tmpdir } from "os";
 import type { KulalaDocument } from "../parser/types";
 import type { KulalaBlock } from "../parser/types/block";
-import { getEffectiveJqFilter } from "./effective-operators";
+import type { KulalaOperator } from "../parser/types/operator";
+import {
+  getEffectiveCurlArgv,
+  getEffectiveJqFilter,
+  jetbrainsOperatorsToCurlArgv,
+  parseDurationToSec,
+} from "./effective-operators";
 
 function block(operators: KulalaBlock["operators"]): KulalaBlock {
   return {
@@ -11,6 +20,93 @@ function block(operators: KulalaBlock["operators"]): KulalaBlock {
     scripts: { preRequest: [], postRequest: [] },
   } as unknown as KulalaBlock;
 }
+
+function op(name: KulalaOperator["name"], args?: string): KulalaOperator {
+  return { name, args, lineNumber: 0 };
+}
+
+function envDirWithDefaults(defaults: string[]): string {
+  const dir = mkdtempSync(join(tmpdir(), "kulala-curl-ops-"));
+  writeFileSync(
+    join(dir, "http-client.env.json"),
+    JSON.stringify({
+      $kulalaShared: { $kulalaDefaultCurlOptions: defaults },
+      default: { env_name: "default" },
+    }),
+    "utf-8",
+  );
+  return dir;
+}
+
+describe("parseDurationToSec", () => {
+  test("parses ms, s, and m units", () => {
+    expect(parseDurationToSec("10 ms")).toBe(0.01);
+    expect(parseDurationToSec("5 s")).toBe(5);
+    expect(parseDurationToSec("2 m")).toBe(120);
+    expect(parseDurationToSec("3")).toBe(3);
+  });
+});
+
+describe("jetbrainsOperatorsToCurlArgv", () => {
+  test("maps timeout tags to curl flags", () => {
+    expect(
+      jetbrainsOperatorsToCurlArgv([
+        op("timeout", "10 ms"),
+        op("connection-timeout", "500 ms"),
+      ]),
+    ).toEqual(["--max-time", "0.01", "--connect-timeout", "0.5"]);
+  });
+});
+
+describe("getEffectiveCurlArgv", () => {
+  test("# @timeout overrides env default --max-time", () => {
+    const dir = envDirWithDefaults(["--max-time 2"]);
+    const b = block([op("timeout", "10 ms")]);
+    expect(getEffectiveCurlArgv(undefined, b, "default", dir)).toEqual([
+      "--max-time",
+      "0.01",
+    ]);
+  });
+
+  test("# @connection-timeout overrides env default --connect-timeout", () => {
+    const dir = envDirWithDefaults(["--connect-timeout 5"]);
+    const b = block([op("connection-timeout", "500 ms")]);
+    expect(getEffectiveCurlArgv(undefined, b, "default", dir)).toEqual([
+      "--connect-timeout",
+      "0.5",
+    ]);
+  });
+
+  test("# @kulala-curl--max-time overrides env default", () => {
+    const dir = envDirWithDefaults(["--max-time 2"]);
+    const b = block([op("kulala-curl--max-time", "5")]);
+    expect(getEffectiveCurlArgv(undefined, b, "default", dir)).toEqual([
+      "--max-time",
+      "5",
+    ]);
+  });
+
+  test("passthrough curl operator wins over # @timeout on same flag", () => {
+    const dir = envDirWithDefaults(["--max-time 2"]);
+    const b = block([op("timeout", "10 ms"), op("kulala-curl--max-time", "5")]);
+    expect(getEffectiveCurlArgv(undefined, b, "default", dir)).toEqual([
+      "--max-time",
+      "5",
+    ]);
+  });
+
+  test("block operator overrides file-header operator", () => {
+    const dir = envDirWithDefaults(["--max-time 2"]);
+    const doc = {
+      fileHeaderOperators: [op("timeout", "1 s")],
+    } as KulalaDocument;
+    const b = block([op("timeout", "50 ms")]);
+    expect(getEffectiveCurlArgv(doc, b, "default", dir)).toEqual([
+      "--max-time",
+      "0.05",
+    ]);
+  });
+});
 
 describe("getEffectiveJqFilter", () => {
   test("block operator overrides file header", () => {

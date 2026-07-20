@@ -1,0 +1,6 @@
+### rur
+
+GET https://echo.kulala.app/get HTTP/1.1
+Content-Type: application/json
+
+> ./load-test.http.js
