@@ -106,15 +106,15 @@ export const SCRIPT_API_DOCS: Record<string, ScriptApiDoc> = {
     signature: "client.isEmpty(): boolean",
     example: "if (client.isEmpty()) client.log('No globals');",
   },
-  "client.clear": {
+  "client.global.clear": {
     summary: "Remove a single variable from global storage.",
-    signature: "client.clear(varName: string)",
-    example: 'client.clear("SOME_TOKEN");',
+    signature: "client.global.clear(varName: string)",
+    example: 'client.global.clear("SOME_TOKEN");',
   },
-  "client.clearAll": {
+  "client.global.clearAll": {
     summary: "Remove all global variables.",
-    signature: "client.clearAll()",
-    example: "client.clearAll();",
+    signature: "client.global.clearAll()",
+    example: "client.global.clearAll();",
   },
   "client.exit": {
     summary: "Stop executing the current response handler script.",

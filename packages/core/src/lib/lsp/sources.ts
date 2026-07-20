@@ -129,7 +129,7 @@ export function staticCompletionItems(sourceName: string): LspCompletionItem[] {
     },
     {
       label: "timeout",
-      insertText: "timeout 5s",
+      insertText: "timeout 500 ms",
       documentation: "Total request timeout (500 ms, 5 s)",
     },
     {
@@ -344,13 +344,13 @@ export function staticCompletionItems(sourceName: string): LspCompletionItem[] {
       documentation: "Check if globals are empty",
     },
     {
-      label: "client.clear",
-      insertText: 'client.clear(${1:"varName"})$0',
+      label: "client.global.clear",
+      insertText: 'client.global.clear(${1:"varName"})$0',
       documentation: "Clear a global variable",
     },
     {
-      label: "client.clearAll",
-      insertText: "client.clearAll()$0",
+      label: "client.global.clearAll",
+      insertText: "client.global.clearAll()$0",
       documentation: "Clear all global variables",
     },
     {
