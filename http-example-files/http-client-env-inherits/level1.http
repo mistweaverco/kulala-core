@@ -1,0 +1,7 @@
+### level2
+
+run ./level2/level2.http
+
+### level1
+
+GET https://echo.kulala.app/get?level={{ folder_level }} HTTP/1.1
