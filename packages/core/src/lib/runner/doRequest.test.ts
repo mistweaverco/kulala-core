@@ -732,6 +732,77 @@ test("doRequestFromBlock: # @timeout triggers a timeout against a slow endpoint"
   expect(result.success).toBe(false);
 });
 
+test("doRequestFromBlock: # @timeout overrides default --max-time", async () => {
+  const { mkdtempSync, writeFileSync } = await import("fs");
+  const { join } = await import("path");
+  const { tmpdir } = await import("os");
+
+  const dir = mkdtempSync(join(tmpdir(), "kulala-timeout-"));
+  const httpClientEnvPath = join(dir, "http-client.env.json");
+
+  // Default curl options apply when `doRequestFromBlock` receives a `filePath`
+  // and searches upward from that directory.
+  writeFileSync(
+    httpClientEnvPath,
+    JSON.stringify(
+      {
+        $kulalaShared: {
+          $kulalaDefaultCurlOptions: ["--max-time 2"],
+        },
+        default: { env_name: "default" },
+      },
+      null,
+      2,
+    ),
+    "utf-8",
+  );
+
+  const filePath = join(dir, "example.http");
+
+  const slowServer = Bun.serve({
+    port: 0,
+    async fetch() {
+      await new Promise((r) => setTimeout(r, 100));
+      return new Response("ok", { headers: { "Content-Type": "text/plain" } });
+    },
+  });
+
+  if (slowServer.port === undefined) {
+    throw new Error("Slow server did not expose a listening port");
+  }
+
+  const slowUrl = `http://localhost:${slowServer.port}/slow`;
+
+  const block = makeBlock({
+    operators: [
+      {
+        name: "timeout",
+        args: "50 ms", // should override default --max-time 2 and therefore timeout
+        lineNumber: 1,
+      } as KulalaOperator,
+    ],
+    request: {
+      method: "GET",
+      url: slowUrl as KulalaHttpURL,
+      headerSection: [],
+    },
+  });
+
+  const result = await httpDoRequestFromBlock(
+    block,
+    filePath,
+    undefined,
+    "stable-doc",
+    undefined,
+    "default",
+    { globalHeaders: {} },
+  );
+
+  slowServer.stop();
+
+  expect(result.success).toBe(false);
+});
+
 test("doRequestFromBlock: # @timeout 5 s uses seconds for curl (not milliseconds)", async () => {
   const slowServer = Bun.serve({
     port: 0,

@@ -332,19 +332,6 @@ export async function doRequestFromBlock(
 ): Promise<DoRequestFromBlockResult | DoRequestFromBlockResult[]> {
   const scriptConsole: KulalaScriptConsoleLine[] = [];
 
-  const parseDurationToSec = (raw: string): number | undefined => {
-    const s = raw.trim();
-    if (!s) return undefined;
-    const m = s.match(/^(\d+(?:\.\d+)?)\s*(ms|s|m)?$/i);
-    if (!m) return undefined;
-    const n = Number(m[1]);
-    if (!Number.isFinite(n) || n < 0) return undefined;
-    const unit = (m[2] ?? "s").toLowerCase();
-    if (unit === "ms") return n / 1000;
-    if (unit === "m") return n * 60;
-    return n;
-  };
-
   const parsePromptArgs = parseKulalaPromptOperatorArgs;
 
   // Pre-request scripts may set variables that affect substitution.
@@ -961,15 +948,6 @@ export async function doRequestFromBlock(
 
     const method = (isGraphQL ? "POST" : block.request.method) || "GET";
 
-    const timeoutSecJetBrains = parseDurationToSec(
-      getOpArgs(["timeout"]) ?? "",
-    );
-    const connectionTimeoutSecJetBrains = parseDurationToSec(
-      getOpArgs(["connection-timeout"]) ?? "",
-    );
-    const effectiveTimeoutSec = timeoutSecJetBrains ?? undefined;
-    const effectiveConnectionTimeoutSec =
-      connectionTimeoutSecJetBrains ?? undefined;
     const followRedirects = !hasOp(["no-redirect"]);
 
     try {
@@ -1031,8 +1009,6 @@ export async function doRequestFromBlock(
         headers: requestHeaders,
         body: bodyPayload,
         httpVersion: block.request.httpVersion,
-        timeoutSec: effectiveTimeoutSec,
-        connectionTimeoutSec: effectiveConnectionTimeoutSec,
         followRedirects,
         propagateCookiesOnRedirect: cookieJarEnabled,
         cookieJarEnabled,

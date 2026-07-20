@@ -1,0 +1,6 @@
+### load-test-template
+
+# @timeout 300 ms
+
+GET https://echo.kulala.app/get HTTP/1.1
+Content-Type: application/json
