@@ -3,6 +3,7 @@ import { join, dirname, isAbsolute } from "path";
 import type { KulalaBlock } from "../parser/types/block";
 import type { KulalaDocument } from "../parser/types";
 import { parseGraphQLContent } from "../parser/graphql-content";
+import { isRequestContinuationLine, isRequestLine } from "../parser/request";
 import { findBlocksAtCursor } from "../runner/block";
 
 export type GraphQLBlockCursorContext = {
@@ -35,16 +36,30 @@ type GraphQLBodySlice = {
 };
 
 /**
- * Skip ### name, optional blanks, request line, headers; return GraphQL query lines only.
+ * Skip preamble (### name, comments, pre-request scripts, …), the request line,
+ * and headers; return GraphQL query lines only.
+ *
+ * Preamble must be skipped by finding a real request line - a naive
+ * "first non-empty line with a space" match treats `# comments` and
+ * `< ./pre-request.js` as the request and then treats the real GRAPHQL
+ * line as the query body (wrong completions).
  */
 async function sliceGraphQLQueryLines(
   blockLines: string[],
   filepath: string | undefined,
 ): Promise<GraphQLBodySlice | null> {
   let i = 0;
-  if (blockLines[i]?.startsWith("###")) i++;
-  while (i < blockLines.length && (blockLines[i] ?? "").trim() === "") i++;
-  if (i < blockLines.length && /^\s*\S+\s+/.test(blockLines[i] ?? "")) i++;
+  while (i < blockLines.length && !isRequestLine(blockLines[i] ?? "")) {
+    i++;
+  }
+  if (i >= blockLines.length) return null;
+  i++; // skip METHOD URL [HTTP/x.x]
+  while (
+    i < blockLines.length &&
+    isRequestContinuationLine(blockLines[i] ?? "")
+  ) {
+    i++;
+  }
 
   while (i < blockLines.length) {
     const line = blockLines[i] ?? "";
