@@ -1,0 +1,21 @@
+### login
+
+POST https://echo.kulala.app/post HTTP/1.1
+Content-Type: application/json
+
+{
+  "token": "some-token-value",
+  "expiresIn": 60
+}
+
+### get-users
+
+< ./tokencache.pre.http.js
+
+POST https://echo.kulala.app/post HTTP/1.1
+Authorization: Bearer {{ token }}
+Content-Type: application/json
+
+{
+  "hello": "world"
+}
