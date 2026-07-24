@@ -153,4 +153,19 @@ describe("formatGrpcurlCommand", () => {
     expect(cmd).toContain("kulala!");
     expect(cmd).not.toContain("{{");
   });
+
+  test("formats -authority from flags for TLS tunnel overrides", () => {
+    const cmd = formatGrpcurlCommand({
+      grpcCommand: {
+        address: "localhost:50051",
+        symbol: "pkg.Service/Method",
+        inlineFlags: [],
+      },
+      flags: [{ flag: "authority", value: "real.example.com" }],
+      cwd: "/project",
+    });
+    expect(cmd).toContain("-authority");
+    expect(cmd).toContain("real.example.com");
+    expect(cmd).toContain("localhost:50051");
+  });
 });

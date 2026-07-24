@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { parseGrpcAddress } from "./parse-target";
+import {
+  grpcChannelOptionsForAuthority,
+  grpcFlagsToLoaderOptions,
+  parseGrpcAddress,
+} from "./parse-target";
+import { grpcFlagsFromOperators } from "./collect-flags";
 
 describe("parseGrpcAddress", () => {
   test("treats bare host:port as TLS by default (grpcurl parity)", () => {
@@ -31,6 +36,36 @@ describe("parseGrpcAddress", () => {
     expect(parseGrpcAddress("grpc://localhost:50051")).toEqual({
       channelTarget: "localhost:50051",
       useTls: false,
+    });
+  });
+});
+
+describe("grpc-authority", () => {
+  test("maps # @grpc-authority to the authority flag", () => {
+    expect(
+      grpcFlagsFromOperators([
+        {
+          name: "grpc-authority",
+          args: "real.example.com",
+          lineNumber: 0,
+        },
+      ]),
+    ).toEqual([{ flag: "authority", value: "real.example.com" }]);
+  });
+
+  test("extracts authority from loader options", () => {
+    const opts = grpcFlagsToLoaderOptions(
+      [{ flag: "authority", value: "real.example.com" }],
+      "/project",
+    );
+    expect(opts.authority).toBe("real.example.com");
+  });
+
+  test("builds channel options for SSL name override and :authority", () => {
+    expect(grpcChannelOptionsForAuthority(undefined)).toBeUndefined();
+    expect(grpcChannelOptionsForAuthority("real.example.com")).toEqual({
+      "grpc.ssl_target_name_override": "real.example.com",
+      "grpc.default_authority": "real.example.com",
     });
   });
 });

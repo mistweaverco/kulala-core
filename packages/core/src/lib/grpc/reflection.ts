@@ -25,13 +25,14 @@ export async function createReflectionClient(
   address: string,
   creds: grpc.ChannelCredentials,
   metadata?: grpc.Metadata,
+  channelOptions?: object,
 ): Promise<ReflectionClient> {
   const mod = await import("grpc-reflection-js");
   const ReflectionClientCtor = mod.Client ?? mod.default;
   return new ReflectionClientCtor(
     address,
     creds,
-    undefined,
+    channelOptions,
     metadata,
   ) as unknown as ReflectionClient;
 }
@@ -57,9 +58,15 @@ export async function loadPackageFromReflection(
   creds: grpc.ChannelCredentials,
   symbol: string,
   metadata?: grpc.Metadata,
+  channelOptions?: object,
 ): Promise<grpc.GrpcObject> {
   try {
-    const client = await createReflectionClient(address, creds, metadata);
+    const client = await createReflectionClient(
+      address,
+      creds,
+      metadata,
+      channelOptions,
+    );
     const root = await client.fileContainingSymbol(symbol);
     return grpcObjectFromRoot(root);
   } catch (e) {
@@ -75,9 +82,15 @@ export async function listServicesViaReflection(
   address: string,
   creds: grpc.ChannelCredentials,
   metadata?: grpc.Metadata,
+  channelOptions?: object,
 ): Promise<string[]> {
   try {
-    const client = await createReflectionClient(address, creds, metadata);
+    const client = await createReflectionClient(
+      address,
+      creds,
+      metadata,
+      channelOptions,
+    );
     return await client.listServices();
   } catch (e) {
     throw new Error(
@@ -98,8 +111,14 @@ export async function describeViaReflection(
   describeFromPackage: (pkg: grpc.GrpcObject, symbol?: string) => string,
   symbol?: string,
   metadata?: grpc.Metadata,
+  channelOptions?: object,
 ): Promise<string> {
-  const client = await createReflectionClient(address, creds, metadata);
+  const client = await createReflectionClient(
+    address,
+    creds,
+    metadata,
+    channelOptions,
+  );
 
   if (symbol) {
     const root = await client.fileContainingSymbol(symbol);

@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { performance } from "node:perf_hooks";
 import type { KulalaGrpcCommand, KulalaGrpcFlag } from "./types";
 import {
+  grpcChannelOptionsForAuthority,
   grpcFlagsToLoaderOptions,
   mergeGrpcFlags,
   parseGrpcAddress,
@@ -97,6 +98,7 @@ type LoadPackageContext = {
   address?: string;
   creds?: grpc.ChannelCredentials;
   metadata?: grpc.Metadata;
+  channelOptions?: Record<string, string>;
   reflectionSymbol?: string;
 };
 
@@ -156,6 +158,7 @@ async function loadPackageDefinition(
     ctx.creds,
     ctx.reflectionSymbol,
     ctx.metadata,
+    ctx.channelOptions,
   );
 }
 
@@ -178,8 +181,14 @@ async function grpcListServices(
   address: string,
   creds: grpc.ChannelCredentials,
   metadata: grpc.Metadata,
+  channelOptions?: Record<string, string>,
 ): Promise<string> {
-  const services = await listServicesViaReflection(address, creds, metadata);
+  const services = await listServicesViaReflection(
+    address,
+    creds,
+    metadata,
+    channelOptions,
+  );
   return JSON.stringify(services, null, 2);
 }
 
@@ -238,8 +247,9 @@ function unaryCall(
   creds: grpc.ChannelCredentials,
   metadata: grpc.Metadata,
   payload: Record<string, unknown>,
+  channelOptions?: Record<string, string>,
 ): Promise<unknown> {
-  const client = new Client(address, creds) as grpc.Client &
+  const client = new Client(address, creds, channelOptions) as grpc.Client &
     Record<string, unknown>;
   const rpcName = resolveClientMethod(Client, methodName);
   const rpc = client[rpcName];
@@ -270,7 +280,12 @@ export async function grpcNativeRequest(
   const parsed = opts.grpcCommand ?? parseGrpcTarget(opts.target);
   const flags = mergeGrpcFlags(opts.metadataFlags, parsed.inlineFlags);
   const vars = opts.vars ?? {};
-  const { plaintext } = grpcFlagsToLoaderOptions(flags, opts.cwd, vars);
+  const { plaintext, authority } = grpcFlagsToLoaderOptions(
+    flags,
+    opts.cwd,
+    vars,
+  );
+  const channelOptions = grpcChannelOptionsForAuthority(authority);
   const address = parsed.address;
   if (!address) {
     throw new Error("gRPC request is missing server address (host:port)");
@@ -282,7 +297,12 @@ export async function grpcNativeRequest(
 
   try {
     if (parsed.command === "list") {
-      const body = await grpcListServices(channelTarget, creds, metadata);
+      const body = await grpcListServices(
+        channelTarget,
+        creds,
+        metadata,
+        channelOptions,
+      );
       return {
         statusCode: 200,
         body,
@@ -298,6 +318,7 @@ export async function grpcNativeRequest(
       address: channelTarget,
       creds,
       metadata,
+      channelOptions,
     };
 
     if (parsed.command === "describe") {
@@ -312,6 +333,7 @@ export async function grpcNativeRequest(
             describeFromPackage,
             parsed.symbol,
             metadata,
+            channelOptions,
           );
       return {
         statusCode: 200,
@@ -339,6 +361,7 @@ export async function grpcNativeRequest(
         creds,
         serviceName,
         metadata,
+        channelOptions,
       );
       Client = findServiceClient(pkg, serviceName);
     }
@@ -358,6 +381,7 @@ export async function grpcNativeRequest(
       creds,
       metadata,
       payload,
+      channelOptions,
     );
 
     return {

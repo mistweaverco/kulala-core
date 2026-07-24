@@ -4,6 +4,7 @@ export {
   parseGrpcAddress,
   mergeGrpcFlags,
   grpcFlagsToLoaderOptions,
+  grpcChannelOptionsForAuthority,
 } from "./parse-target";
 export { resolveGrpcPath } from "./resolve-path";
 export {

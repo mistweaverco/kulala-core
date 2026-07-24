@@ -17,6 +17,7 @@ export type KulalaOperatorName =
   | "grpc-proto"
   | "grpc-protoset"
   | "grpc-plaintext"
+  | "grpc-authority"
   | "grpc-v"
   | "kulala-vscode-restclient-compat"
   | "kulala-jq"
@@ -39,6 +40,7 @@ export const kulalaOperatorNames: Set<KulalaOperatorName> = new Set([
   "grpc-proto",
   "grpc-protoset",
   "grpc-plaintext",
+  "grpc-authority",
   "grpc-v",
   "kulala-vscode-restclient-compat",
   "kulala-jq",

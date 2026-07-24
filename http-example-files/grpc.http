@@ -35,3 +35,12 @@ HEADER1: {{header1}}
 
 GRPC grpcb.in:9001 grpcbin.GRPCBin/Index
 HEADER1: {{header1}}
+
+### tunnel_authority
+
+# When tunneling a remote TLS service to localhost, override the SSL server
+# name / :authority so the certificate hostname still matches.
+# @grpc-authority grpcb.in
+
+GRPC localhost:9001 grpcbin.GRPCBin/Index
+HEADER1: {{header1}}
