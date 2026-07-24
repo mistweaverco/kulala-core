@@ -744,3 +744,48 @@ GET https://example.com
     "GET https://old.example.com",
   ]);
 });
+
+test("parser: commented-out @VAR = value preamble is kept as comments", async () => {
+  const content = `# @CARD_CODE = gorillamoe
+# @EMAIL = marco@example.com
+# @FIRST_NAME = Gorilla
+#
+# ### Find customer by cardcode
+#
+# GRAPHQL {{ URL }} HTTP/1.1
+#
+# query { __typename }
+#
+# { "query": "x" }
+
+### Other
+GET https://example.com
+`;
+  const doc = await getDocument(content);
+  expect(doc.fileHeaderOperators).toBeUndefined();
+  expect(doc.fileHeaderComments?.map((c) => c.content).slice(0, 5)).toEqual([
+    "@CARD_CODE = gorillamoe",
+    "@EMAIL = marco@example.com",
+    "@FIRST_NAME = Gorilla",
+    "",
+    "### Find customer by cardcode",
+  ]);
+});
+
+test("parser: real file-header operators still parse alongside comments", async () => {
+  const content = `# @kulala-curl--insecure
+# @CARD_CODE = gorillamoe
+# plain note
+
+### Active
+GET https://example.com
+`;
+  const doc = await getDocument(content);
+  expect(doc.fileHeaderOperators?.map((o) => o.name)).toEqual([
+    "kulala-curl--insecure",
+  ]);
+  expect(doc.fileHeaderComments?.map((c) => c.content)).toEqual([
+    "@CARD_CODE = gorillamoe",
+    "plain note",
+  ]);
+});

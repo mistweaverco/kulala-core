@@ -70,6 +70,12 @@ export const getOperator = (
 const isOperatorError = (obj: unknown): obj is KulalaError =>
   typeof obj === "object" && obj !== null && "errorMessage" in obj;
 
+/** True when the line is a recognized `# @…` / `// @…` operator (not a commented `@VAR =`). */
+export function isKnownOperatorLine(line: string): boolean {
+  if (!(line.startsWith("# @") || line.startsWith("// @"))) return false;
+  return !isOperatorError(getOperator(line, 0));
+}
+
 /** Operators (`# @…` / `// @…`) before the first request or `###` block marker. */
 export function extractFileHeaderOperators(content: string): KulalaOperator[] {
   const out: KulalaOperator[] = [];

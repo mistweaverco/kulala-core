@@ -11,6 +11,7 @@ import {
   extractFileHeaderOperators,
   getOperator,
   hasVscodeRestclientCompatOperator,
+  isKnownOperatorLine,
 } from "./operator";
 import type { KulalaError } from "./types/error";
 import type { KulalaScript } from "./types/script";
@@ -80,7 +81,8 @@ const getLineType = (
   }
   // Comments must win over body so `# …` / `// …` after a blank line are not slurped into the payload.
   if (isHttpCommentLine(line)) {
-    if (line.startsWith("# @") || line.startsWith("// @"))
+    // Only known `# @…` operators; commented-out `@VAR = value` stays a comment.
+    if (isKnownOperatorLine(line))
       return { name: "operator", lineNumber: lineIdx };
     return { name: "comment", lineNumber: lineIdx };
   }
@@ -287,7 +289,23 @@ const getParsedBlock = async (
       case "operator":
         operator = getOperator(line, lineIdx);
         if (isError(operator)) {
-          result.errors.push(operator);
+          // Unknown `# @…` (e.g. commented `@VAR = value`) - keep as a comment.
+          const comment = getComment(line, lineIdx);
+          if (!seenBlockTypes.has("request")) {
+            result.preamble.push(comment);
+            result.comments.push(comment);
+          } else if (
+            seenBlockTypes.has("body") ||
+            (result.trailingComments?.length ?? 0) > 0
+          ) {
+            result.trailingComments ??= [];
+            result.trailingComments.push(comment);
+          } else {
+            result.request.headerSection.push({
+              type: "comment",
+              comment,
+            });
+          }
           break;
         }
         result.preamble.push(operator);

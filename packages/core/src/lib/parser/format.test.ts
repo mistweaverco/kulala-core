@@ -231,4 +231,33 @@ GET https://example.com
     expect(result.formatted).toContain("# GET https://old.example.com");
     expect(result.formatted).toContain("### ACTIVE");
   });
+
+  test("preserves commented-out @VAR = value preamble lines", async () => {
+    const content = `# @CARD_CODE = gorillamoe
+# @EMAIL = marco@example.com
+# @SHOPIFY_SHOP_NAME = Urban Classics B2B
+#
+# ### Find customer by cardcode
+#
+# GRAPHQL {{ URL }} HTTP/1.1
+# Accept: application/json
+#
+# query { __typename }
+#
+# { "query": "x" }
+
+### Other
+GET https://example.com
+`;
+    const result = await formatHttp(content, undefined, { formatBody: true });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.formatted).toContain("# @CARD_CODE = gorillamoe");
+    expect(result.formatted).toContain("# @EMAIL = marco@example.com");
+    expect(result.formatted).toContain(
+      "# @SHOPIFY_SHOP_NAME = Urban Classics B2B",
+    );
+    expect(result.formatted).toContain("# ### Find customer by cardcode");
+    expect(result.formatted).toContain("### Other");
+  });
 });

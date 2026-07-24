@@ -1,5 +1,6 @@
 import { getComment } from "./comment";
 import { isHttpCommentLine } from "./comment-line";
+import { isKnownOperatorLine } from "./operator";
 import { isRequestLine } from "./request";
 import { isPreRequestScriptLine } from "./script";
 import type { KulalaComment } from "./types/comment";
@@ -17,8 +18,9 @@ export function extractFileHeaderComments(content: string): KulalaComment[] {
     ) {
       break;
     }
-    // Operators are handled separately; keep only plain comments here.
-    if (line.startsWith("# @") || line.startsWith("// @")) {
+    // Known `# @name` / `# @kulala-…` operators are handled separately.
+    // Commented-out `@VAR = value` lines look similar (`# @CARD_CODE = …`) but must be kept.
+    if (isKnownOperatorLine(line)) {
       lineIdx++;
       continue;
     }
