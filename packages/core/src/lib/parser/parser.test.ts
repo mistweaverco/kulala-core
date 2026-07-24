@@ -676,3 +676,71 @@ GET https://pokeapi.co/api/v2/type/electric
   expect(doc.blocks.map((b) => b.name)).toEqual(["GET-POKEMON", "GET-TYPE"]);
   expect(doc.blocks.some((b) => b.name === "LIST-POKEMON")).toBe(false);
 });
+
+test("parser: trailing commented-out request is kept on the previous block", async () => {
+  const content = `### GQL_PERSON
+
+GRAPHQL https://example.com/graphql HTTP/1.1
+Accept: application/json
+
+query Person($id: ID) {
+  person(personID: $id) {
+    name
+  }
+}
+
+{ "id": 1 }
+
+# ### GQL_PLANET
+#
+# GRAPHQL https://example.com/graphql HTTP/1.1
+#
+# query Planet($id: ID) {
+#   planet(planetID: $id) {
+#     name
+#   }
+# }
+#
+# { "id": 1 }
+
+### NEXT
+GET https://example.com/next
+`;
+  const doc = await getDocument(content);
+  expect(doc.blocks).toHaveLength(2);
+  expect(doc.blocks[0]!.name).toBe("GQL_PERSON");
+  expect(doc.blocks[0]!.trailingComments?.map((c) => c.content)).toEqual([
+    "### GQL_PLANET",
+    "",
+    "GRAPHQL https://example.com/graphql HTTP/1.1",
+    "",
+    "query Planet($id: ID) {",
+    "  planet(planetID: $id) {",
+    "    name",
+    "  }",
+    "}",
+    "",
+    '{ "id": 1 }',
+  ]);
+  expect(doc.blocks[0]!.request.body).toEqual({
+    query:
+      "query Person($id: ID) {\n  person(personID: $id) {\n    name\n  }\n}",
+    variables: { id: 1 },
+  });
+});
+
+test("parser: leading commented-out request is kept as file header comments", async () => {
+  const content = `# ### OLD
+# GET https://old.example.com
+
+### ACTIVE
+GET https://example.com
+`;
+  const doc = await getDocument(content);
+  expect(doc.blocks).toHaveLength(1);
+  expect(doc.blocks[0]!.name).toBe("ACTIVE");
+  expect(doc.fileHeaderComments?.map((c) => c.content)).toEqual([
+    "### OLD",
+    "GET https://old.example.com",
+  ]);
+});

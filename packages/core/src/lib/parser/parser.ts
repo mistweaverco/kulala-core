@@ -21,10 +21,12 @@ import {
 } from "./script";
 import { getHeader } from "./header";
 import { getBody } from "./body";
+import type { KulalaBodyParseResult } from "./body";
 import type { KulalaHeader } from "./types/header";
 import { getComment } from "./comment";
+import { isHttpCommentLine } from "./comment-line";
+import { extractFileHeaderComments } from "./file-header-comments";
 import { getRequest } from "./request";
-import type { KulalaRequestBody } from "./types/body";
 import {
   parseImportDirective,
   parseRunDirective,
@@ -76,6 +78,12 @@ const getLineType = (
   if (seenBlockTypes.has("afterHeaders") && line.startsWith("> ")) {
     return { name: "postRequestScript", lineNumber: lineIdx };
   }
+  // Comments must win over body so `# …` / `// …` after a blank line are not slurped into the payload.
+  if (isHttpCommentLine(line)) {
+    if (line.startsWith("# @") || line.startsWith("// @"))
+      return { name: "operator", lineNumber: lineIdx };
+    return { name: "comment", lineNumber: lineIdx };
+  }
   // Body line (including JetBrains "< path" body-from-file) must be checked before "< " → preRequestScript
   if (
     seenBlockTypes.has("request") &&
@@ -93,10 +101,6 @@ const getLineType = (
       return { name: "docVariable", lineNumber: lineIdx };
     }
   }
-  if (line.startsWith("# @") || line.startsWith("// @"))
-    return { name: "operator", lineNumber: lineIdx };
-  if (line.startsWith("#") || line.trim().startsWith("//"))
-    return { name: "comment", lineNumber: lineIdx };
   if (isRequestLine(line)) {
     return { name: "request", lineNumber: lineIdx };
   }
@@ -165,7 +169,7 @@ const getParsedBlock = async (
   let header: KulalaHeader | KulalaError;
   let operator: KulalaOperator | KulalaError;
   let script: KulalaScript | KulalaError;
-  let body: KulalaRequestBody | KulalaError;
+  let body: KulalaBodyParseResult | KulalaError;
   const seenBlockTypes: KulalaSeenBlockLineTypes = new Set<
     KulalaBlockLineType["name"]
   >();
@@ -187,6 +191,8 @@ const getParsedBlock = async (
       postRequest: [],
     },
     position,
+    hasRequest: false,
+    trailingComments: [],
   };
   while (lineIdx < lines.length) {
     const line = lines[lineIdx];
@@ -243,6 +249,12 @@ const getParsedBlock = async (
           const comment = getComment(line, lineIdx);
           result.preamble.push(comment);
           result.comments.push(comment);
+        } else if (
+          seenBlockTypes.has("body") ||
+          (result.trailingComments?.length ?? 0) > 0
+        ) {
+          result.trailingComments ??= [];
+          result.trailingComments.push(getComment(line, lineIdx));
         } else {
           result.request.headerSection.push({
             type: "comment",
@@ -266,6 +278,7 @@ const getParsedBlock = async (
           break;
         }
         result.request = requestResult;
+        result.hasRequest = true;
         lineIdx += consumed - 1;
         break;
       }
@@ -294,6 +307,14 @@ const getParsedBlock = async (
         if (body.sourceText !== undefined) {
           result.request.sourceBodyText = body.sourceText;
         }
+        if (body.trailingCommentLines?.length) {
+          result.trailingComments ??= [];
+          for (const [i, raw] of body.trailingCommentLines.entries()) {
+            result.trailingComments.push(getComment(raw, lineIdx + i));
+          }
+        }
+        // Skip payload + trailing comment lines; leave redirects/scripts for later.
+        lineIdx += body.consumedLines - 1;
         break;
       case "responseRedirect": {
         const overwrite = line.startsWith(">>!");
@@ -577,6 +598,9 @@ export const getDocument = async (
   const fileHeaderOperators = extractFileHeaderOperators(
     contentWithoutDirectives,
   );
+  const fileHeaderComments = extractFileHeaderComments(
+    contentWithoutDirectives,
+  );
   const vscodeRestclientCompat =
     hasVscodeRestclientCompatOperator(fileHeaderOperators);
   const nativeBlockCount = blocks.length;
@@ -815,5 +839,6 @@ export const getDocument = async (
       : {}),
     ...(vscodeRestclientCompat ? { vscodeRestclientCompat: true } : {}),
     ...(fileHeaderOperators.length > 0 ? { fileHeaderOperators } : {}),
+    ...(fileHeaderComments.length > 0 ? { fileHeaderComments } : {}),
   };
 };

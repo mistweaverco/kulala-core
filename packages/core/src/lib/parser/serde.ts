@@ -306,6 +306,18 @@ function serializeBlock(
     lines.push("");
   }
 
+  // Comment-only / operator-only blocks have no request line - do not invent `GET /`.
+  if (block.hasRequest === false) {
+    const postScriptsOnly = [...(block.scripts?.postRequest ?? [])].sort(
+      (a, b) => a.lineNumber - b.lineNumber,
+    );
+    if (postScriptsOnly.length) {
+      if (lines.length > 0 && lines[lines.length - 1] !== "") lines.push("");
+      pushScriptsWithBlankLines(lines, postScriptsOnly, docFilepath);
+    }
+    return lines;
+  }
+
   // Request line(s)
   if (block.request.requestLineParts && block.request.requestLineParts.length) {
     lines.push(
@@ -334,17 +346,26 @@ function serializeBlock(
     block.request.sourceBodyText,
     options.preserveBodyText,
   );
+  const trailingComments = block.trailingComments ?? [];
   const postScripts = [...(block.scripts?.postRequest ?? [])].sort(
     (a, b) => a.lineNumber - b.lineNumber,
   );
   const hasAfterHeaders =
     bodyLines.length > 0 ||
+    trailingComments.length > 0 ||
     block.request.responseRedirect !== undefined ||
     postScripts.length > 0;
   // Only emit the blank line separator when something follows.
   if (hasAfterHeaders) {
     lines.push("");
     lines.push(...bodyLines);
+  }
+
+  if (trailingComments.length) {
+    if (lines.length > 0 && lines[lines.length - 1] !== "") lines.push("");
+    for (const comment of trailingComments) {
+      lines.push(`# ${comment.content}`.trimEnd());
+    }
   }
 
   // Response redirect
@@ -392,6 +413,16 @@ export function serializeHttp(
     }
   } else if (doc.vscodeRestclientCompat) {
     lines.push("# @kulala-vscode-restclient-compat");
+  }
+
+  // File header comments (including commented-out requests before the first ###)
+  const fileComments = doc.fileHeaderComments ?? [];
+  if (fileComments.length) {
+    for (const comment of [...fileComments].sort(
+      (a, b) => a.lineNumber - b.lineNumber,
+    )) {
+      lines.push(`# ${comment.content}`.trimEnd());
+    }
   }
 
   // Directives

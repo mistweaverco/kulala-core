@@ -24,7 +24,13 @@ test("getBody: GraphQL without variables", async () => {
     "}",
   ];
   const result = await getBody(lines, 2, "GRAPHQL");
-  expect(result).toEqual({
+  expect(result).not.toHaveProperty("errorMessage");
+  const { consumedLines, ...bodyResult } = result as Exclude<
+    typeof result,
+    { errorMessage: string }
+  >;
+  expect(consumedLines).toBeGreaterThan(0);
+  expect(bodyResult).toEqual({
     type: "graphql",
     content: {
       query:
@@ -47,7 +53,13 @@ test("getBody: GraphQL with variables", async () => {
     '{ "id": 1 }',
   ];
   const result = await getBody(lines, 2, "GRAPHQL");
-  expect(result).toEqual({
+  expect(result).not.toHaveProperty("errorMessage");
+  const { consumedLines, ...bodyResult } = result as Exclude<
+    typeof result,
+    { errorMessage: string }
+  >;
+  expect(consumedLines).toBeGreaterThan(0);
+  expect(bodyResult).toEqual({
     type: "graphql",
     content: {
       query:
@@ -71,7 +83,13 @@ test("getBody: GraphQL with variables and trailing comma", async () => {
     '{ "id": 1, }',
   ];
   const result = await getBody(lines, 2, "GRAPHQL");
-  expect(result).toEqual({
+  expect(result).not.toHaveProperty("errorMessage");
+  const { consumedLines, ...bodyResult } = result as Exclude<
+    typeof result,
+    { errorMessage: string }
+  >;
+  expect(consumedLines).toBeGreaterThan(0);
+  expect(bodyResult).toEqual({
     type: "graphql",
     content: {
       query:
@@ -94,7 +112,13 @@ test("getBody: GraphQL with multiple blank lines", async () => {
     '{ "id": 1 }',
   ];
   const result = await getBody(lines, 2, "GRAPHQL");
-  expect(result).toEqual({
+  expect(result).not.toHaveProperty("errorMessage");
+  const { consumedLines, ...bodyResult } = result as Exclude<
+    typeof result,
+    { errorMessage: string }
+  >;
+  expect(consumedLines).toBeGreaterThan(0);
+  expect(bodyResult).toEqual({
     type: "graphql",
     content: {
       query: "query Query {\n  allFilms { films { title } }\n}",
@@ -111,7 +135,13 @@ test("getBody: GraphQL query only (no variables)", async () => {
     "query { user { name } }",
   ];
   const result = await getBody(lines, 2, "GRAPHQL");
-  expect(result).toEqual({
+  expect(result).not.toHaveProperty("errorMessage");
+  const { consumedLines, ...bodyResult } = result as Exclude<
+    typeof result,
+    { errorMessage: string }
+  >;
+  expect(consumedLines).toBeGreaterThan(0);
+  expect(bodyResult).toEqual({
     type: "graphql",
     content: {
       query: "query { user { name } }",
@@ -127,7 +157,13 @@ test("getBody: GRAPHQL with body from file (< path) uses bodyFromFile", async ()
     "< ./query.graphql",
   ];
   const result = await getBody(lines, 2, "GRAPHQL");
-  expect(result).toEqual({
+  expect(result).not.toHaveProperty("errorMessage");
+  const { consumedLines, ...bodyResult } = result as Exclude<
+    typeof result,
+    { errorMessage: string }
+  >;
+  expect(consumedLines).toBeGreaterThan(0);
+  expect(bodyResult).toEqual({
     type: "bodyFromFile",
     content: { __bodyFromFile: "./query.graphql" },
     sourceText: expectedSourceText(lines, 2),
@@ -143,7 +179,13 @@ test("getBody: GRAPHQL with body from file and inline variables", async () => {
     '{ "id": 1 }',
   ];
   const result = await getBody(lines, 2, "GRAPHQL");
-  expect(result).toEqual({
+  expect(result).not.toHaveProperty("errorMessage");
+  const { consumedLines, ...bodyResult } = result as Exclude<
+    typeof result,
+    { errorMessage: string }
+  >;
+  expect(consumedLines).toBeGreaterThan(0);
+  expect(bodyResult).toEqual({
     type: "bodyFromFile",
     content: {
       __bodyFromFile: "./query.graphql",
@@ -161,7 +203,13 @@ test("getBody: body from file (< path) JetBrains syntax", async () => {
     "< ./input.json",
   ];
   const result = await getBody(lines, 3, "POST");
-  expect(result).toEqual({
+  expect(result).not.toHaveProperty("errorMessage");
+  const { consumedLines, ...bodyResult } = result as Exclude<
+    typeof result,
+    { errorMessage: string }
+  >;
+  expect(consumedLines).toBeGreaterThan(0);
+  expect(bodyResult).toEqual({
     type: "bodyFromFile",
     content: { __bodyFromFile: "./input.json" },
     sourceText: expectedSourceText(lines, 3),
@@ -175,7 +223,13 @@ test("getBody: body from file with path without leading ./", async () => {
     "< path/to/file.json",
   ];
   const result = await getBody(lines, 2, "POST");
-  expect(result).toEqual({
+  expect(result).not.toHaveProperty("errorMessage");
+  const { consumedLines, ...bodyResult } = result as Exclude<
+    typeof result,
+    { errorMessage: string }
+  >;
+  expect(consumedLines).toBeGreaterThan(0);
+  expect(bodyResult).toEqual({
     type: "bodyFromFile",
     content: { __bodyFromFile: "path/to/file.json" },
     sourceText: expectedSourceText(lines, 2),
@@ -189,7 +243,13 @@ test("getBody: body from file with quoted path", async () => {
     '< "fixtures/input.json"',
   ];
   const result = await getBody(lines, 2, "POST");
-  expect(result).toEqual({
+  expect(result).not.toHaveProperty("errorMessage");
+  const { consumedLines, ...bodyResult } = result as Exclude<
+    typeof result,
+    { errorMessage: string }
+  >;
+  expect(consumedLines).toBeGreaterThan(0);
+  expect(bodyResult).toEqual({
     type: "bodyFromFile",
     content: { __bodyFromFile: "fixtures/input.json" },
     sourceText: expectedSourceText(lines, 2),
@@ -272,7 +332,13 @@ test("getBody: GraphQL with variables containing variable placeholders", async (
     '{ "id": "{{userId}}" }',
   ];
   const result = await getBody(lines, 2, "GRAPHQL");
-  expect(result).toEqual({
+  expect(result).not.toHaveProperty("errorMessage");
+  const { consumedLines, ...bodyResult } = result as Exclude<
+    typeof result,
+    { errorMessage: string }
+  >;
+  expect(consumedLines).toBeGreaterThan(0);
+  expect(bodyResult).toEqual({
     type: "graphql",
     content: {
       query:
@@ -297,7 +363,13 @@ test("getBody: GraphQL unescapes \\{ and \\} in query", async () => {
     '{ "id": 1 }',
   ];
   const result = await getBody(lines, 2, "GRAPHQL");
-  expect(result).toEqual({
+  expect(result).not.toHaveProperty("errorMessage");
+  const { consumedLines, ...bodyResult } = result as Exclude<
+    typeof result,
+    { errorMessage: string }
+  >;
+  expect(consumedLines).toBeGreaterThan(0);
+  expect(bodyResult).toEqual({
     type: "graphql",
     content: {
       query:
@@ -330,7 +402,13 @@ test("getBody: GraphQL with multi-line indented variables JSON", async () => {
     "}",
   ];
   const result = await getBody(lines, 2, "GRAPHQL");
-  expect(result).toEqual({
+  expect(result).not.toHaveProperty("errorMessage");
+  const { consumedLines, ...bodyResult } = result as Exclude<
+    typeof result,
+    { errorMessage: string }
+  >;
+  expect(consumedLines).toBeGreaterThan(0);
+  expect(bodyResult).toEqual({
     type: "graphql",
     content: {
       query:
@@ -365,7 +443,13 @@ test("getBody: GraphQL with multi-line variables JSON with trailing comma", asyn
     "}",
   ];
   const result = await getBody(lines, 2, "GRAPHQL");
-  expect(result).toEqual({
+  expect(result).not.toHaveProperty("errorMessage");
+  const { consumedLines, ...bodyResult } = result as Exclude<
+    typeof result,
+    { errorMessage: string }
+  >;
+  expect(consumedLines).toBeGreaterThan(0);
+  expect(bodyResult).toEqual({
     type: "graphql",
     content: {
       query:

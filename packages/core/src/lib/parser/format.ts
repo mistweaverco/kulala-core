@@ -280,6 +280,8 @@ function normalizeBlock(
   block: KulalaBlock,
   defaults: KulalaHttpFormatDefaults,
 ): void {
+  if (block.hasRequest === false) return;
+
   const method =
     block.request.method.toUpperCase() as typeof block.request.method;
   block.request.method = method;
@@ -350,6 +352,7 @@ async function formatBodyContent(
   formatBody: boolean,
   bodyFormat: KulalaHttpBodyFormatOptions,
 ): Promise<void> {
+  if (block.hasRequest === false) return;
   const body = block.request.body;
   if (body === undefined || body === null) return;
   if (!formatBody) return;

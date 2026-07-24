@@ -1,6 +1,6 @@
 import { parseGraphQLContent } from "./graphql-content";
 import type { KulalaError } from "./types/error";
-import { postRequestScriptMarker } from "./script";
+import { splitTrailingCommentLines } from "./comment-line";
 import type {
   KulalaRequestBody,
   KulalaRequestBodyFromFileContent,
@@ -66,22 +66,39 @@ export const isBody = (obj: unknown): obj is KulalaRequestBody => {
   }
 };
 
+export type KulalaBodyParseResult = KulalaRequestBody & {
+  /** `#` / `//` lines that followed the payload inside this block. */
+  trailingCommentLines?: string[];
+  /** Number of lines from `lineIdx` consumed (payload + trailing comments, not scripts). */
+  consumedLines: number;
+};
+
+function findBodyRegionEnd(blockLines: string[], startIdx: number): number {
+  for (let i = startIdx; i < blockLines.length; i++) {
+    const line = blockLines[i]!;
+    // Post-request scripts and response redirects are handled by the block parser.
+    if (line.startsWith("> ") || line.startsWith(">>")) {
+      return i;
+    }
+  }
+  return blockLines.length;
+}
+
 export const getBody = async (
   blockLines: string[],
   lineIdx: number,
   method?: string,
-): Promise<KulalaRequestBody | KulalaError> => {
-  // fetch everything after lineIdx
-  // until the end or up to the postRequestScriptMarker
-  const contents = blockLines.slice(lineIdx).join("\n");
-  const postRequestScriptMarkerPos = contents.indexOf(postRequestScriptMarker);
-  let content =
-    postRequestScriptMarkerPos !== -1
-      ? contents.slice(0, postRequestScriptMarkerPos).trim()
-      : contents.trim();
-  // Strip trailing response-redirect (>> / >>!) and post-request script (> path) lines so they are not parsed as body.
-  // Use \s* at end so we match when content has trailing newline; match any line starting with > or >> so we never leave a stray ">".
-  content = content.replace(/\n\s*>{1,2}!?[^\n]*\s*$/, "").trim();
+): Promise<KulalaBodyParseResult | KulalaError> => {
+  const regionEnd = findBodyRegionEnd(blockLines, lineIdx);
+  const consumedLines = Math.max(1, regionEnd - lineIdx);
+  let content = blockLines.slice(lineIdx, regionEnd).join("\n").trim();
+
+  // Commented-out requests after a real body must not be treated as payload (format would drop them).
+  const { body: payload, trailingCommentLines } =
+    splitTrailingCommentLines(content);
+  content = payload;
+  const trailing =
+    trailingCommentLines.length > 0 ? { trailingCommentLines } : {};
 
   // Body from file: first line is "< path" (JetBrains HTTP syntax)
   const firstLine = blockLines[lineIdx]?.trim() ?? "";
@@ -97,16 +114,27 @@ export const getBody = async (
     const firstNewline = content.indexOf("\n");
     const trailingAfterFileRef =
       firstNewline === -1 ? "" : content.slice(firstNewline + 1).trim();
+    // Variables suffix may itself include trailing comments; peel those too.
+    const {
+      body: variablesSuffix,
+      trailingCommentLines: fileTrailingComments,
+    } = splitTrailingCommentLines(trailingAfterFileRef);
     const bodyFromFile: KulalaRequestBodyFromFileContent = {
       __bodyFromFile: path,
     };
-    if (method === "GRAPHQL" && trailingAfterFileRef) {
-      bodyFromFile.__graphqlVariablesSuffix = trailingAfterFileRef;
+    if (method === "GRAPHQL" && variablesSuffix) {
+      bodyFromFile.__graphqlVariablesSuffix = variablesSuffix;
     }
+    const fileTrailing =
+      fileTrailingComments.length > 0
+        ? { trailingCommentLines: fileTrailingComments }
+        : trailing;
     return {
       type: "bodyFromFile",
       content: bodyFromFile,
       sourceText: content,
+      consumedLines,
+      ...fileTrailing,
     };
   }
 
@@ -117,6 +145,8 @@ export const getBody = async (
       type: "graphql",
       content: parseGraphQLContent(content),
       sourceText: content,
+      consumedLines,
+      ...trailing,
     };
   }
 
@@ -132,6 +162,8 @@ export const getBody = async (
         type: "json",
         content: JSON.parse(jsonStr),
         sourceText: content,
+        consumedLines,
+        ...trailing,
       };
     } catch {
       // do nothing, we'll treat it as raw text body below
@@ -142,5 +174,7 @@ export const getBody = async (
     type: "raw",
     content: content,
     sourceText: content,
+    consumedLines,
+    ...trailing,
   };
 };

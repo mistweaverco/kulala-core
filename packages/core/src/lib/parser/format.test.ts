@@ -177,4 +177,58 @@ POST https://example.com
       expect(withoutBody.formatted).toContain('    "foo": "bar"');
     }
   });
+
+  test("preserves trailing commented-out GraphQL request after body format", async () => {
+    const content = `### GQL_PERSON
+
+GRAPHQL https://example.com/graphql HTTP/1.1
+Accept: application/json
+
+query Person($id: ID) {
+  person(personID: $id) {
+    name
+  }
+}
+
+{ "id": 1 }
+
+# ### GQL_PLANET
+#
+# GRAPHQL https://example.com/graphql HTTP/1.1
+#
+# query Planet($id: ID) {
+#   planet(planetID: $id) {
+#     name
+#   }
+# }
+#
+# { "id": 1 }
+
+### NEXT
+GET https://example.com/next
+`;
+    const result = await formatHttp(content, undefined, { formatBody: true });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.formatted).toContain("# ### GQL_PLANET");
+    expect(result.formatted).toContain("# query Planet($id: ID) {");
+    expect(result.formatted).toContain('# { "id": 1 }');
+    expect(result.formatted).not.toContain("\nGET / HTTP/1.1\n");
+    expect(result.formatted).toContain("### NEXT");
+  });
+
+  test("preserves leading commented-out request before first ###", async () => {
+    const content = `# ### OLD
+# GET https://old.example.com
+
+### ACTIVE
+GET https://example.com
+`;
+    const result = await formatHttp(content, undefined, { formatBody: true });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.formatted).toContain("# ### OLD");
+    expect(result.formatted).toContain("# GET https://old.example.com");
+    expect(result.formatted).toContain("### ACTIVE");
+  });
 });

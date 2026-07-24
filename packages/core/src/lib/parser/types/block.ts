@@ -26,6 +26,13 @@ export type KulalaBlock = {
   preambleVariables?: Record<string, string>;
   /** Empty line between preamble and request line in the source file. */
   blankLineBeforeRequest?: boolean;
+  /**
+   * `#` / `//` comment lines after the request body (e.g. a commented-out next request).
+   * Kept separate so body formatting does not drop them.
+   */
+  trailingComments?: KulalaComment[];
+  /** False when the block has no request line (comments / operators only). */
+  hasRequest?: boolean;
   /** @ variables from the start of the .http file this block was parsed from (imports / run file). */
   sourceFileHeaderVariables?: Record<string, string>;
   /** `# @kulala-vscode-restclient-compat` from the source .http file (imports / run file). */
