@@ -176,6 +176,12 @@ export function staticCompletionItems(sourceName: string): LspCompletionItem[] {
       insertText: "grpc-plaintext",
       documentation: "No TLS",
     },
+    {
+      label: "grpc-authority",
+      insertText: "grpc-authority",
+      documentation:
+        "SSL server name / :authority (grpcurl -authority); useful when tunneling via localhost",
+    },
     { label: "grpc-v", insertText: "grpc-verbose", documentation: "Verbose" },
   ];
 

@@ -560,6 +560,23 @@ Content-Type: application/json
   expect(opNames).toContain("grpc-proto");
 });
 
+test("parses # @grpc-authority operator", async () => {
+  const content = `
+### Tunnelled
+
+# @grpc-authority real.example.com
+# @grpc-plaintext
+
+GRPC localhost:50051 helloworld.Greeter/SayHello
+`;
+  const doc = await getDocument(content, "/tmp/grpc-authority.http");
+  const block = doc.blocks.find((b) => b.name === "Tunnelled");
+  expect(block).toBeDefined();
+  expect(block!.errors).toEqual([]);
+  const authority = block!.operators.find((o) => o.name === "grpc-authority");
+  expect(authority?.args).toBe("real.example.com");
+});
+
 test("parses WEBSOCKET request line", async () => {
   const content = `
 ### Echo

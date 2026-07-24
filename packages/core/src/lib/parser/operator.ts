@@ -18,6 +18,7 @@ const operatorNameRequiresArgs = new Set([
   "grpc-import-path",
   "grpc-proto",
   "grpc-protoset",
+  "grpc-authority",
 ]);
 
 export const getOperator = (

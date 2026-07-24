@@ -65,11 +65,13 @@ export function grpcFlagsToLoaderOptions(
   protoFiles: string[];
   protosetFiles: string[];
   plaintext: boolean;
+  authority?: string;
 } {
   const importPaths: string[] = [];
   const protoFiles: string[] = [];
   const protosetFiles: string[] = [];
   let plaintext = false;
+  let authority: string | undefined;
 
   for (const { flag, value } of flags) {
     switch (flag) {
@@ -85,12 +87,26 @@ export function grpcFlagsToLoaderOptions(
       case "plaintext":
         plaintext = true;
         break;
+      case "authority":
+        if (value) authority = value;
+        break;
       default:
         break;
     }
   }
 
-  return { importPaths, protoFiles, protosetFiles, plaintext };
+  return { importPaths, protoFiles, protosetFiles, plaintext, authority };
+}
+
+/** Channel options for grpcurl-compatible `-authority` / `# @grpc-authority`. */
+export function grpcChannelOptionsForAuthority(
+  authority?: string,
+): Record<string, string> | undefined {
+  if (!authority) return undefined;
+  return {
+    "grpc.ssl_target_name_override": authority,
+    "grpc.default_authority": authority,
+  };
 }
 
 /** `helloworld.Greeter/SayHello` → service + method names. */
