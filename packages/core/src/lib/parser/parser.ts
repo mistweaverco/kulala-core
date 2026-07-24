@@ -37,7 +37,9 @@ import {
 import type { KulalaDirective, KulalaRunDirective } from "./types/directive";
 import { isRequestLine } from "./request";
 import { resolve, dirname } from "path";
-const blockRegex = /###(.*?)\n([\s\S]+?)(?=###|$)/g;
+// Only match ### at line start so commented `# ### …` / `// ### …` are not separators.
+// Use (?![\s\S]) instead of $: under /m, $ matches end-of-line and would truncate bodies.
+const blockRegex = /^###(.*?)\n([\s\S]+?)(?=^###|(?![\s\S]))/gm;
 const nameRegex = /### (.+?)\n/;
 
 type BlockWithRunDirective = KulalaBlock & {

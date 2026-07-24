@@ -608,3 +608,54 @@ Accept: application/json
     { type: "header", name: "Accept", value: "application/json" },
   ]);
 });
+
+test("parser: # ### commented separator does not start a new block", async () => {
+  const content = `### FIRST
+GET https://example.com/first
+
+# ### COMMENTED
+# GET https://example.com/commented
+
+### SECOND
+GET https://example.com/second
+`;
+  const doc = await getDocument(content);
+
+  expect(doc.blocks).toHaveLength(2);
+  expect(doc.blocks.map((b) => b.name)).toEqual(["FIRST", "SECOND"]);
+});
+
+test("parser: // ### commented separator does not start a new block", async () => {
+  const content = `### FIRST
+GET https://example.com/first
+
+// ### COMMENTED
+// GET https://example.com/commented
+
+### SECOND
+GET https://example.com/second
+`;
+  const doc = await getDocument(content);
+
+  expect(doc.blocks).toHaveLength(2);
+  expect(doc.blocks.map((b) => b.name)).toEqual(["FIRST", "SECOND"]);
+});
+
+test("parser: issue #168 commented ### LIST-POKEMON is not a block separator", async () => {
+  const content = `### GET-POKEMON
+GET https://pokeapi.co/api/v2/pokemon/pikachu
+
+# ### LIST-POKEMON
+# GET https://pokeapi.co/api/v2/pokemon
+#   ?limit=5
+#   &offset=0
+
+### GET-TYPE
+GET https://pokeapi.co/api/v2/type/electric
+`;
+  const doc = await getDocument(content);
+
+  expect(doc.blocks).toHaveLength(2);
+  expect(doc.blocks.map((b) => b.name)).toEqual(["GET-POKEMON", "GET-TYPE"]);
+  expect(doc.blocks.some((b) => b.name === "LIST-POKEMON")).toBe(false);
+});
