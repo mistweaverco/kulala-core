@@ -45,7 +45,7 @@ describe("runWebSocketSession", () => {
     server = Bun.serve({
       port: 0,
       fetch(req, srv) {
-        if (srv.upgrade(req)) return;
+        if (srv.upgrade(req, { data: undefined })) return;
         return new Response("Upgrade failed", { status: 500 });
       },
       websocket: {
