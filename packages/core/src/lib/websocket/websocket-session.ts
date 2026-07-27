@@ -1,4 +1,5 @@
 import { createInterface } from "node:readline";
+import { normalizeSentPayload } from "./display";
 
 export type WebSocketConnectOptions = {
   url: string;
@@ -9,6 +10,7 @@ export type WebSocketConnectOptions = {
 type OutboundMessage =
   | { type: "ready" }
   | { type: "message"; data: string }
+  | { type: "sent"; data: string }
   | { type: "error"; error: string }
   | { type: "closed"; code?: number };
 
@@ -133,13 +135,17 @@ export async function runWebSocketSession(
       writeOutbound({ type: "error", error: message });
     };
 
+    const sendPayload = (data: string) => {
+      const payload = data.endsWith("\n") ? data : data + "\n";
+      ws.send(payload);
+      writeOutbound({ type: "sent", data: normalizeSentPayload(data) });
+    };
+
     ws.addEventListener("open", () => {
       opened = true;
       writeOutbound({ type: "ready" });
       if (connect.body && connect.body.trim()) {
-        ws.send(
-          connect.body.endsWith("\n") ? connect.body : connect.body + "\n",
-        );
+        sendPayload(connect.body);
       }
     });
 
@@ -184,8 +190,7 @@ export async function runWebSocketSession(
           return;
         }
         if (cmd.op === "send" && cmd.data != null) {
-          const payload = cmd.data.endsWith("\n") ? cmd.data : cmd.data + "\n";
-          ws.send(payload);
+          sendPayload(cmd.data);
         }
       } catch {
         writeOutbound({ type: "error", error: "Invalid stdin command JSON" });
