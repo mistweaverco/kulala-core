@@ -10,27 +10,72 @@ type OutboundMessage = {
   code?: number;
 };
 
-async function readAllStdout(
-  stream: ReadableStream<Uint8Array>,
-): Promise<OutboundMessage[]> {
-  const events: OutboundMessage[] = [];
-  const reader = stream.getReader();
-  const decoder = new TextDecoder();
-  let buf = "";
+class StdoutCollector {
+  readonly events: OutboundMessage[] = [];
+  private buf = "";
+  private readonly waiters: Array<() => void> = [];
+  private done = false;
+  private readonly pump: Promise<void>;
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    let nl: number;
-    while ((nl = buf.indexOf("\n")) >= 0) {
-      const line = buf.slice(0, nl).trim();
-      buf = buf.slice(nl + 1);
-      if (line) events.push(JSON.parse(line) as OutboundMessage);
+  constructor(stream: ReadableStream<Uint8Array>) {
+    this.pump = this.read(stream);
+  }
+
+  private notify(): void {
+    const waiters = this.waiters.splice(0);
+    for (const wake of waiters) wake();
+  }
+
+  private async read(stream: ReadableStream<Uint8Array>): Promise<void> {
+    const reader = stream.getReader();
+    const decoder = new TextDecoder();
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        this.buf += decoder.decode(value, { stream: true });
+        let nl: number;
+        while ((nl = this.buf.indexOf("\n")) >= 0) {
+          const line = this.buf.slice(0, nl).trim();
+          this.buf = this.buf.slice(nl + 1);
+          if (line) this.events.push(JSON.parse(line) as OutboundMessage);
+        }
+        this.notify();
+      }
+    } finally {
+      this.done = true;
+      this.notify();
     }
   }
 
-  return events;
+  async waitUntil(
+    predicate: (events: OutboundMessage[]) => boolean,
+    label: string,
+    timeoutMs = 10_000,
+  ): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    while (!predicate(this.events)) {
+      if (this.done) {
+        throw new Error(
+          `stdout ended before ${label}; events=${JSON.stringify(this.events)}`,
+        );
+      }
+      if (Date.now() >= deadline) {
+        throw new Error(
+          `timed out waiting for ${label}; events=${JSON.stringify(this.events)}`,
+        );
+      }
+      await new Promise<void>((resolve) => {
+        this.waiters.push(resolve);
+        setTimeout(resolve, 50);
+      });
+    }
+  }
+
+  async finish(): Promise<OutboundMessage[]> {
+    await this.pump;
+    return this.events;
+  }
 }
 
 describe("runWebSocketSession", () => {
@@ -43,6 +88,7 @@ describe("runWebSocketSession", () => {
 
   test("emits sent for initial body and stdin send", async () => {
     server = Bun.serve({
+      hostname: "127.0.0.1",
       port: 0,
       fetch(req, srv) {
         if (srv.upgrade(req, { data: undefined })) return;
@@ -68,25 +114,66 @@ describe("runWebSocketSession", () => {
 
     const cliPath = join(import.meta.dir, "../../cli.ts");
     const child = Bun.spawn(
-      ["bun", cliPath, "--websocket", "-i", connectFile],
+      ["bun", "run", cliPath, "--websocket", "-i", connectFile],
       {
-        cwd: join(import.meta.dir, "../../../.."),
+        cwd: join(import.meta.dir, "../../../../../"),
         stdin: "pipe",
         stdout: "pipe",
         stderr: "pipe",
       },
     );
 
-    const eventsPromise = readAllStdout(child.stdout);
+    const stderrChunks: string[] = [];
+    void child.stderr.pipeTo(
+      new WritableStream({
+        write(chunk) {
+          stderrChunks.push(new TextDecoder().decode(chunk));
+        },
+      }),
+    );
 
-    await Bun.sleep(200);
-    child.stdin.write(`${JSON.stringify({ op: "send", data: '{"foo":1}' })}\n`);
-    await Bun.sleep(200);
-    child.stdin.write(`${JSON.stringify({ op: "close" })}\n`);
-    child.stdin.end();
+    const collector = new StdoutCollector(child.stdout);
 
-    const events = await eventsPromise;
-    expect(await child.exited).toBe(0);
+    try {
+      await collector.waitUntil(
+        (events) =>
+          events.some((e) => e.type === "ready") &&
+          events.filter((e) => e.type === "sent").length >= 1 &&
+          events.filter((e) => e.type === "message").length >= 1,
+        "initial sent+echo",
+      );
+
+      child.stdin.write(
+        `${JSON.stringify({ op: "send", data: '{"foo":1}' })}\n`,
+      );
+
+      await collector.waitUntil(
+        (events) =>
+          events.filter((e) => e.type === "sent").length >= 2 &&
+          events.filter((e) => e.type === "message").length >= 2,
+        "stdin sent+echo",
+      );
+
+      child.stdin.write(`${JSON.stringify({ op: "close" })}\n`);
+      child.stdin.end();
+
+      await collector.waitUntil(
+        (events) => events.some((e) => e.type === "closed"),
+        "closed",
+      );
+    } catch (error) {
+      child.kill();
+      const stderr = stderrChunks.join("").trim();
+      throw new Error(
+        `${error instanceof Error ? error.message : String(error)}${
+          stderr ? `\nstderr: ${stderr}` : ""
+        }`,
+      );
+    }
+
+    const events = await collector.finish();
+    const exitCode = await child.exited;
+    expect(exitCode).toBe(0);
 
     expect(events.map((e) => e.type)).toEqual([
       "ready",
