@@ -242,11 +242,9 @@ POST https://example.com/post HTTP/1.1
     if (!("ok" in result) || !result.ok) return;
 
     expect(result.curl).toContain("grpcurl");
-    expect(result.curl).toContain("-import-path");
-    expect(result.curl).toContain("-proto");
     expect(result.curl).toContain("-d");
-    expect(result.curl).toContain("EchoService/Echo");
-    expect(result.curl).toContain("Hello, world!");
+    expect(result.curl).toContain("echo.Echo/UnaryEcho");
+    expect(result.curl).toContain("Hello world!");
   });
 
   test("substitutes variables in GRPC target", async () => {
@@ -279,7 +277,7 @@ POST https://example.com/post HTTP/1.1
     const result = await toCurlAtCursor({
       content,
       filepath: grpcExamplePath,
-      line: 18,
+      line: 26,
       column: 1,
       env: "default",
     });
@@ -303,12 +301,12 @@ POST https://example.com/post HTTP/1.1
     if (!("ok" in result) || !result.ok) return;
 
     expect(result.curl).toContain("websocat");
-    expect(result.curl).toContain("wss://ws.ifelse.io");
-    expect(result.curl).toContain('"name":"world"');
+    expect(result.curl).toContain("wss://echo.kulala.app");
+    expect(result.curl).toContain('"message":"Hello world!"');
   });
 
   test("substitutes variables in WEBSOCKET target", async () => {
-    const content = `@WS_URL = wss://ws.ifelse.io
+    const content = `@WS_URL = wss://echo.kulala.app
 
 ### WS_TEST
 
@@ -324,14 +322,14 @@ WEBSOCKET {{ WS_URL }}
     const result = await resolveRequestFromBlock(
       block!,
       "/test.http",
-      { WS_URL: "wss://ws.ifelse.io" },
+      { WS_URL: "wss://echo.kulala.app" },
       undefined,
     );
     expect(result).toMatchObject({ ok: true });
     if (!("ok" in result) || !result.ok) return;
     if (result.request.kind !== "websocket") return;
 
-    expect(result.request.url).toBe("wss://ws.ifelse.io");
+    expect(result.request.url).toBe("wss://echo.kulala.app");
   });
 
   test("substitutes env variables in WEBSOCKET target from websocket.http", async () => {
@@ -346,7 +344,7 @@ WEBSOCKET {{ WS_URL }}
     expect(result).toMatchObject({ ok: true });
     if (!("ok" in result) || !result.ok) return;
 
-    expect(result.curl).toContain("wss://ws.ifelse.io");
+    expect(result.curl).toContain("wss://echo.kulala.app/ws");
     expect(result.curl).not.toContain("{{");
   });
 });

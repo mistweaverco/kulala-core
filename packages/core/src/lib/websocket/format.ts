@@ -31,5 +31,5 @@ export function formatWebsocatCommand(input: WebsocatFormatInput): string {
   const body = input.body?.trim();
   if (!body) return websocatArgs(input).join(" ");
   const cmd = websocatArgs(input).join(" ");
-  return `printf '%s' ${shellQuote(body)} | ${cmd}`;
+  return `echo ${shellQuote(body)} | ${cmd}`;
 }

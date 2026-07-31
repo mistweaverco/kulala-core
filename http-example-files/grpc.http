@@ -1,16 +1,26 @@
 @POSTMAN_ECHO_FOO = HelloService/SayHello
 @POSTMAN_ECHO_URL = grpc.postman-echo.com:443
 
-### GRPC_ECHO
+### kulala-echo-grpc-echo
 
-# @grpc-import-path grpc/echopb
-# @grpc-proto grpc/echopb/echo.proto
+# @grpc-plaintext
 
-GRPC localhost:8080 grpc_echo.v1.EchoService/Echo
+GRPC echo.kulala.app:50051 echo.Echo/UnaryEcho
 Content-Type: application/json
 
 {
-  "ping": "Hello, world!"
+  "message": "Hello world!"
+}
+
+### kulala-echo-local-grpc
+
+# @grpc-plaintext
+
+GRPC localhost:50051 echo.Echo/UnaryEcho
+Content-Type: application/json
+
+{
+  "message": "Hello world!"
 }
 
 ### POSTMAN_GRPC_ECHO

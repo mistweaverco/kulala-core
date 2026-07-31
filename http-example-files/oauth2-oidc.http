@@ -1,0 +1,61 @@
+### oidc-userinfo
+
+# Uses the `oidc` Security.Auth profile against local kulala-echo.
+# First run: Kulala opens the consent page and prompts you to paste the redirect URL
+# (same pattern as oauth2.http). Approve with email user@example.com, then paste the
+# full http://localhost:3000/get?code=... URL back into Kulala.
+# Tokens (access + refresh + id_token) are stored; later runs reuse or auto-refresh.
+
+GET http://echo.kulala.app/oauth2/userinfo HTTP/1.1
+Accept: application/json
+Authorization: Bearer {{ $auth.token("oidc") }}
+
+> {%
+  client.log("userinfo", JSON.stringify(response.body, null, 2));
+%}
+
+### oidc-echo-access-token
+
+# Access tokens from kulala-echo are base64url JSON (not JWTs).
+
+GET http://echo.kulala.app/get HTTP/1.1
+Accept: application/json
+Authorization: Bearer {{ $auth.token("oidc") }}
+
+> {%
+  const token = response.body.headers.authorization;
+  const split = token.split(" ");
+  const tokenType = split[0];
+  const accessToken = split[1];
+  const b64 = accessToken.replace(/-/g, "+").replace(/_/g, "/");
+  const pad = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
+  const decoded = JSON.parse(atob(pad));
+  client.log(`${tokenType} access_token payload`, JSON.stringify(decoded, null, 2));
+%}
+
+### oidc-id-token
+
+# ID token is a JWT when scope includes `openid`.
+# Kulala renews access + id tokens together via refresh_token when the access token expires.
+
+GET http://echo.kulala.app/get HTTP/1.1
+Accept: application/json
+X-ID-Token: {{ $auth.idToken("oidc") }}
+
+> {%
+  const jwt = response.body.headers["x-id-token"];
+  const parts = jwt.split(".");
+  const payloadB64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+  const pad = payloadB64 + "=".repeat((4 - (payloadB64.length % 4)) % 4);
+  const payload = JSON.parse(atob(pad));
+  client.log("id_token payload", JSON.stringify(payload, null, 2));
+%}
+
+### oidc-refresh-demo
+
+# Same auth profile as above. To force a refresh, set auth_data.oidc.expires_at in
+# http-client.private.env.json to a past unix timestamp, then re-run this request.
+
+GET http://echo.kulala.app/oauth2/userinfo HTTP/1.1
+Accept: application/json
+Authorization: Bearer {{ $auth.token("oidc") }}

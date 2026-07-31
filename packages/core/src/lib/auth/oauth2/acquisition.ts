@@ -343,7 +343,7 @@ export async function acquireAuthorizationCodeToken(
       prompt: true,
       promptId,
       promptType: "oauth2_authorization_code",
-      message: `Please complete the authorization in your browser.\nAfter authorization, you will be redirected to: ${redirectUrl}\nPlease copy the full redirect URL or authorization code and use it to continue the request.`,
+      message: `Please complete the authorization in your browser (${authUrl}).\nAfter authorization, you will be redirected to: ${redirectUrl}\nPlease copy the full redirect URL or authorization code and use it to continue the request.`,
       inputs: [
         {
           id: "redirect_url",

@@ -45,6 +45,8 @@ export function generatePKCEPlain(): {
 /**
  * Open browser with the given URL.
  * Uses Browser CMD if provided, otherwise uses system default browser.
+ * Never blocks the OAuth flow on the browser process (awaiting `open()` can hang
+ * indefinitely on some Linux setups when the opener waits on the browser).
  */
 export async function openBrowser(
   url: string,
@@ -53,10 +55,18 @@ export async function openBrowser(
   if (browserCmd) {
     // Custom browser command (e.g., "browser.js http://localhost:8080/callback")
     const [cmd, ...args] = browserCmd.split(" ");
-    spawn(cmd, [...args, url], { detached: true, stdio: "ignore" });
-  } else {
-    await open(url);
+    if (!cmd) return;
+    const child = spawn(cmd, [...args, url], {
+      detached: true,
+      stdio: "ignore",
+    });
+    child.unref();
+    return;
   }
+
+  void open(url, { wait: false }).catch((err: unknown) => {
+    console.error("Failed to open browser for OAuth2:", err);
+  });
 }
 
 /**

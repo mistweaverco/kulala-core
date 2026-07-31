@@ -31,8 +31,9 @@ describe("lspVariableHover", () => {
       column: 18,
     });
     expect(hover.contents).toMatchObject({
-      kind: "plaintext",
-      value: "wss://ws.ifelse.io",
+      language: "http",
+      value:
+        'echo \'{"message":"Hello world!"}\' | websocat \'wss://echo.kulala.app/ws\' --text -H "User-Agent: kulala-core/0.0.0-local" -H "X-Kulala-Shared-Default-Header: kulala-family"',
     });
   });
 

@@ -1,3 +1,19 @@
+### kulala-echo-websocket
+
+WEBSOCKET wss://echo.kulala.app/ws
+
+{
+  "message": "Hello world!"
+}
+
+### kulala-echo-local-websocket
+
+WEBSOCKET ws://localhost:3000/ws
+
+{
+  "message": "Hello world!"
+}
+
 ### WEBSOCKET_ECHO
 
 WEBSOCKET {{websocket.addr}}
