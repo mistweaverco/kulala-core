@@ -252,8 +252,23 @@ const wrapScriptContent = (
           ? tsxTranspiler
           : jsTranspiler;
   return transpiler.transformSync(
-    `export default async function kulalaWrappedScript() {\n${content}\n}`,
+    `export default async function kulalaWrappedScript() {\nconst require = globalThis.require;\n${content}\n}`,
   );
+};
+
+/**
+ * Filename passed to `createRequire` so Node walks `node_modules` from the
+ * HTTP document (or external script) directory - not from the OS temp file
+ * where the wrapped script is written for `import()`.
+ */
+const resolveRequireFilename = (
+  documentDir: string,
+  script: KulalaScript,
+): string => {
+  if (script.source === "file" && script.filepath) {
+    return path.resolve(documentDir, script.filepath);
+  }
+  return path.join(documentDir, "__kulala_script_require__.js");
 };
 
 async function executeJsTsScript(
@@ -263,6 +278,8 @@ async function executeJsTsScript(
     request: ScriptRequest;
     response: ScriptResponse;
     kulala: ReturnType<typeof buildKulalaScriptApi>;
+    /** Absolute path used only for CommonJS `require` resolution. */
+    requireFilename: string;
     /** When set, `console.*` is captured via this hook (caller supplies origin). */
     pushCapturedConsole?: (
       level: KulalaScriptConsoleLine["level"],
@@ -305,8 +322,8 @@ async function executeJsTsScript(
     (globalThis as unknown as Record<string, unknown>).response = ctx.response;
     (globalThis as unknown as Record<string, unknown>).$kulala = ctx.kulala;
 
-    // Allow CommonJS requires in scripts.
-    const req = createRequire(modulePath);
+    // Allow CommonJS requires in scripts (resolve from document/script dir).
+    const req = createRequire(ctx.requireFilename);
     (globalThis as unknown as Record<string, unknown>).require = req;
 
     // JetBrains parity: expose common child_process helpers as globals.
@@ -855,6 +872,7 @@ export const runScripts = async (
           request: requestObj,
           response: responseObj,
           kulala: kulalaApi,
+          requireFilename: resolveRequireFilename(tempCwd, script),
           pushCapturedConsole:
             scriptConsole !== undefined
               ? (level, args) => {

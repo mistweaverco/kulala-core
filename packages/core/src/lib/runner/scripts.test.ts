@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, writeFileSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
 import { runScripts } from "./scripts";
 import { getDbInMemory, getVariable, setDbForTesting } from "../persistence";
 import { ScriptPromptError } from "./script-prompt-error";
@@ -825,5 +828,85 @@ client.global.set("DATE", response.headers.valueOf("Date") || "");`,
     expect(scriptConsole[0]?.origin.phase).toBe("preRequest");
     expect(scriptConsole[0]?.origin.source).toBe("file");
     expect(scriptConsole[0]?.origin.file).toContain("scripts/pre.js");
+  });
+
+  test("require resolves packages from the HTTP document project node_modules", async () => {
+    const projectDir = mkdtempSync(join(tmpdir(), "kulala-require-"));
+    const nestedDir = join(projectDir, "http");
+    mkdirSync(join(projectDir, "node_modules", "kulala-fixture-pkg"), {
+      recursive: true,
+    });
+    mkdirSync(nestedDir, { recursive: true });
+    writeFileSync(
+      join(projectDir, "node_modules", "kulala-fixture-pkg", "package.json"),
+      JSON.stringify({ name: "kulala-fixture-pkg", main: "index.js" }),
+    );
+    writeFileSync(
+      join(projectDir, "node_modules", "kulala-fixture-pkg", "index.js"),
+      'module.exports = { ping: () => "pong" };\n',
+    );
+    const httpFile = join(nestedDir, "example.http");
+    writeFileSync(httpFile, "###\nGET https://example.com\n");
+
+    const vars: Record<string, string> = {};
+    await runScripts(
+      [
+        {
+          type: "preRequest",
+          source: "inline",
+          lang: "js",
+          content: `const pkg = require("kulala-fixture-pkg");
+request.variables.set("PING", pkg.ping());`,
+          lineNumber: 1,
+        },
+      ],
+      "preRequest",
+      dummyBlock,
+      httpFile,
+      undefined,
+      vars,
+    );
+
+    expect(vars.PING).toBe("pong");
+  });
+
+  test("require resolves packages relative to an external script file", async () => {
+    const projectDir = mkdtempSync(join(tmpdir(), "kulala-require-file-"));
+    const scriptsDir = join(projectDir, "scripts");
+    mkdirSync(join(scriptsDir, "node_modules", "kulala-script-pkg"), {
+      recursive: true,
+    });
+    writeFileSync(
+      join(scriptsDir, "node_modules", "kulala-script-pkg", "package.json"),
+      JSON.stringify({ name: "kulala-script-pkg", main: "index.js" }),
+    );
+    writeFileSync(
+      join(scriptsDir, "node_modules", "kulala-script-pkg", "index.js"),
+      'module.exports = { value: "from-script-dir" };\n',
+    );
+    const httpFile = join(projectDir, "example.http");
+    writeFileSync(httpFile, "###\nGET https://example.com\n");
+
+    const vars: Record<string, string> = {};
+    await runScripts(
+      [
+        {
+          type: "preRequest",
+          source: "file",
+          lang: "js",
+          filepath: "scripts/pre.js",
+          content: `const pkg = require("kulala-script-pkg");
+request.variables.set("VAL", pkg.value);`,
+          lineNumber: 0,
+        },
+      ],
+      "preRequest",
+      dummyBlock,
+      httpFile,
+      undefined,
+      vars,
+    );
+
+    expect(vars.VAL).toBe("from-script-dir");
   });
 });

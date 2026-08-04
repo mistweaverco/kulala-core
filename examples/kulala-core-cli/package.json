@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "bun run ../../packages/core/scripts/generate-vendored-curl.ts && bun build src/main.ts --compile --define __KULALA_EMBED_CURL__=true --outfile dist/kulala-core-cli",
+    "build": "bun run ../../packages/core/scripts/generate-vendored-curl.ts && bun build src/main.ts --compile --compile-autoload-package-json --define __KULALA_EMBED_CURL__=true --outfile dist/kulala-core-cli",
     "run": "bun run build && ./dist/kulala-core-cli"
   },
   "dependencies": {
