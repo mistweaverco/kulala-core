@@ -103,6 +103,7 @@ import type {
   RunnerResponseLike,
   VariableResolver,
 } from "./types";
+import { runOpenAPIFromBlock } from "../openapi/run-block";
 
 export type { RunnerResponseLike } from "./types";
 
@@ -822,6 +823,60 @@ export async function doRequestFromBlock(
     }
 
     const methodUpper = (block.request.method || "GET").toUpperCase();
+
+    if (hasOp(["kulala-openapi-json"])) {
+      const requestHeaders = { ...headers };
+      return await runOpenAPIFromBlock({
+        block,
+        filePath,
+        url,
+        headers: requestHeaders,
+        method: methodUpper,
+        mutableVars,
+        stableDocId,
+        resolver,
+        env,
+        flow,
+        scriptRunScope,
+        effectiveBody,
+        scriptConsole,
+        collectionIndex,
+        collectionPlan: scriptCollectionPlan,
+        iterationOptions,
+        extraCurlArgv,
+        startDir,
+        runSharedPostScripts: async () => {
+          const responseLike: RunnerResponseLike = {
+            body: "",
+            statusCode: 200,
+            headers: { "content-type": "application/json" },
+            timings: { phases: { total: 0 } },
+          };
+          await runSharedScriptsForPhase("postRequest", {
+            flow,
+            requestBlock: block,
+            filePath,
+            effectiveBody,
+            env,
+            startDir,
+            mutableVars,
+            resolver,
+            iteration: collectionIndex,
+            collectionPlan: scriptCollectionPlan,
+            scriptConsole,
+            response: responseLike,
+            urlSent: url,
+            headersSent: requestHeaders,
+            bodySent: bodyPayloadToScriptString(undefined),
+            responseUrl: url,
+            responseHeaders: responseLike.headers,
+            stableDocId,
+            doc: iterationOptions?.doc,
+            runRequestStack: scriptRunScope.runRequestStack,
+          });
+        },
+      });
+    }
 
     if (methodUpper === "WEBSOCKET") {
       const bodyStr =

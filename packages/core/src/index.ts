@@ -51,6 +51,24 @@ export {
   type GraphQLIntrospectionResult,
   type GraphQLSchemaIndex,
 } from "./lib/graphql";
+export {
+  clearOpenAPISchemaCache,
+  openAPILoadAtCursor,
+  runOpenAPIOperation,
+  openAPICacheKeyFromSource,
+  parseOpenAPIRawText,
+  buildOpenAPIIndex,
+  buildOpenAPIUITree,
+  openAPILspCompletionItems,
+  openAPILspHover,
+  prepareOpenAPIDocument,
+  bundleOpenAPIRefs,
+  type ClearOpenAPISchemaCacheResult,
+  type OpenAPILspCompletionResult,
+  type OpenAPIUiPayload,
+  type OpenAPIUITreeNode,
+  type OpenAPIIndex,
+} from "./lib/openapi";
 export type {
   LspCompletionItem,
   LspCompletionList,

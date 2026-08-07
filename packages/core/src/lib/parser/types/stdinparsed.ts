@@ -142,6 +142,36 @@ export type KulalaStdinActionGraphqlIntrospect = {
   env?: string;
 };
 
+/** Clear cached OpenAPI schema(s) by cache key. */
+export type KulalaStdinActionClearOpenapiSchema = {
+  action: "clear_openapi_schema";
+  /** Cache key (host or file path). When omitted, clears all cached schemas. */
+  cacheKey?: string;
+};
+
+/** Load OpenAPI spec and return explorer UI tree for block at cursor. */
+export type KulalaStdinActionOpenapiLoad = {
+  action: "openapi_load";
+  content: string;
+  filepath?: string;
+  line: number;
+  column: number;
+  env?: string;
+};
+
+/** Run one OpenAPI operation with scripts inherited from parent block. */
+export type KulalaStdinActionOpenapiRunOperation = {
+  action: "openapi_run_operation";
+  content: string;
+  filepath?: string;
+  line: number;
+  column: number;
+  env?: string;
+  operationKey: string;
+  parameterOverrides?: Record<string, string>;
+  responseFormat?: KulalaResponseFormatStdinOptions;
+};
+
 /** Discover http-client.env.json / ws.yaml environments for UI pickers. */
 export type KulalaStdinActionEnvironments = {
   action: "environments";
@@ -242,6 +272,9 @@ export type KulalaStdinParsed =
   | KulalaStdinActionClearGlobals
   | KulalaStdinActionClearGraphqlSchema
   | KulalaStdinActionGraphqlIntrospect
+  | KulalaStdinActionClearOpenapiSchema
+  | KulalaStdinActionOpenapiLoad
+  | KulalaStdinActionOpenapiRunOperation
   | KulalaStdinActionEnvironments
   | KulalaStdinActionInspectRequest
   | KulalaStdinActionToCurl

@@ -459,6 +459,17 @@ GET https://example.com/{{FOO}} HTTP/1.1
   expect(block.operators[5]?.args).toBe(`"What is your name?" NAME`);
 });
 
+test("parser: parses kulala-openapi-json operator", async () => {
+  const content = `### OpenAPI
+# @kulala-openapi-json
+GET https://echo.kulala.app/openapi.json HTTP/1.1
+`;
+  const doc = await getDocument(content.trim());
+  const block = doc.blocks[0]!;
+  expect(block.errors).toEqual([]);
+  expect(block.operators.map((o) => o.name)).toEqual(["kulala-openapi-json"]);
+});
+
 test("parser: parses JetBrains // @ tags as operators", async () => {
   const content = `### Tags
 // @no-redirect

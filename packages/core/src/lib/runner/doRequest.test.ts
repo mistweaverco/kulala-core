@@ -129,6 +129,17 @@ beforeAll(() => {
           },
         });
       }
+      if (path === "/openapi.json" && method === "GET") {
+        return Response.json({
+          openapi: "3.0.0",
+          info: { title: "Test API", version: "1.0.0" },
+          paths: {
+            "/hello": {
+              get: { responses: { "200": { description: "OK" } } },
+            },
+          },
+        });
+      }
       if (path === "/graphql" && method === "POST") {
         const contentType = req.headers.get("content-type") ?? "";
         if (!contentType.toLowerCase().includes("application/json")) {
@@ -2205,4 +2216,76 @@ test("doRequestFromBlock: redirects response to file (>> create with suffix if e
   expect(await fs.readFile(existingFile, "utf-8")).toBe("existing");
   const newFile = join(dir, "out-1.json");
   expect(await fs.readFile(newFile, "utf-8")).toBe("plain text response");
+});
+
+test("doRequestFromBlock: kulala-openapi-json returns explorer UI payload", async () => {
+  const block = makeBlock({
+    operators: [testOperator("kulala-openapi-json")],
+    request: {
+      method: "GET",
+      url: `${baseUrl}/openapi.json` as KulalaHttpURL,
+      headerSection: [],
+    },
+  });
+
+  const result = await httpDoRequestFromBlock(
+    block,
+    "/tmp/example.http",
+    undefined,
+    "stable-doc",
+    undefined,
+    "default",
+    { globalHeaders: {} },
+  );
+
+  expect(result.success).toBe(true);
+  if (result.success) {
+    expect(result.openapiUi).toBe(true);
+    expect(result.openapi?.tree?.length).toBeGreaterThan(0);
+    expect(result.openapi?.title).toBe("Test API");
+  }
+});
+
+test("doRequestFromBlock: kulala-openapi-json loads local spec file", async () => {
+  const { mkdtempSync } = await import("fs");
+  const { join } = await import("path");
+  const { tmpdir } = await import("os");
+  const fs = await import("fs/promises");
+  const dir = mkdtempSync(join(tmpdir(), "kulala-openapi-"));
+  const httpFilePath = join(dir, "request.http");
+  const specPath = join(dir, "spec.json");
+  await fs.writeFile(
+    specPath,
+    JSON.stringify({
+      openapi: "3.0.0",
+      info: { title: "Local", version: "2" },
+      paths: {},
+    }),
+    "utf-8",
+  );
+
+  const block = makeBlock({
+    operators: [testOperator("kulala-openapi-json")],
+    request: {
+      method: "GET",
+      url: "spec.json" as KulalaHttpURL,
+      headerSection: [],
+    },
+  });
+
+  const result = await httpDoRequestFromBlock(
+    block,
+    httpFilePath,
+    undefined,
+    "stable-doc",
+    undefined,
+    "default",
+    { globalHeaders: {} },
+  );
+
+  expect(result.success).toBe(true);
+  if (result.success) {
+    expect(result.openapiUi).toBe(true);
+    expect(result.openapi?.title).toBe("Local");
+  }
 });

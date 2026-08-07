@@ -132,6 +132,9 @@ export type KulalaRequestSuccessResponse = {
   jqFilter?: string;
   /** Present when scripts emitted console output (including client.test / client.log). */
   scriptConsole?: KulalaScriptConsoleLine[];
+  /** Open OpenAPI explorer instead of standard response UI. */
+  openapiUi?: true;
+  openapi?: import("../openapi/types").OpenAPIUiPayload;
 };
 
 export type KulalaRequestErrorResponse = {

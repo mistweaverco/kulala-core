@@ -38,6 +38,11 @@ import {
 } from "../lsp";
 import { clearGraphQLSchemaCache, introspectGraphQLAtCursor } from "../graphql";
 import {
+  clearOpenAPISchemaCache,
+  openAPILoadAtCursor,
+  runOpenAPIOperation,
+} from "../openapi";
+import {
   deleteVariable,
   getPrompt,
   deletePrompt,
@@ -294,6 +299,44 @@ const kulalaParser: KulalaParser = {
           type: "graphql_introspect",
           ...result,
         });
+        break;
+      }
+      case "clear_openapi_schema": {
+        const result = clearOpenAPISchemaCache(stdIn.cacheKey);
+        await writeToStdout({
+          type: "clear_openapi_schema",
+          success: true,
+          cleared: result.cleared,
+          keys: result.keys,
+        });
+        break;
+      }
+      case "openapi_load": {
+        const result = await openAPILoadAtCursor({
+          content: stdIn.content,
+          filepath: stdIn.filepath,
+          line: stdIn.line,
+          column: stdIn.column,
+          env: stdIn.env,
+        });
+        await writeToStdout({
+          type: "openapi_load",
+          ...result,
+        });
+        break;
+      }
+      case "openapi_run_operation": {
+        const result = await runOpenAPIOperation({
+          content: stdIn.content,
+          filepath: stdIn.filepath,
+          line: stdIn.line,
+          column: stdIn.column,
+          env: stdIn.env,
+          operationKey: stdIn.operationKey,
+          parameterOverrides: stdIn.parameterOverrides,
+          responseFormat: stdIn.responseFormat,
+        });
+        await writeRequestResponseToStdout(result);
         break;
       }
       case "environments": {

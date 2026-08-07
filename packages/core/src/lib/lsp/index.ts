@@ -13,6 +13,10 @@ import {
 } from "./script-api-docs";
 import { graphQLLspCompletionItems, graphQLLspHover } from "../graphql";
 import {
+  openAPILspCompletionItems,
+  openAPILspHover,
+} from "../openapi/completions";
+import {
   structuralCompletionSources,
   templateVarPrefix,
 } from "./completion-context";
@@ -459,6 +463,17 @@ export async function lspCompletion(input: {
     return { isIncomplete: false, items: applyEdits(gql.items) };
   }
 
+  const oas = await openAPILspCompletionItems({
+    content: input.content,
+    filepath: input.filepath,
+    line: input.line,
+    column: input.column,
+    env: input.env,
+  });
+  if (oas.active) {
+    return { isIncomplete: false, items: applyEdits(oas.items) };
+  }
+
   const templatePrefix = templateVarPrefix(before);
   const { prefix: wordPrefix } = completionPrefixAtCursor(line, input.column);
   const isExternalScript =
@@ -516,6 +531,15 @@ export async function lspHover(input: {
     env: input.env,
   });
   if (gqlHover) return gqlHover;
+
+  const oasHover = await openAPILspHover({
+    content: input.content,
+    filepath: input.filepath,
+    line: input.line,
+    column: input.column,
+    env: input.env,
+  });
+  if (oasHover) return oasHover;
 
   const variableHover = await lspVariableHover({
     content: input.content,

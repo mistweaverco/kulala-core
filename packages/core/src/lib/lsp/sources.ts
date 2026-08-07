@@ -123,6 +123,12 @@ export function staticCompletionItems(sourceName: string): LspCompletionItem[] {
         "Enable VS Code REST Client request chaining\n\nSee: https://kulala.app/usage/request-variables#vs-code-rest-client-chaining",
     },
     {
+      label: "kulala-openapi-json",
+      insertText: "kulala-openapi-json",
+      documentation:
+        "Load OpenAPI spec from request URL or local path and open explorer UI",
+    },
+    {
       label: "kulala-file-contents-to-variable",
       insertText: "kulala-file-contents-to-variable my-var file.txt",
       documentation: "Fail if response status is not in the list (200,201,204)",

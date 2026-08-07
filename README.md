@@ -39,6 +39,7 @@ between distributed systems.
 
 - HTTP RESTful (1.0, 1.1, 2, 3)
 - GraphQL (queries, mutations)
+- OpenAPI (spec load, explorer UI tree, Try it out overrides, LSP completions, `$ref` bundling, Swagger 2.0)
 - gRPC
 - WebSockets
 
