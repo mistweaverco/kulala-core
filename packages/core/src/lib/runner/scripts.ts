@@ -41,7 +41,11 @@ import {
 } from "./script-request-context";
 import { buildKulalaScriptApi } from "./kulala-script-api";
 import { ScriptPromptError } from "./script-prompt-error";
-import { ScriptReplayError, ScriptSkipError } from "./script-control-error";
+import {
+  ScriptAbortError,
+  ScriptReplayError,
+  ScriptSkipError,
+} from "./script-control-error";
 import { makeResponseForScripts, type ScriptResponse } from "./script-response";
 
 export type { ScriptContentType } from "./script-response";
@@ -541,6 +545,9 @@ async function executeLuaScript(
       all: () => req.headers.all(),
       findByName: (name: string) => req.headers.findByName(name),
     },
+    skip: () => req.skip(),
+    abort: (message?: string) => req.abort(message),
+    replay: () => req.replay(),
   };
   luaCtx.response = {
     status: ctx.response.status,
@@ -892,6 +899,7 @@ export const runScripts = async (
       if (
         error instanceof ScriptPromptError ||
         error instanceof ScriptSkipError ||
+        error instanceof ScriptAbortError ||
         error instanceof ScriptReplayError
       ) {
         throw error;

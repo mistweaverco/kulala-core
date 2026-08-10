@@ -6,7 +6,11 @@ import {
 } from "./custom-prompt";
 import { getVariable, setVariable } from "../persistence";
 import { ScriptPromptError } from "./script-prompt-error";
-import { ScriptReplayError, ScriptSkipError } from "./script-control-error";
+import {
+  ScriptAbortError,
+  ScriptReplayError,
+  ScriptSkipError,
+} from "./script-control-error";
 import type { ScriptFlowContext } from "./scripts";
 import type { ScriptResponse } from "./script-response";
 import type { VariableResolver } from "./types";
@@ -59,6 +63,8 @@ export type KulalaScriptApi = {
   request: {
     /** Skip sending this request (pre-request scripts only). */
     skip: () => void;
+    /** Abort sending this request as a failure (pre-request scripts only). */
+    abort: (message?: string) => void;
     /** Re-run this request from pre-request scripts (pre- and post-request). */
     replay: () => void;
   };
@@ -146,6 +152,14 @@ export function buildKulalaScriptApi(ctx: {
           );
         }
         throw new ScriptSkipError();
+      },
+      abort(message?: string) {
+        if (ctx.phase !== "preRequest") {
+          throw new Error(
+            "$kulala.request.abort() is only available in pre-request scripts",
+          );
+        }
+        throw new ScriptAbortError(message);
       },
       replay() {
         throw new ScriptReplayError();

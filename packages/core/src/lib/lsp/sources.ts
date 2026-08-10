@@ -299,6 +299,11 @@ export function staticCompletionItems(sourceName: string): LspCompletionItem[] {
       documentation: "Skip sending this request (pre-request only)",
     },
     {
+      label: "$kulala.request.abort",
+      insertText: "$kulala.request.abort(${1:message})$0",
+      documentation: "Abort this request as an error (pre-request only)",
+    },
+    {
       label: "$kulala.request.replay",
       insertText: "$kulala.request.replay()$0",
       documentation: "Re-run the current request",
@@ -424,6 +429,21 @@ export function staticCompletionItems(sourceName: string): LspCompletionItem[] {
       label: "request.url.tryGetSubstituted",
       insertText: "request.url.tryGetSubstituted()$0",
       documentation: "Get substituted request URL",
+    },
+    {
+      label: "request.skip",
+      insertText: "request.skip()$0",
+      documentation: "Skip sending this request (pre-request only)",
+    },
+    {
+      label: "request.abort",
+      insertText: "request.abort(${1:message})$0",
+      documentation: "Abort this request as an error (pre-request only)",
+    },
+    {
+      label: "request.replay",
+      insertText: "request.replay()$0",
+      documentation: "Re-run the current request",
     },
     {
       label: "request.iteration",

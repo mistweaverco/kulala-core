@@ -504,6 +504,128 @@ test("doRequestFromBlock: $kulala.request.skip in pre-script skips HTTP", async 
   expect(result).toHaveProperty("skipped", true);
 });
 
+test("doRequestFromBlock: client.log before skip is preserved in scriptConsole", async () => {
+  const block = makeBlock({
+    scripts: {
+      preRequest: [
+        {
+          type: "preRequest",
+          source: "inline",
+          lang: "js",
+          content: `
+            client.log("before skip");
+            $kulala.request.skip();
+          `,
+          lineNumber: 1,
+        },
+      ],
+      postRequest: [],
+    },
+  });
+
+  const result = await doRequestFromBlock(
+    block,
+    "/tmp/example.http",
+    undefined,
+    "stable-doc",
+    undefined,
+    "default",
+    { globalHeaders: {} },
+  );
+
+  expect(result).toHaveProperty("success", true);
+  expect(result).toHaveProperty("skipped", true);
+  expect(result).toHaveProperty("scriptConsole");
+  if ("scriptConsole" in result && Array.isArray(result.scriptConsole)) {
+    expect(result.scriptConsole.some((l) => l.message === "before skip")).toBe(
+      true,
+    );
+  }
+  if ("body" in result && result.body && result.body.type === "text") {
+    expect(result.body.content).toContain("before skip");
+    expect(result.body.content).toContain("Request skipped by script");
+  } else {
+    throw new Error("expected skip body with script logs");
+  }
+});
+
+test("doRequestFromBlock: $kulala.request.abort in pre-script fails without HTTP", async () => {
+  const block = makeBlock({
+    scripts: {
+      preRequest: [
+        {
+          type: "preRequest",
+          source: "inline",
+          lang: "js",
+          content: `
+            client.log("before abort");
+            $kulala.request.abort("missing token");
+          `,
+          lineNumber: 1,
+        },
+      ],
+      postRequest: [],
+    },
+  });
+
+  const result = await doRequestFromBlock(
+    block,
+    "/tmp/example.http",
+    undefined,
+    "stable-doc",
+    undefined,
+    "default",
+    { globalHeaders: {} },
+  );
+
+  expect(result).toHaveProperty("success", false);
+  expect(result).toHaveProperty("aborted", true);
+  expect(result).toHaveProperty("error", "missing token");
+  expect(result).not.toHaveProperty("httpCompleted", true);
+  if ("scriptConsole" in result && Array.isArray(result.scriptConsole)) {
+    expect(result.scriptConsole.some((l) => l.message === "before abort")).toBe(
+      true,
+    );
+  }
+  if ("body" in result && result.body && result.body.type === "text") {
+    expect(result.body.content).toContain("before abort");
+    expect(result.body.content).toContain("missing token");
+  } else {
+    throw new Error("expected abort body with script logs");
+  }
+});
+
+test("doRequestFromBlock: request.abort alias aborts without HTTP", async () => {
+  const block = makeBlock({
+    scripts: {
+      preRequest: [
+        {
+          type: "preRequest",
+          source: "inline",
+          lang: "js",
+          content: `request.abort();`,
+          lineNumber: 1,
+        },
+      ],
+      postRequest: [],
+    },
+  });
+
+  const result = await doRequestFromBlock(
+    block,
+    "/tmp/example.http",
+    undefined,
+    "stable-doc",
+    undefined,
+    "default",
+    { globalHeaders: {} },
+  );
+
+  expect(result).toHaveProperty("success", false);
+  expect(result).toHaveProperty("aborted", true);
+  expect(result).toHaveProperty("error", "Request aborted by script");
+});
+
 test("doRequestFromBlock: $kulala.request.replay in pre-script re-runs with updated vars", async () => {
   const block = makeBlock({
     scripts: {

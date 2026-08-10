@@ -11,6 +11,7 @@ import { ScriptPromptError } from "./script-prompt-error";
 import { getVariable } from "../persistence";
 import {
   MAX_SCRIPT_REPLAYS,
+  ScriptAbortError,
   ScriptReplayError,
   ScriptSkipError,
 } from "./script-control-error";
@@ -214,6 +215,9 @@ export async function resolveRequestFromBlock(
       }
       if (error instanceof ScriptSkipError) {
         return { ok: false, skipped: true };
+      }
+      if (error instanceof ScriptAbortError) {
+        return { ok: false, error: error.message };
       }
       if (error instanceof ScriptReplayError) {
         scriptReplayIndex += 1;

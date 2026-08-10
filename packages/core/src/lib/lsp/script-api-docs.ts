@@ -36,7 +36,16 @@ export const SCRIPT_API_DOCS: Record<string, ScriptApiDoc> = {
   "$kulala.request.skip": {
     summary: "Skip sending the current request. Pre-request scripts only.",
     signature: "$kulala.request.skip()",
-    notes: 'In Lua: `_G["$kulala"].request.skip()`.',
+    notes:
+      'In Lua: `_G["$kulala"].request.skip()`. Soft skip: success continues the document.',
+  },
+  "$kulala.request.abort": {
+    summary:
+      "Abort sending the current request as a failure. Pre-request scripts only.",
+    signature: "$kulala.request.abort(message?: string)",
+    example: '$kulala.request.abort("missing token");',
+    notes:
+      'In Lua: `_G["$kulala"].request.abort()`. Unlike skip, this is an error (respects haltOnError).',
   },
   "$kulala.request.replay": {
     summary:
@@ -167,6 +176,28 @@ export const SCRIPT_API_DOCS: Record<string, ScriptApiDoc> = {
   "request.url.tryGetSubstituted": {
     summary: "Request URL with variables substituted.",
     signature: "request.url.tryGetSubstituted(): string",
+  },
+  "request.skip": {
+    summary: "Skip sending the current request. Pre-request scripts only.",
+    signature: "request.skip()",
+    example: "request.skip();",
+    notes:
+      "Alias of `$kulala.request.skip()`. Soft skip: success continues the document.",
+  },
+  "request.abort": {
+    summary:
+      "Abort sending the current request as a failure. Pre-request scripts only.",
+    signature: "request.abort(message?: string)",
+    example: 'request.abort("missing token");',
+    notes:
+      "Alias of `$kulala.request.abort()`. Unlike skip, this is an error (respects haltOnError).",
+  },
+  "request.replay": {
+    summary:
+      "Re-run the current request (pre- and post-request scripts). Replays are capped per request.",
+    signature: "request.replay()",
+    example: "request.replay();",
+    notes: "Alias of `$kulala.request.replay()`.",
   },
   "response.contentType.mimeType": {
     summary: "Content-Type of the response, if any.",

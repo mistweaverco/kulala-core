@@ -6,6 +6,18 @@ export class ScriptSkipError extends Error {
   }
 }
 
+/** Pre-request script asked to abort sending this request (failure, not soft skip). */
+export class ScriptAbortError extends Error {
+  override name = "ScriptAbortError";
+  constructor(message?: string) {
+    super(
+      typeof message === "string" && message.trim().length > 0
+        ? message
+        : "Request aborted by script",
+    );
+  }
+}
+
 /** Script asked to re-run this request (JetBrains `request.replay()`). */
 export class ScriptReplayError extends Error {
   override name = "ScriptReplayError";

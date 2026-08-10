@@ -42,6 +42,7 @@ import {
 import { ScriptPromptError } from "./script-prompt-error";
 import {
   MAX_SCRIPT_REPLAYS,
+  ScriptAbortError,
   ScriptReplayError,
   ScriptSkipError,
 } from "./script-control-error";
@@ -115,6 +116,23 @@ export type DoRequestFromBlockResult =
   | KulalaWebSocketPlanResponse;
 
 const CLIENT_GLOBAL_HEADERS_VAR = "__kulala_client_global_headers__";
+
+function scriptConsolePlainText(lines: KulalaScriptConsoleLine[]): string {
+  return lines
+    .map((l) => (typeof l.message === "string" ? l.message : String(l.message)))
+    .filter((m) => m.trim().length > 0)
+    .join("\n");
+}
+
+/** Visible body for skip/abort so clients with a body-first UI show pre-exit logs. */
+function controlFlowBody(
+  scriptConsole: KulalaScriptConsoleLine[],
+  footer: string,
+): KulalaRequestSuccessResponse["body"] {
+  const logs = scriptConsolePlainText(scriptConsole);
+  const content = logs.length > 0 ? `${logs}\n\n${footer}` : footer;
+  return { type: "text", content, mediaType: "text/plain" };
+}
 
 function readClientGlobalHeaders(): Record<string, string> {
   const v = getVariable("global", CLIENT_GLOBAL_HEADERS_VAR);
@@ -538,8 +556,18 @@ export async function doRequestFromBlock(
           return {
             success: true,
             skipped: true,
+            body: controlFlowBody(scriptConsole, "Request skipped by script"),
             ...(scriptConsole.length > 0 ? { scriptConsole } : {}),
           } as KulalaSkippedResponse;
+        }
+        if (error instanceof ScriptAbortError) {
+          return {
+            success: false,
+            aborted: true,
+            error: error.message,
+            body: controlFlowBody(scriptConsole, error.message),
+            ...(scriptConsole.length > 0 ? { scriptConsole } : {}),
+          } as KulalaRequestErrorResponse;
         }
         if (error instanceof ScriptReplayError) {
           scriptReplayIndex += 1;

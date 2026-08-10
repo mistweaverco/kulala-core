@@ -399,6 +399,7 @@ test("lspCompletion includes $kulala API items with documentation", async () => 
   const labels = new Set(res.items.map((i) => i.label));
   expect(labels.has("$kulala.prompt")).toBe(true);
   expect(labels.has("$kulala.request.skip")).toBe(true);
+  expect(labels.has("$kulala.request.abort")).toBe(true);
   expect(labels.has("$kulala.runRequest")).toBe(true);
   expect(labels.has("$kulala.client.global.headers.set")).toBe(true);
   const item = res.items.find((i) => i.label === "$kulala.prompt");

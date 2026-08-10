@@ -143,6 +143,8 @@ export type KulalaRequestErrorResponse = {
   error: string;
   /** Present when scripts ran before the failure (e.g. pre-request or failed expect-status). */
   scriptConsole?: KulalaScriptConsoleLine[];
+  /** Pre-request script called `$kulala.request.abort()` - no HTTP request was sent. */
+  aborted?: true;
   /**
    * HTTP finished before the failure (JetBrains: response-handler script errors).
    * Response fields below are populated so the UI can still show the received response.
@@ -181,6 +183,8 @@ export type KulalaSkippedResponse = {
   skipped: true;
   blockName?: string;
   scriptConsole?: KulalaScriptConsoleLine[];
+  /** Synthetic body so UIs that default to the body pane still show pre-skip logs. */
+  body: KulalaRequestSuccessResponse["body"];
 };
 
 export type KulalaResponseWrapper =

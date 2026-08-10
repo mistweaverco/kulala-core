@@ -5,7 +5,11 @@ import { join } from "path";
 import { runScripts } from "./scripts";
 import { getDbInMemory, getVariable, setDbForTesting } from "../persistence";
 import { ScriptPromptError } from "./script-prompt-error";
-import { ScriptReplayError, ScriptSkipError } from "./script-control-error";
+import {
+  ScriptAbortError,
+  ScriptReplayError,
+  ScriptSkipError,
+} from "./script-control-error";
 import type { KulalaBlock } from "../parser/types/block";
 import type { KulalaHttpURL } from "../parser/types/request";
 
@@ -719,6 +723,59 @@ client.global.set("DATE", response.headers.valueOf("Date") || "");`,
     }
   });
 
+  test("$kulala.request.abort throws ScriptAbortError in pre-request", async () => {
+    try {
+      await runScripts(
+        [
+          {
+            type: "preRequest",
+            source: "inline",
+            lang: "js",
+            content: `$kulala.request.abort("missing token");`,
+            lineNumber: 1,
+          },
+        ],
+        "preRequest",
+        dummyBlock,
+        "/tmp/example.http",
+        undefined,
+        {},
+        undefined,
+        undefined,
+        undefined,
+        { stableDocId: "stable-doc" },
+      );
+      throw new Error("expected ScriptAbortError");
+    } catch (e) {
+      expect(e).toBeInstanceOf(ScriptAbortError);
+      expect((e as Error).message).toBe("missing token");
+    }
+  });
+
+  test("request.skip throws ScriptSkipError in pre-request", async () => {
+    try {
+      await runScripts(
+        [
+          {
+            type: "preRequest",
+            source: "inline",
+            lang: "js",
+            content: `request.skip();`,
+            lineNumber: 1,
+          },
+        ],
+        "preRequest",
+        dummyBlock,
+        "/tmp/example.http",
+        undefined,
+        {},
+      );
+      throw new Error("expected ScriptSkipError");
+    } catch (e) {
+      expect(e).toBeInstanceOf(ScriptSkipError);
+    }
+  });
+
   test("$kulala.request.replay throws ScriptReplayError", async () => {
     try {
       await runScripts(
@@ -752,6 +809,32 @@ client.global.set("DATE", response.headers.valueOf("Date") || "");`,
             source: "inline",
             lang: "js",
             content: `$kulala.request.skip();`,
+            lineNumber: 1,
+          },
+        ],
+        "postRequest",
+        dummyBlock,
+        "/tmp/example.http",
+        {
+          statusCode: 200,
+          headers: {},
+          body: "",
+          timings: { phases: { total: 1 } },
+        },
+        {},
+      ),
+    ).rejects.toThrow(/pre-request/);
+  });
+
+  test("$kulala.request.abort is not available in post-request scripts", async () => {
+    await expect(
+      runScripts(
+        [
+          {
+            type: "postRequest",
+            source: "inline",
+            lang: "js",
+            content: `$kulala.request.abort();`,
             lineNumber: 1,
           },
         ],

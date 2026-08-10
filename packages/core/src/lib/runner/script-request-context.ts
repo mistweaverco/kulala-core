@@ -5,6 +5,11 @@ import {
   parseStoredVariable,
   writeVariableToMaps,
 } from "../variables/variable-lookup";
+import {
+  ScriptAbortError,
+  ScriptReplayError,
+  ScriptSkipError,
+} from "./script-control-error";
 import type { VariableResolver } from "./types";
 import { buildHeadersFromSection } from "./headers";
 import { normalizeSetCookieFromLine } from "../persistence/cookie-store";
@@ -116,6 +121,12 @@ type ScriptVariablesApi = {
   all: () => Record<string, string>;
 };
 
+type ScriptRequestControlApi = {
+  skip: () => never;
+  abort: (message?: string) => never;
+  replay: () => never;
+};
+
 export type PreRequestScriptApi = {
   variables: ScriptVariablesApi;
   environment: { get: (name: string) => string | null };
@@ -134,7 +145,7 @@ export type PreRequestScriptApi = {
     getRaw: () => string;
     tryGetSubstituted: () => string;
   };
-};
+} & ScriptRequestControlApi;
 
 export type PostRequestScriptApi = {
   variables: ScriptVariablesApi;
@@ -148,7 +159,7 @@ export type PostRequestScriptApi = {
   };
   body: () => string | undefined;
   url: () => string;
-};
+} & ScriptRequestControlApi;
 
 function makePreRequestHeader(
   name: string,
@@ -170,12 +181,39 @@ function makePostRequestHeader(name: string, value: string): PostRequestHeader {
   };
 }
 
+function makeRequestControlApi(
+  phase: "preRequest" | "postRequest",
+): ScriptRequestControlApi {
+  return {
+    skip() {
+      if (phase !== "preRequest") {
+        throw new Error(
+          "request.skip() is only available in pre-request scripts",
+        );
+      }
+      throw new ScriptSkipError();
+    },
+    abort(message?: string) {
+      if (phase !== "preRequest") {
+        throw new Error(
+          "request.abort() is only available in pre-request scripts",
+        );
+      }
+      throw new ScriptAbortError(message);
+    },
+    replay() {
+      throw new ScriptReplayError();
+    },
+  };
+}
+
 export type ScriptRequestApi = PreRequestScriptApi | PostRequestScriptApi;
 
 export function buildScriptRequestApi(
   ctx: ScriptRequestContext,
 ): ScriptRequestApi {
   const envVars = loadEnvVars(ctx.env, ctx.startDir);
+  const control = makeRequestControlApi(ctx.phase);
 
   const variables = {
     set: (name: string, value: unknown) => {
@@ -245,6 +283,7 @@ export function buildScriptRequestApi(
           ctx.urlSubstituted ??
           substituteInString(ctx.urlRaw, ctx.mutableVars, ctx.resolver),
       },
+      ...control,
     };
   }
 
@@ -272,6 +311,7 @@ export function buildScriptRequestApi(
     },
     body: () => ctx.bodySent,
     url: () => ctx.urlSent ?? "",
+    ...control,
   };
 }
 
