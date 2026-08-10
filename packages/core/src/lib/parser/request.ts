@@ -122,10 +122,32 @@ export const getRequest = (
   }
 
   if (method === "WEBSOCKET") {
+    const { target, versionStr } = splitRequestTargetAndVersion(afterMethod);
+    if (!target) {
+      return [
+        {
+          errorMessage: `Missing URL at line ${startLineIdx + 1}`,
+          lineNumber: startLineIdx,
+        },
+        1,
+      ];
+    }
+    if (!isValidRequestTarget(target)) {
+      return [
+        {
+          errorMessage: `Invalid URL: ${target}`,
+          lineNumber: startLineIdx,
+        },
+        1,
+      ];
+    }
+    // HTTP version is allowed for JetBrains-style lines but unused for WebSocket.
+    const httpVersion = versionStr ? parseHttpVersion(versionStr) : undefined;
     return [
       {
         method: "WEBSOCKET",
-        url: afterMethod as KulalaHttpURL,
+        url: target as KulalaHttpURL,
+        ...(httpVersion !== undefined ? { httpVersion } : {}),
         headerSection: [],
       },
       1,

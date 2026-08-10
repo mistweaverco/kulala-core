@@ -1,3 +1,4 @@
+import { writeSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { normalizeSentPayload } from "./display";
 
@@ -14,8 +15,34 @@ type OutboundMessage =
   | { type: "error"; error: string }
   | { type: "closed"; code?: number };
 
+function isEagain(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as NodeJS.ErrnoException).code === "EAGAIN"
+  );
+}
+
+/**
+ * Compact NDJSON to stdout. Uses writeSync (same rationale as writePayloadToFd):
+ * async process.stdout.write can deadlock / throw under parent pipe backpressure.
+ */
 function writeOutbound(msg: OutboundMessage): void {
-  process.stdout.write(JSON.stringify(msg) + "\n");
+  const buffer = Buffer.from(`${JSON.stringify(msg)}\n`);
+  let offset = 0;
+  while (offset < buffer.length) {
+    try {
+      const written = writeSync(1, buffer, offset, buffer.length - offset);
+      if (written <= 0) {
+        throw new Error("failed to write WebSocket outbound message");
+      }
+      offset += written;
+    } catch (error) {
+      if (isEagain(error)) continue;
+      throw error;
+    }
+  }
 }
 
 /** DOM lib types only allow protocols as the 2nd arg; Bun accepts `{ headers }`. */
@@ -38,7 +65,11 @@ function openClientWebSocket(
 }
 
 function normalizeWsUrl(method: string, target: string): string {
-  const t = target.trim();
+  // Defensive: strip a trailing HTTP version if a caller passed a raw request line.
+  const withoutVersion = target
+    .replace(/\s+HTTP\/\d+(?:\.\d+)?\s*$/i, "")
+    .trim();
+  const t = withoutVersion;
   if (/^wss?:\/\//i.test(t)) return t;
   const scheme = method.toUpperCase() === "WSS" ? "wss" : "ws";
   return `${scheme}://${t}`;

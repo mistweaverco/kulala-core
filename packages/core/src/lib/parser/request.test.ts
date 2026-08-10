@@ -74,6 +74,17 @@ test("getRequest: invalid HTTP version (HTTP/3) is omitted from httpVersion", ()
   }
 });
 
+test("getRequest: WEBSOCKET strips trailing HTTP version from url", () => {
+  const lines = ["WEBSOCKET wss://ws.ifelse.io HTTP/1.1"];
+  const [result] = getRequest(lines, 0);
+  expect(result).not.toHaveProperty("errorMessage");
+  if (!("errorMessage" in result!)) {
+    expect(result.method).toBe("WEBSOCKET");
+    expect(result.url).toBe("wss://ws.ifelse.io");
+    expect(result.httpVersion).toBe("HTTP/1.1");
+  }
+});
+
 test("getRequest: full URL template on request line (POST {{API_URL}})", () => {
   const lines = ["POST {{API_URL}} HTTP/1.1"];
   const [result] = getRequest(lines, 0);

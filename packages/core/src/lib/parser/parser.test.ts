@@ -603,6 +603,22 @@ WEBSOCKET wss://echo.websocket.org
   expect(block!.request.url).toBe("wss://echo.websocket.org");
 });
 
+test("parses WEBSOCKET request line with trailing HTTP version", async () => {
+  const content = `
+### Echo
+
+WEBSOCKET wss://ws.ifelse.io HTTP/1.1
+
+{"hello": true}
+`;
+  const doc = await getDocument(content, "/tmp/ws.http");
+  const block = doc.blocks.find((b) => b.name === "Echo");
+  expect(block).toBeDefined();
+  expect(block!.request.method).toBe("WEBSOCKET");
+  expect(block!.request.url).toBe("wss://ws.ifelse.io");
+  expect(block!.request.httpVersion).toBe("HTTP/1.1");
+});
+
 test("parses WEBSOCKET request line with spaced variable placeholder", async () => {
   const content = `
 ### Echo
