@@ -1,18 +1,10 @@
 if (request.url.tryGetSubstituted().endsWith("/swagger/json")) {
+  client.global.set("PORT_BEARER_TOKEN", "NONE");
   client.exit(0);
   return;
 }
 
 const { spawnSync } = require("node:child_process");
-
-const whichPort = spawnSync("which", ["port"], {
-  encoding: "utf-8",
-});
-if (whichPort.status !== 0) {
-  client.log("Port CLI is not installed. Please install it to continue.");
-  $kulala.request.abort();
-  return;
-}
 
 const isExcludedURL = (url) => {
   if (!url) return true;
@@ -51,6 +43,15 @@ if (PORT_BEARER_TOKEN) {
     );
     return;
   }
+}
+
+const whichPort = spawnSync("which", ["port"], {
+  encoding: "utf-8",
+});
+if (whichPort.status !== 0) {
+  client.log("Port CLI is not installed. Please install it to continue.");
+  $kulala.request.abort();
+  return;
 }
 
 // We need to get a new token
