@@ -3,9 +3,3 @@
 # @kulala-openapi-json
 
 GET https://echo.kulala.app/openapi.json HTTP/1.1
-
-### port-openapi
-
-# @kulala-openapi-json
-
-GET https://api.port.io/swagger/json HTTP/1.1

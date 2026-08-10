@@ -1,0 +1,7 @@
+### port-openapi
+
+< ./openapi-port.impersonate.http.js
+
+# @kulala-openapi-json
+
+GET https://api.port.io/swagger/json HTTP/1.1
