@@ -263,6 +263,41 @@ const kulalaParser: KulalaParser = {
         }
         break;
       }
+      case "convert_image": {
+        try {
+          const { convertImage } = await import("../image");
+          const result = convertImage({
+            content: stdIn.content,
+            mediaType: stdIn.mediaType,
+            target: stdIn.target,
+          });
+          if (!result.ok) {
+            await writeRequestResponseToStdout({
+              type: "convert_image",
+              success: false,
+              error: result.error,
+            });
+            break;
+          }
+          await writeRequestResponseToStdout({
+            type: "convert_image",
+            success: true,
+            content: result.content,
+            mediaType: result.mediaType,
+            byteLength: result.byteLength,
+            ...(result.convertedFrom
+              ? { convertedFrom: result.convertedFrom }
+              : {}),
+          });
+        } catch (error) {
+          await writeRequestResponseToStdout({
+            type: "convert_image",
+            success: false,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+        break;
+      }
       case "clear_globals": {
         const names = stdIn.names;
         if (!names || names.length === 0) {

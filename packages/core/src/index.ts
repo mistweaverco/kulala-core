@@ -27,6 +27,12 @@ export type {
 } from "./lib/runner/external-tools";
 
 export { applyJqFilter, enrichResponseWithJq, runJq } from "./lib/jq";
+export {
+  convertImage,
+  type ConvertImageInput,
+  type ConvertImageResult,
+  type ConvertImageTarget,
+} from "./lib/image";
 
 export type { KulalaDocument } from "./lib/parser/types";
 export type { KulalaStdinParsed } from "./lib/parser/types/stdinparsed";

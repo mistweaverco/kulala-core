@@ -80,6 +80,16 @@ export type KulalaStdinActionApplyJqFilter = {
   responseFormat?: KulalaResponseFormatStdinOptions;
 };
 
+/** Convert an image body to a terminal-friendly format (e.g. JPEG → PNG). */
+export type KulalaStdinActionConvertImage = {
+  action: "convert_image";
+  /** Base64-encoded image bytes. */
+  content: string;
+  mediaType?: string;
+  /** Target format. Only `"png"` is supported today (Kitty graphics). */
+  target: "png";
+};
+
 export type KulalaStdinActionContinue = {
   action: "continue";
   promptId: string;
@@ -266,6 +276,7 @@ export type KulalaStdinParsed =
   | KulalaStdinActionSerialize
   | KulalaStdinActionRun
   | KulalaStdinActionApplyJqFilter
+  | KulalaStdinActionConvertImage
   | KulalaStdinActionContinue
   | KulalaStdinActionCrypto
   | KulalaStdinActionHttpRequest
