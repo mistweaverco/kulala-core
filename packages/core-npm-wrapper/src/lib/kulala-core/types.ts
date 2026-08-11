@@ -78,6 +78,7 @@ export type KulalaPromptResponse = {
 export type KulalaSkippedResponse = {
   success: true;
   skipped: true;
+  message?: string;
   blockName?: string;
   scriptConsole?: KulalaScriptConsoleLine[];
 };

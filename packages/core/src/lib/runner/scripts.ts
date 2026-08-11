@@ -545,7 +545,7 @@ async function executeLuaScript(
       all: () => req.headers.all(),
       findByName: (name: string) => req.headers.findByName(name),
     },
-    skip: () => req.skip(),
+    skip: (message?: string) => req.skip(message),
     abort: (message?: string) => req.abort(message),
     replay: () => req.replay(),
   };
@@ -895,6 +895,12 @@ export const runScripts = async (
     } catch (error) {
       if (error instanceof ScriptExitError) {
         break;
+      }
+      if (error instanceof ScriptSkipError) {
+        emitConsoleLine("info", error.message, captureJsCallsite());
+      }
+      if (error instanceof ScriptAbortError) {
+        emitConsoleLine("error", error.message, captureJsCallsite());
       }
       if (
         error instanceof ScriptPromptError ||

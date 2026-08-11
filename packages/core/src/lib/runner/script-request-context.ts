@@ -122,7 +122,7 @@ type ScriptVariablesApi = {
 };
 
 type ScriptRequestControlApi = {
-  skip: () => never;
+  skip: (message?: string) => never;
   abort: (message?: string) => never;
   replay: () => never;
 };
@@ -185,13 +185,13 @@ function makeRequestControlApi(
   phase: "preRequest" | "postRequest",
 ): ScriptRequestControlApi {
   return {
-    skip() {
+    skip(message?: string) {
       if (phase !== "preRequest") {
         throw new Error(
           "request.skip() is only available in pre-request scripts",
         );
       }
-      throw new ScriptSkipError();
+      throw new ScriptSkipError(message);
     },
     abort(message?: string) {
       if (phase !== "preRequest") {

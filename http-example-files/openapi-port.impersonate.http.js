@@ -23,7 +23,7 @@ if (isExcludedURL(request.url.tryGetSubstituted())) {
 
 const TOKEN_TTL = 60 * 60; // 1 hour
 const PORT_BEARER_TOKEN_RAW = client.global.get("PORT_BEARER_TOKEN_CACHE");
-const PORT_BEARER_TOKEN = PORT_BEARER_TOKEN_RAW
+let PORT_BEARER_TOKEN = PORT_BEARER_TOKEN_RAW
   ? JSON.parse(PORT_BEARER_TOKEN_RAW)
   : null;
 
@@ -48,9 +48,11 @@ if (PORT_BEARER_TOKEN) {
 const whichPort = spawnSync("which", ["port"], {
   encoding: "utf-8",
 });
+
 if (whichPort.status !== 0) {
-  client.log("Port CLI is not installed. Please install it to continue.");
-  $kulala.request.abort();
+  $kulala.request.abort(
+    "Port CLI is not installed. Please install it to continue.",
+  );
   return;
 }
 
@@ -60,14 +62,14 @@ RES = spawnSync("port", ["auth", "token"], {
 });
 
 if (RES.error) {
-  client.log(RES.error);
-  $kulala.request.abort();
+  $kulala.request.abort(RES.error);
   return;
 }
 
 const TOKEN = RES.stdout.replace(/\n$/, "");
 // Cache the token with its expiry time
 const NOW = Math.floor(Date.now() / 1000);
+PORT_BEARER_TOKEN = {};
 PORT_BEARER_TOKEN.token = TOKEN;
 // Subtract 60 seconds to account for clock skew, or use returned values from the shell out
 PORT_BEARER_TOKEN.expiry = NOW + TOKEN_TTL - 60;

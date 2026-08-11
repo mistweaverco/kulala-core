@@ -62,7 +62,7 @@ export type KulalaScriptApi = {
   ) => string;
   request: {
     /** Skip sending this request (pre-request scripts only). */
-    skip: () => void;
+    skip: (message?: string) => void;
     /** Abort sending this request as a failure (pre-request scripts only). */
     abort: (message?: string) => void;
     /** Re-run this request from pre-request scripts (pre- and post-request). */
@@ -145,13 +145,13 @@ export function buildKulalaScriptApi(ctx: {
       );
     },
     request: {
-      skip() {
+      skip(message?: string) {
         if (ctx.phase !== "preRequest") {
           throw new Error(
             "$kulala.request.skip() is only available in pre-request scripts",
           );
         }
-        throw new ScriptSkipError();
+        throw new ScriptSkipError(message);
       },
       abort(message?: string) {
         if (ctx.phase !== "preRequest") {

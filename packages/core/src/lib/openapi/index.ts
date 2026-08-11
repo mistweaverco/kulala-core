@@ -11,10 +11,24 @@ import { createRequestVarContext } from "../runner/request-var-context";
 import { collectSharedGrpcFlags } from "../grpc";
 import { getStableDocumentId, resolveVariables } from "../variables";
 import type { ScriptFlowContext } from "../runner/scripts";
-import { doRequestFromBlock } from "../runner/doRequest";
+import {
+  doRequestFromBlock,
+  isPreRequestScriptsOk,
+  runPreRequestScriptsForBlock,
+  type DoRequestFromBlockResult,
+} from "../runner/doRequest";
+import { isSharedBlockName } from "../shared-blocks";
 import { curlArgvHasFlag } from "../curl/passthrough";
 import { getEffectiveCurlArgv } from "../runner/effective-operators";
-import { openAPIBlockFromCursor } from "./context";
+import type {
+  KulalaPromptResponse,
+  KulalaScriptConsoleLine,
+  VariableResolver,
+} from "../runner/types";
+import {
+  openAPIBlockFromCursor,
+  blockHasOpenAPINoCacheOperator,
+} from "./context";
 import { loadOpenAPISpecFromSource } from "./load";
 import { prepareOpenAPIDocument } from "./prepare-document";
 import { buildOpenAPIIndex } from "./schema-index";
@@ -75,36 +89,144 @@ export function clearOpenAPISchemaCache(
   return { cleared };
 }
 
-async function resolveOpenAPIBlockRequest(
+function buildOpenAPIFlow(doc: KulalaDocument): ScriptFlowContext {
+  return {
+    globalHeaders: {},
+    sharedGrpcFlags: collectSharedGrpcFlags(doc.blocks),
+    sharedBlocks: doc.blocks.filter((b) => isSharedBlockName(b.name)),
+    sharedHttpExecuted: new Set(),
+    collectedSharedHttpResults: [],
+  };
+}
+
+type PreparedOpenAPIParent =
+  | {
+      ok: true;
+      mutableVars: Record<string, string>;
+      flow: ScriptFlowContext;
+      stableDocId: string;
+      resolver: VariableResolver | undefined;
+      scriptConsole: KulalaScriptConsoleLine[];
+    }
+  | ({
+      ok: false;
+    } & Exclude<
+      Awaited<ReturnType<typeof runPreRequestScriptsForBlock>>,
+      { ok: true }
+    >);
+
+function preScriptResultToOpenAPIError(
+  result: Exclude<
+    Awaited<ReturnType<typeof runPreRequestScriptsForBlock>>,
+    { ok: true }
+  >,
+): { ok: false; error: string } {
+  if ("prompt" in result && result.prompt) {
+    return { ok: false, error: "Prompt required to resolve OpenAPI request" };
+  }
+  if ("skipped" in result && result.skipped) {
+    return {
+      ok: false,
+      error:
+        "message" in result && typeof result.message === "string"
+          ? result.message
+          : "Request skipped by script",
+    };
+  }
+  return {
+    ok: false,
+    error: "error" in result ? result.error : "Pre-request script failed",
+  };
+}
+
+function preScriptResultToDoRequestError(
+  result: Extract<PreparedOpenAPIParent, { ok: false }>,
+): DoRequestFromBlockResult {
+  const rest = { ...result };
+  delete (rest as { ok?: false }).ok;
+  if ("prompt" in rest && rest.prompt) {
+    return rest as KulalaPromptResponse;
+  }
+  return rest as DoRequestFromBlockResult;
+}
+
+async function prepareOpenAPIParentBlock(
   doc: KulalaDocument,
   block: KulalaBlock,
   content: string,
   env: string,
+  opts?: { skipPreScripts?: boolean },
+): Promise<PreparedOpenAPIParent> {
+  const pathMod = await import("path");
+  const startDir = doc.filepath ? pathMod.dirname(doc.filepath) : process.cwd();
+  const stableDocId = getStableDocumentId(doc.filepath, content);
+  const mutableVars = await resolveVariables(
+    env,
+    stableDocId,
+    block.name,
+    startDir,
+    {
+      fileHeader:
+        block.sourceFileHeaderVariables ?? doc.fileHeaderVariables ?? undefined,
+      blockPreamble: block.preambleVariables,
+    },
+  );
+  const flow = buildOpenAPIFlow(doc);
+  const { resolver } = createRequestVarContext(doc, block, stableDocId);
+  const scriptConsole: KulalaScriptConsoleLine[] = [];
+
+  if (!opts?.skipPreScripts) {
+    const preResult = await runPreRequestScriptsForBlock(
+      block,
+      doc.filepath,
+      mutableVars,
+      stableDocId,
+      resolver,
+      env,
+      flow,
+      scriptConsole,
+      { doc },
+    );
+    if (!isPreRequestScriptsOk(preResult)) {
+      return { ok: false, ...preResult } as Extract<
+        PreparedOpenAPIParent,
+        { ok: false }
+      >;
+    }
+  }
+
+  return {
+    ok: true,
+    mutableVars,
+    flow,
+    stableDocId,
+    resolver,
+    scriptConsole,
+  };
+}
+
+async function resolveOpenAPIBlockRequest(
+  doc: KulalaDocument,
+  block: KulalaBlock,
+  env: string,
+  mutableVars: Record<string, string>,
+  flow: ScriptFlowContext,
+  stableDocId: string,
+  skipPreScripts = false,
 ): Promise<
   | { ok: true; url: string; headers: Record<string, string>; method: string }
   | { ok: false; error: string }
 > {
-  const pathMod = await import("path");
-  const startDir = doc.filepath ? pathMod.dirname(doc.filepath) : process.cwd();
-  const stableDocId = getStableDocumentId(doc.filepath, content);
-  const vars = await resolveVariables(env, stableDocId, block.name, startDir, {
-    fileHeader:
-      block.sourceFileHeaderVariables ?? doc.fileHeaderVariables ?? undefined,
-    blockPreamble: block.preambleVariables,
-  });
-  const flow: ScriptFlowContext = {
-    globalHeaders: {},
-    sharedGrpcFlags: collectSharedGrpcFlags(doc.blocks),
-  };
   const { resolver } = createRequestVarContext(doc, block, stableDocId);
   const resolved = await resolveRequestFromBlock(
     block,
     doc.filepath,
-    vars,
+    mutableVars,
     resolver,
     env,
     flow,
     doc,
+    { skipPreScripts },
   );
   if ("prompt" in resolved && resolved.prompt) {
     return { ok: false, error: "Prompt required to resolve OpenAPI request" };
@@ -129,23 +251,39 @@ async function resolveOpenAPIBlockRequest(
 async function getOrLoadOpenAPIIndex(
   doc: KulalaDocument,
   block: KulalaBlock,
-  content: string,
   env: string,
+  mutableVars: Record<string, string>,
+  flow: ScriptFlowContext,
+  stableDocId: string,
 ): Promise<
-  | { ok: true; index: import("./types").OpenAPIIndex; cacheKey: string }
+  | {
+      ok: true;
+      index: import("./types").OpenAPIIndex;
+      cacheKey: string;
+      fromCache: boolean;
+    }
   | { ok: false; error: string }
 > {
-  const resolved = await resolveOpenAPIBlockRequest(doc, block, content, env);
+  const resolved = await resolveOpenAPIBlockRequest(
+    doc,
+    block,
+    env,
+    mutableVars,
+    flow,
+    stableDocId,
+    true,
+  );
   if (!resolved.ok) return resolved;
 
   const pathMod = await import("path");
   const startDir = doc.filepath ? pathMod.dirname(doc.filepath) : process.cwd();
   const cacheKey = openAPICacheKeyFromSource(resolved.url, startDir);
+  const skipCache = blockHasOpenAPINoCacheOperator(doc, block);
 
-  const cached = loadOpenAPISchema(cacheKey);
+  const cached = skipCache ? null : loadOpenAPISchema(cacheKey);
   if (cached) {
     const index = buildOpenAPIIndex(cached.spec, resolved.url);
-    if (index) return { ok: true, index, cacheKey };
+    if (index) return { ok: true, index, cacheKey, fromCache: true };
   }
 
   const extraCurlArgv = getEffectiveCurlArgv(doc, block, env, startDir);
@@ -161,13 +299,13 @@ async function getOrLoadOpenAPIIndex(
   if (!loaded.ok) return loaded;
 
   const docParsed = prepareOpenAPIDocument(loaded.raw);
-  if (docParsed) saveOpenAPISchema(loaded.cacheKey, docParsed);
+  if (docParsed && !skipCache) saveOpenAPISchema(loaded.cacheKey, docParsed);
 
   const index = buildOpenAPIIndex(docParsed ?? {}, resolved.url);
   if (!index) {
     return { ok: false, error: "Failed to build OpenAPI index" };
   }
-  return { ok: true, index, cacheKey: loaded.cacheKey };
+  return { ok: true, index, cacheKey: loaded.cacheKey, fromCache: false };
 }
 
 export async function openAPILoadAtCursor(input: {
@@ -186,11 +324,22 @@ export async function openAPILoadAtCursor(input: {
     return { ok: false, error: "No OpenAPI block at cursor" };
   }
 
-  const indexResult = await getOrLoadOpenAPIIndex(
+  const env = input.env ?? "default";
+  const prepared = await prepareOpenAPIParentBlock(
     doc,
     block,
     input.content,
-    input.env ?? "default",
+    env,
+  );
+  if (!prepared.ok) return preScriptResultToOpenAPIError(prepared);
+
+  const indexResult = await getOrLoadOpenAPIIndex(
+    doc,
+    block,
+    env,
+    prepared.mutableVars,
+    prepared.flow,
+    prepared.stableDocId,
   );
   if (!indexResult.ok) return indexResult;
 
@@ -199,7 +348,7 @@ export async function openAPILoadAtCursor(input: {
     ok: true,
     openapi: {
       cacheKey: indexResult.cacheKey,
-      fromCache: false,
+      fromCache: indexResult.fromCache,
       tree,
       title: indexResult.index.title,
       version: indexResult.index.version,
@@ -224,21 +373,58 @@ export async function runOpenAPIOperation(input: {
     return { success: false, error: "No OpenAPI block at cursor" };
   }
 
+  const env = input.env ?? "default";
   const pathMod = await import("path");
   const startDir = doc.filepath ? pathMod.dirname(doc.filepath) : process.cwd();
   const stableDocId = getStableDocumentId(doc.filepath, input.content);
-  const env = input.env ?? "default";
-  const vars = await resolveVariables(env, stableDocId, block.name, startDir, {
-    fileHeader:
-      block.sourceFileHeaderVariables ?? doc.fileHeaderVariables ?? undefined,
-    blockPreamble: block.preambleVariables,
-  });
+  const mutableVars = await resolveVariables(
+    env,
+    stableDocId,
+    block.name,
+    startDir,
+    {
+      fileHeader:
+        block.sourceFileHeaderVariables ?? doc.fileHeaderVariables ?? undefined,
+      blockPreamble: block.preambleVariables,
+    },
+  );
+  const flow = buildOpenAPIFlow(doc);
 
-  const indexResult = await getOrLoadOpenAPIIndex(
+  const resolvedForCache = await resolveOpenAPIBlockRequest(
+    doc,
+    block,
+    env,
+    mutableVars,
+    flow,
+    stableDocId,
+    true,
+  );
+  const skipCache = blockHasOpenAPINoCacheOperator(doc, block);
+  const specCached =
+    !skipCache &&
+    resolvedForCache.ok &&
+    loadOpenAPISchema(
+      openAPICacheKeyFromSource(resolvedForCache.url, startDir),
+    ) != null;
+
+  const prepared = await prepareOpenAPIParentBlock(
     doc,
     block,
     input.content,
     env,
+    { skipPreScripts: specCached },
+  );
+  if (!prepared.ok) {
+    return preScriptResultToDoRequestError(prepared);
+  }
+
+  const indexResult = await getOrLoadOpenAPIIndex(
+    doc,
+    block,
+    env,
+    prepared.mutableVars,
+    prepared.flow,
+    prepared.stableDocId,
   );
   if (!indexResult.ok) {
     return { success: false, error: indexResult.error };
@@ -247,7 +433,7 @@ export async function runOpenAPIOperation(input: {
   const built = buildOperationRequest(
     indexResult.index,
     input.operationKey,
-    vars,
+    prepared.mutableVars,
     overridesFromTryItOutValues(input.parameterOverrides),
   );
   if ("error" in built) {
@@ -259,20 +445,20 @@ export async function runOpenAPIOperation(input: {
     input.operationKey,
     built,
   );
-  const flow: ScriptFlowContext = {
-    globalHeaders: {},
-    sharedGrpcFlags: collectSharedGrpcFlags(doc.blocks),
-  };
-  const { resolver } = createRequestVarContext(doc, synthetic, stableDocId);
+  const { resolver } = createRequestVarContext(
+    doc,
+    synthetic,
+    prepared.stableDocId,
+  );
 
   const result = await doRequestFromBlock(
     synthetic,
     doc.filepath,
-    vars,
-    stableDocId,
+    prepared.mutableVars,
+    prepared.stableDocId,
     resolver,
     env,
-    flow,
+    prepared.flow,
     {
       doc,
       responseFormat: input.responseFormat,

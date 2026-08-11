@@ -1,5 +1,13 @@
 ### echo-openapi
 
-# @kulala-openapi-json
+< {%
+  client.log("pre", request.url.tryGetSubstituted())
+%}
+
+# @kulala-openapi-explorer
 
 GET https://echo.kulala.app/openapi.json HTTP/1.1
+
+> {%
+  client.log("post", response.body)
+%}

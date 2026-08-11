@@ -123,10 +123,16 @@ export function staticCompletionItems(sourceName: string): LspCompletionItem[] {
         "Enable VS Code REST Client request chaining\n\nSee: https://kulala.app/usage/request-variables#vs-code-rest-client-chaining",
     },
     {
-      label: "kulala-openapi-json",
-      insertText: "kulala-openapi-json",
+      label: "kulala-openapi-explorer",
+      insertText: "kulala-openapi-explorer",
       documentation:
         "Load OpenAPI spec from request URL or local path and open explorer UI",
+    },
+    {
+      label: "kulala-openapi-no-cache",
+      insertText: "kulala-openapi-no-cache",
+      documentation:
+        "Do not cache this OpenAPI spec; reload from source on every explorer open",
     },
     {
       label: "kulala-file-contents-to-variable",
@@ -295,7 +301,7 @@ export function staticCompletionItems(sourceName: string): LspCompletionItem[] {
     },
     {
       label: "$kulala.request.skip",
-      insertText: "$kulala.request.skip()$0",
+      insertText: "$kulala.request.skip(${1:message})$0",
       documentation: "Skip sending this request (pre-request only)",
     },
     {
@@ -432,7 +438,7 @@ export function staticCompletionItems(sourceName: string): LspCompletionItem[] {
     },
     {
       label: "request.skip",
-      insertText: "request.skip()$0",
+      insertText: "request.skip(${1:message})$0",
       documentation: "Skip sending this request (pre-request only)",
     },
     {

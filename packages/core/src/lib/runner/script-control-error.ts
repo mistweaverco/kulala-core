@@ -1,8 +1,12 @@
 /** Pre-request script asked to skip sending this request (JetBrains `request.skip()`). */
 export class ScriptSkipError extends Error {
   override name = "ScriptSkipError";
-  constructor() {
-    super("Request skipped by script");
+  constructor(message?: string) {
+    super(
+      typeof message === "string" && message.trim().length > 0
+        ? message
+        : "Request skipped by script",
+    );
   }
 }
 

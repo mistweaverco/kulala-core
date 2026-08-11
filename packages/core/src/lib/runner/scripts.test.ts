@@ -723,7 +723,44 @@ client.global.set("DATE", response.headers.valueOf("Date") || "");`,
     }
   });
 
+  test("$kulala.request.skip with message throws ScriptSkipError at info level", async () => {
+    const scriptConsole: import("./types").KulalaScriptConsoleLine[] = [];
+    try {
+      await runScripts(
+        [
+          {
+            type: "preRequest",
+            source: "inline",
+            lang: "js",
+            content: `$kulala.request.skip("not applicable in dev");`,
+            lineNumber: 1,
+          },
+        ],
+        "preRequest",
+        dummyBlock,
+        "/tmp/example.http",
+        undefined,
+        {},
+        undefined,
+        scriptConsole,
+        undefined,
+        { stableDocId: "stable-doc" },
+      );
+      throw new Error("expected ScriptSkipError");
+    } catch (e) {
+      expect(e).toBeInstanceOf(ScriptSkipError);
+      expect((e as Error).message).toBe("not applicable in dev");
+      expect(scriptConsole).toEqual([
+        expect.objectContaining({
+          level: "info",
+          message: "not applicable in dev",
+        }),
+      ]);
+    }
+  });
+
   test("$kulala.request.abort throws ScriptAbortError in pre-request", async () => {
+    const scriptConsole: import("./types").KulalaScriptConsoleLine[] = [];
     try {
       await runScripts(
         [
@@ -741,7 +778,7 @@ client.global.set("DATE", response.headers.valueOf("Date") || "");`,
         undefined,
         {},
         undefined,
-        undefined,
+        scriptConsole,
         undefined,
         { stableDocId: "stable-doc" },
       );
@@ -749,6 +786,12 @@ client.global.set("DATE", response.headers.valueOf("Date") || "");`,
     } catch (e) {
       expect(e).toBeInstanceOf(ScriptAbortError);
       expect((e as Error).message).toBe("missing token");
+      expect(scriptConsole).toEqual([
+        expect.objectContaining({
+          level: "error",
+          message: "missing token",
+        }),
+      ]);
     }
   });
 

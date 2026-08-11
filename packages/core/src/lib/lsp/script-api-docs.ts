@@ -35,7 +35,8 @@ export const SCRIPT_API_DOCS: Record<string, ScriptApiDoc> = {
   },
   "$kulala.request.skip": {
     summary: "Skip sending the current request. Pre-request scripts only.",
-    signature: "$kulala.request.skip()",
+    signature: "$kulala.request.skip(message?: string)",
+    example: '$kulala.request.skip("not applicable in dev");',
     notes:
       'In Lua: `_G["$kulala"].request.skip()`. Soft skip: success continues the document.',
   },
@@ -179,8 +180,8 @@ export const SCRIPT_API_DOCS: Record<string, ScriptApiDoc> = {
   },
   "request.skip": {
     summary: "Skip sending the current request. Pre-request scripts only.",
-    signature: "request.skip()",
-    example: "request.skip();",
+    signature: "request.skip(message?: string)",
+    example: 'request.skip("not applicable in dev");',
     notes:
       "Alias of `$kulala.request.skip()`. Soft skip: success continues the document.",
   },

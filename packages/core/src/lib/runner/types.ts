@@ -181,6 +181,8 @@ export type KulalaPromptResponse = {
 export type KulalaSkippedResponse = {
   success: true;
   skipped: true;
+  /** Human-readable skip reason (default: "Request skipped by script"). */
+  message?: string;
   blockName?: string;
   scriptConsole?: KulalaScriptConsoleLine[];
   /** Synthetic body so UIs that default to the body pane still show pre-skip logs. */

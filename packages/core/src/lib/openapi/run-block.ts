@@ -1,6 +1,7 @@
 import { curlArgvHasFlag } from "../curl/passthrough";
 import type { KulalaBlock } from "../parser/types/block";
 import { saveOpenAPISchema } from "../persistence/openapi-schema-store";
+import { blockHasOpenAPINoCacheOperator } from "./context";
 import {
   runScripts,
   type ScriptFlowContext,
@@ -95,6 +96,11 @@ export async function runOpenAPIFromBlock(
       };
     }
 
+    const skipCache = blockHasOpenAPINoCacheOperator(
+      iterationOptions?.doc,
+      block,
+    );
+
     const loaded = await loadOpenAPISpecFromSource(url, startDir, {
       headers,
       method,
@@ -110,7 +116,7 @@ export async function runOpenAPIFromBlock(
     }
 
     const doc = prepareOpenAPIDocument(loaded.raw);
-    if (doc) saveOpenAPISchema(loaded.cacheKey, doc);
+    if (doc && !skipCache) saveOpenAPISchema(loaded.cacheKey, doc);
 
     const rawBody = loaded.raw;
     const responseHeaders = { "content-type": "application/json" };

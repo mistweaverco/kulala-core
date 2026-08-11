@@ -549,6 +549,58 @@ test("doRequestFromBlock: client.log before skip is preserved in scriptConsole",
   }
 });
 
+test("doRequestFromBlock: $kulala.request.skip with message skips HTTP at info level", async () => {
+  const block = makeBlock({
+    scripts: {
+      preRequest: [
+        {
+          type: "preRequest",
+          source: "inline",
+          lang: "js",
+          content: `
+            client.log("before skip");
+            $kulala.request.skip("not applicable in dev");
+          `,
+          lineNumber: 1,
+        },
+      ],
+      postRequest: [],
+    },
+  });
+
+  const result = await doRequestFromBlock(
+    block,
+    "/tmp/example.http",
+    undefined,
+    "stable-doc",
+    undefined,
+    "default",
+    { globalHeaders: {} },
+  );
+
+  expect(result).toHaveProperty("success", true);
+  expect(result).toHaveProperty("skipped", true);
+  expect(result).toHaveProperty("message", "not applicable in dev");
+  if ("scriptConsole" in result && Array.isArray(result.scriptConsole)) {
+    expect(result.scriptConsole.some((l) => l.message === "before skip")).toBe(
+      true,
+    );
+    const skipLine = result.scriptConsole.find(
+      (l) => l.message === "not applicable in dev",
+    );
+    expect(skipLine?.level).toBe("info");
+  }
+  if ("body" in result && result.body && result.body.type === "text") {
+    expect(result.body.content).toContain("before skip");
+    expect(result.body.content).toContain("not applicable in dev");
+    expect(result.body.content).not.toContain(
+      "not applicable in dev\n\nnot applicable in dev",
+    );
+  } else {
+    throw new Error("expected skip body with script logs");
+  }
+});
+
 test("doRequestFromBlock: $kulala.request.abort in pre-script fails without HTTP", async () => {
   const block = makeBlock({
     scripts: {
@@ -586,10 +638,15 @@ test("doRequestFromBlock: $kulala.request.abort in pre-script fails without HTTP
     expect(result.scriptConsole.some((l) => l.message === "before abort")).toBe(
       true,
     );
+    const abortLine = result.scriptConsole.find(
+      (l) => l.message === "missing token",
+    );
+    expect(abortLine?.level).toBe("error");
   }
   if ("body" in result && result.body && result.body.type === "text") {
     expect(result.body.content).toContain("before abort");
     expect(result.body.content).toContain("missing token");
+    expect(result.body.content).not.toContain("missing token\n\nmissing token");
   } else {
     throw new Error("expected abort body with script logs");
   }
@@ -624,6 +681,119 @@ test("doRequestFromBlock: request.abort alias aborts without HTTP", async () => 
   expect(result).toHaveProperty("success", false);
   expect(result).toHaveProperty("aborted", true);
   expect(result).toHaveProperty("error", "Request aborted by script");
+});
+
+test("doRequestFromBlock: shared block pre-script abort stops the main request", async () => {
+  preScriptAbortProbeHits = 0;
+  const sharedBlock = makeBlock({
+    name: "KULALA_SHARED",
+    scripts: {
+      preRequest: [
+        {
+          type: "preRequest",
+          source: "inline",
+          lang: "js",
+          content: `$kulala.request.abort("shared abort");`,
+          lineNumber: 1,
+        },
+      ],
+      postRequest: [],
+    },
+    request: {
+      method: "GET",
+      url: `${baseUrl}/get` as KulalaHttpURL,
+      headerSection: [],
+    },
+  });
+  const block = makeBlock({
+    request: {
+      method: "GET",
+      url: `${baseUrl}/pre-script-abort-probe` as KulalaHttpURL,
+      headerSection: [],
+    },
+  });
+
+  const result = await doRequestFromBlock(
+    block,
+    "/tmp/example.http",
+    undefined,
+    "stable-doc",
+    undefined,
+    "default",
+    {
+      globalHeaders: {},
+      sharedBlocks: [sharedBlock],
+      sharedHttpExecuted: new Set(),
+      collectedSharedHttpResults: [],
+    },
+  );
+
+  expect(result).toMatchObject({
+    success: false,
+    aborted: true,
+    error: "shared abort",
+  });
+  expect(preScriptAbortProbeHits).toBe(0);
+});
+
+test("doRequestFromBlock: shared HTTP block pre-script abort stops the main request", async () => {
+  preScriptAbortProbeHits = 0;
+  const sharedBlock = makeBlock({
+    name: "KULALA_SHARED",
+    scripts: {
+      preRequest: [
+        {
+          type: "preRequest",
+          source: "inline",
+          lang: "js",
+          content: `
+            if (!client.global.get("SHARED_PRE_RAN")) {
+              client.global.set("SHARED_PRE_RAN", true);
+              client.exit(0);
+            }
+            $kulala.request.abort("shared http abort");
+          `,
+          lineNumber: 1,
+        },
+      ],
+      postRequest: [],
+    },
+    request: {
+      method: "GET",
+      url: `${baseUrl}/get` as KulalaHttpURL,
+      headerSection: [],
+    },
+    hasRequest: true,
+  });
+  const block = makeBlock({
+    request: {
+      method: "GET",
+      url: `${baseUrl}/pre-script-abort-probe` as KulalaHttpURL,
+      headerSection: [],
+    },
+  });
+
+  const result = await doRequestFromBlock(
+    block,
+    "/tmp/example.http",
+    undefined,
+    "stable-doc",
+    undefined,
+    "default",
+    {
+      globalHeaders: {},
+      sharedBlocks: [sharedBlock],
+      sharedHttpExecuted: new Set(),
+      collectedSharedHttpResults: [],
+    },
+  );
+
+  expect(result).toMatchObject({
+    success: false,
+    aborted: true,
+    error: "shared http abort",
+  });
+  expect(preScriptAbortProbeHits).toBe(0);
 });
 
 test("doRequestFromBlock: $kulala.request.replay in pre-script re-runs with updated vars", async () => {
@@ -2340,9 +2510,9 @@ test("doRequestFromBlock: redirects response to file (>> create with suffix if e
   expect(await fs.readFile(newFile, "utf-8")).toBe("plain text response");
 });
 
-test("doRequestFromBlock: kulala-openapi-json returns explorer UI payload", async () => {
+test("doRequestFromBlock: kulala-openapi-explorer returns explorer UI payload", async () => {
   const block = makeBlock({
-    operators: [testOperator("kulala-openapi-json")],
+    operators: [testOperator("kulala-openapi-explorer")],
     request: {
       method: "GET",
       url: `${baseUrl}/openapi.json` as KulalaHttpURL,
@@ -2368,7 +2538,7 @@ test("doRequestFromBlock: kulala-openapi-json returns explorer UI payload", asyn
   }
 });
 
-test("doRequestFromBlock: kulala-openapi-json loads local spec file", async () => {
+test("doRequestFromBlock: kulala-openapi-explorer loads local spec file", async () => {
   const { mkdtempSync } = await import("fs");
   const { join } = await import("path");
   const { tmpdir } = await import("os");
@@ -2387,7 +2557,7 @@ test("doRequestFromBlock: kulala-openapi-json loads local spec file", async () =
   );
 
   const block = makeBlock({
-    operators: [testOperator("kulala-openapi-json")],
+    operators: [testOperator("kulala-openapi-explorer")],
     request: {
       method: "GET",
       url: "spec.json" as KulalaHttpURL,

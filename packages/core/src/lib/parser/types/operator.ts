@@ -20,7 +20,8 @@ export type KulalaOperatorName =
   | "grpc-authority"
   | "grpc-v"
   | "kulala-vscode-restclient-compat"
-  | "kulala-openapi-json"
+  | "kulala-openapi-explorer"
+  | "kulala-openapi-no-cache"
   | "kulala-jq"
   | "jq"
   | KulalaCurlPassthroughOperatorName;
@@ -44,7 +45,8 @@ export const kulalaOperatorNames: Set<KulalaOperatorName> = new Set([
   "grpc-authority",
   "grpc-v",
   "kulala-vscode-restclient-compat",
-  "kulala-openapi-json",
+  "kulala-openapi-explorer",
+  "kulala-openapi-no-cache",
   "kulala-jq",
   "jq",
 ]);

@@ -117,7 +117,7 @@ export type ResolveRequestResult =
   | { ok: true; request: ResolvedRequestPreview }
   | { ok: false; error: string }
   | KulalaPromptResponse
-  | { ok: false; skipped: true };
+  | { ok: false; skipped: true; message?: string };
 
 /**
  * Resolve URL, headers, and body as they would be sent (pre-request scripts + substitution).
@@ -131,6 +131,7 @@ export async function resolveRequestFromBlock(
   env: string = "default",
   flow?: ScriptFlowContext,
   doc?: KulalaDocument,
+  options?: { skipPreScripts?: boolean },
 ): Promise<ResolveRequestResult> {
   const startDir = filePath
     ? (await import("path")).dirname(filePath)
@@ -175,60 +176,62 @@ export async function resolveRequestFromBlock(
     );
   }
 
-  let scriptReplayIndex = 0;
-  scriptReplay: while (true) {
-    if (scriptReplayIndex > MAX_SCRIPT_REPLAYS) {
-      return {
-        ok: false,
-        error: `Too many $kulala.request.replay() calls (max ${MAX_SCRIPT_REPLAYS})`,
-      };
-    }
-    const preScriptRequestCtx = buildScriptRequestContextFromBlock({
-      block,
-      phase: "preRequest",
-      effectiveBody,
-      env,
-      startDir,
-      mutableVars,
-      resolver,
-      iteration: 0,
-    });
-    try {
-      // Important: capture script console output so the caller can safely serialize
-      // JSON responses (e.g. stdin actions like inspect_request).
-      const scriptConsole: import("./types").KulalaScriptConsoleLine[] = [];
-      await runScripts(
-        block.scripts.preRequest,
-        "preRequest",
+  if (!options?.skipPreScripts) {
+    let scriptReplayIndex = 0;
+    scriptReplay: while (true) {
+      if (scriptReplayIndex > MAX_SCRIPT_REPLAYS) {
+        return {
+          ok: false,
+          error: `Too many $kulala.request.replay() calls (max ${MAX_SCRIPT_REPLAYS})`,
+        };
+      }
+      const preScriptRequestCtx = buildScriptRequestContextFromBlock({
         block,
-        filePath,
-        undefined,
+        phase: "preRequest",
+        effectiveBody,
+        env,
+        startDir,
         mutableVars,
-        flow,
-        scriptConsole,
-        preScriptRequestCtx,
-        scriptRunScope,
-      );
-    } catch (error) {
-      if (error instanceof ScriptPromptError) {
-        return error.promptResponse;
+        resolver,
+        iteration: 0,
+      });
+      try {
+        // Important: capture script console output so the caller can safely serialize
+        // JSON responses (e.g. stdin actions like inspect_request).
+        const scriptConsole: import("./types").KulalaScriptConsoleLine[] = [];
+        await runScripts(
+          block.scripts.preRequest,
+          "preRequest",
+          block,
+          filePath,
+          undefined,
+          mutableVars,
+          flow,
+          scriptConsole,
+          preScriptRequestCtx,
+          scriptRunScope,
+        );
+      } catch (error) {
+        if (error instanceof ScriptPromptError) {
+          return error.promptResponse;
+        }
+        if (error instanceof ScriptSkipError) {
+          return { ok: false, skipped: true, message: error.message };
+        }
+        if (error instanceof ScriptAbortError) {
+          return { ok: false, error: error.message };
+        }
+        if (error instanceof ScriptReplayError) {
+          scriptReplayIndex += 1;
+          continue scriptReplay;
+        }
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
       }
-      if (error instanceof ScriptSkipError) {
-        return { ok: false, skipped: true };
-      }
-      if (error instanceof ScriptAbortError) {
-        return { ok: false, error: error.message };
-      }
-      if (error instanceof ScriptReplayError) {
-        scriptReplayIndex += 1;
-        continue scriptReplay;
-      }
-      return {
-        ok: false,
-        error: error instanceof Error ? error.message : String(error),
-      };
+      break;
     }
-    break;
   }
 
   const collectionPlan = detectCollectionIterationPlan(

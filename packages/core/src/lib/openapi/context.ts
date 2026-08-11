@@ -3,12 +3,29 @@ import type { KulalaBlock } from "../parser/types/block";
 import { findBlocksAtCursor } from "../runner/block";
 import { getEffectiveOperators } from "../runner/effective-operators";
 
+export const OPENAPI_EXPLORER_OPERATOR = "kulala-openapi-explorer";
+export const OPENAPI_NO_CACHE_OPERATOR = "kulala-openapi-no-cache";
+
+export function isOpenAPIPanelOperatorName(name: string): boolean {
+  return (
+    name === OPENAPI_EXPLORER_OPERATOR || name === OPENAPI_NO_CACHE_OPERATOR
+  );
+}
+
 export function blockHasOpenAPIOperator(
   doc: KulalaDocument | undefined,
   block: KulalaBlock,
 ): boolean {
   const operators = getEffectiveOperators(doc, block);
-  return operators.some((o) => o.name === "kulala-openapi-json");
+  return operators.some((o) => o.name === OPENAPI_EXPLORER_OPERATOR);
+}
+
+export function blockHasOpenAPINoCacheOperator(
+  doc: KulalaDocument | undefined,
+  block: KulalaBlock,
+): boolean {
+  const operators = getEffectiveOperators(doc, block);
+  return operators.some((o) => o.name === OPENAPI_NO_CACHE_OPERATOR);
 }
 
 export function openAPIBlockFromCursor(

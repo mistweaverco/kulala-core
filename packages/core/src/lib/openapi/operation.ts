@@ -1,5 +1,6 @@
 import type { KulalaBlock } from "../parser/types/block";
 import type { KulalaHttpURL } from "../parser/types/request";
+import { isOpenAPIPanelOperatorName } from "./context";
 import {
   defaultRequestBodyValue,
   mergeParameterOverrides,
@@ -71,6 +72,27 @@ export type BuiltOpenAPIOperationRequest = {
   headers: Record<string, string>;
   body?: string;
 };
+
+function mergeParentAndOperationHeaders(
+  parentHeaderSection: KulalaBlock["request"]["headerSection"],
+  operationHeaders: Record<string, string>,
+): KulalaBlock["request"]["headerSection"] {
+  const byKey = new Map<
+    string,
+    { type: "header"; name: string; value: string }
+  >();
+  for (const entry of parentHeaderSection ?? []) {
+    if (entry.type !== "header") continue;
+    const name = entry.name;
+    const value = entry.value ?? "";
+    byKey.set(name.toLowerCase(), { type: "header", name, value });
+  }
+  for (const [name, value] of Object.entries(operationHeaders)) {
+    if (!value.trim()) continue;
+    byKey.set(name.toLowerCase(), { type: "header", name, value });
+  }
+  return [...byKey.values()];
+}
 
 export function buildOperationRequest(
   index: OpenAPIIndex,
@@ -153,15 +175,16 @@ export function buildSyntheticOperationBlock(
     name: `${parent.name}::${safeName}`,
     preamble: [],
     comments: [],
-    operators: parent.operators.filter((o) => o.name !== "kulala-openapi-json"),
+    operators: parent.operators.filter(
+      (o) => !isOpenAPIPanelOperatorName(o.name),
+    ),
     request: {
       method: built.method as KulalaBlock["request"]["method"],
       url: built.url as KulalaHttpURL,
-      headerSection: Object.entries(built.headers).map(([name, value]) => ({
-        type: "header" as const,
-        name,
-        value,
-      })),
+      headerSection: mergeParentAndOperationHeaders(
+        parent.request?.headerSection ?? [],
+        built.headers,
+      ),
       body: built.body,
     },
     scripts: { ...parent.scripts },

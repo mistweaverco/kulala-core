@@ -130,7 +130,14 @@ function controlFlowBody(
   footer: string,
 ): KulalaRequestSuccessResponse["body"] {
   const logs = scriptConsolePlainText(scriptConsole);
-  const content = logs.length > 0 ? `${logs}\n\n${footer}` : footer;
+  const footerTrim = footer.trim();
+  const omitFooter =
+    footerTrim.length > 0 &&
+    (logs === footerTrim ||
+      logs.endsWith(`\n${footerTrim}`) ||
+      logs.includes(footerTrim));
+  const content =
+    logs.length > 0 ? (omitFooter ? logs : `${logs}\n\n${footer}`) : footer;
   return { type: "text", content, mediaType: "text/plain" };
 }
 
@@ -246,12 +253,12 @@ async function runSharedBlockHttpRequests(opts: {
   mutableVars: Record<string, string>;
   resolver: VariableResolver | undefined;
   responseFormat?: KulalaResponseFormatOptions;
-}): Promise<void> {
+}): Promise<Exclude<RunPreRequestScriptsResult, { ok: true }> | undefined> {
   const flow = opts.flow;
-  if (!flow) return;
+  if (!flow) return undefined;
   const sharedBlocks = flow.sharedBlocks;
-  if (!sharedBlocks?.length) return;
-  if (isSharedBlockName(opts.requestBlock.name)) return;
+  if (!sharedBlocks?.length) return undefined;
+  if (isSharedBlockName(opts.requestBlock.name)) return undefined;
 
   if (!flow.sharedHttpExecuted) {
     flow.sharedHttpExecuted = new Set();
@@ -286,6 +293,8 @@ async function runSharedBlockHttpRequests(opts: {
 
     const items = Array.isArray(result) ? result : [result];
     for (const item of items) {
+      const control = doRequestResultToPreRequestControlFlow(item);
+      if (control) return control;
       flow.collectedSharedHttpResults.push({ ...item, blockName: key });
       if (
         opts.doc &&
@@ -320,6 +329,256 @@ async function runSharedBlockHttpRequests(opts: {
       }
     }
   }
+  return undefined;
+}
+
+export type RunPreRequestScriptsResult =
+  | { ok: true; effectiveBody: KulalaBlock["request"]["body"] }
+  | KulalaPromptResponse
+  | KulalaSkippedResponse
+  | KulalaRequestErrorResponse;
+
+export function isPreRequestScriptsOk(
+  result: RunPreRequestScriptsResult,
+): result is { ok: true; effectiveBody: KulalaBlock["request"]["body"] } {
+  return "ok" in result && result.ok === true;
+}
+
+function doRequestResultToPreRequestControlFlow(
+  item: DoRequestFromBlockResult,
+): Exclude<RunPreRequestScriptsResult, { ok: true }> | undefined {
+  if (Array.isArray(item)) {
+    for (const one of item) {
+      const control = doRequestResultToPreRequestControlFlow(one);
+      if (control) return control;
+    }
+    return undefined;
+  }
+  if ("prompt" in item && item.prompt) return item;
+  if ("skipped" in item && item.skipped) return item;
+  if (item.success === false && "aborted" in item && item.aborted === true) {
+    return item;
+  }
+  return undefined;
+}
+
+/** Shared + block pre-request scripts (and `@prompt` / file-to-var operators). */
+export async function runPreRequestScriptsForBlock(
+  block: KulalaBlock,
+  filePath: string | undefined,
+  mutableVars: Record<string, string>,
+  stableDocId: string,
+  resolver: VariableResolver | undefined,
+  env: string,
+  flow: ScriptFlowContext | undefined,
+  scriptConsole: KulalaScriptConsoleLine[],
+  iterationOptions?: DoRequestFromBlockOptions,
+): Promise<RunPreRequestScriptsResult> {
+  const startDir = filePath
+    ? (await import("path")).dirname(filePath)
+    : process.cwd();
+  const scriptRunScope: ScriptRunScope = {
+    stableDocId,
+    doc: iterationOptions?.doc,
+    env,
+    resolver,
+    runRequestStack: iterationOptions?.runRequestStack ?? [],
+  };
+  const effectiveOperators = getEffectiveOperators(
+    iterationOptions?.doc,
+    block,
+  );
+  const getOps = (names: string[]) =>
+    effectiveOperators.filter((o) => names.includes(o.name));
+  const getOpArgs = (names: string[]): string | undefined =>
+    getOps(names)
+      .map((o) => String(o.args ?? ""))
+      .find((s) => s.trim() !== "");
+  const parsePromptArgs = parseKulalaPromptOperatorArgs;
+
+  const scriptReplayIndex = iterationOptions?.scriptReplayIndex ?? 0;
+
+  if (scriptReplayIndex === 0) {
+    const promptVar = getOpArgs(["prompt", "kulala-prompt"]);
+    if (promptVar) {
+      const parsed = parsePromptArgs(promptVar);
+      const varName = parsed?.varName?.trim() ?? "";
+      const label = parsed?.label?.trim();
+
+      consumeRequestPromptVariable({
+        stableDocId,
+        blockName: block.name,
+        varName,
+        mutableVars,
+      });
+
+      if (varName && mutableVars[varName] === undefined) {
+        return buildCustomPromptResponse({
+          stableDocId,
+          blockName: block.name,
+          varName,
+          label,
+          inputType: parsed?.inputType,
+        });
+      }
+    }
+
+    const fileToVarArgs = getOpArgs(["kulala-file-contents-to-variable"]);
+    if (fileToVarArgs) {
+      const parts = fileToVarArgs.trim().split(/\s+/);
+      const varName = parts.shift();
+      const relPath = parts.join(" ").trim();
+      if (varName && relPath) {
+        const pathMod = await import("path");
+        const fs = await import("fs/promises");
+        const resolved = pathMod.resolve(startDir, relPath);
+        const content = await fs.readFile(resolved, "utf-8");
+        mutableVars[varName] = content;
+        if (stableDocId) {
+          setVariable("document", varName, content, { document: stableDocId });
+        }
+      }
+    }
+  }
+
+  let effectiveBody: typeof block.request.body = block.request.body;
+  if (isBodyFromFileRef(effectiveBody)) {
+    effectiveBody = await resolveEffectiveBodyFromFileRef(
+      effectiveBody,
+      startDir,
+      block.request.method,
+    );
+  }
+
+  while (true) {
+    if (scriptReplayIndex > MAX_SCRIPT_REPLAYS) {
+      return {
+        success: false,
+        error: `Too many $kulala.request.replay() calls (max ${MAX_SCRIPT_REPLAYS})`,
+        ...(scriptConsole.length > 0 ? { scriptConsole } : {}),
+      } as KulalaRequestErrorResponse;
+    }
+
+    try {
+      if (!iterationOptions?.skipSharedHooks) {
+        const iter = iterationOptions?.collectionIndex ?? 0;
+        await runSharedScriptsForPhase("preRequest", {
+          flow,
+          requestBlock: block,
+          filePath,
+          effectiveBody,
+          env,
+          startDir,
+          mutableVars,
+          resolver,
+          iteration: iter,
+          collectionPlan: iterationOptions?.collectionPlan,
+          scriptConsole,
+          stableDocId,
+          doc: iterationOptions?.doc,
+          runRequestStack: scriptRunScope.runRequestStack,
+        });
+
+        const sharedHttpControl = await runSharedBlockHttpRequests({
+          flow,
+          requestBlock: block,
+          filePath,
+          env,
+          stableDocId,
+          doc: iterationOptions?.doc,
+          mutableVars,
+          resolver,
+          responseFormat: iterationOptions?.responseFormat,
+        });
+        if (sharedHttpControl) return sharedHttpControl;
+      }
+
+      const preScriptRequestCtx = buildScriptRequestContextFromBlock({
+        block,
+        phase: "preRequest",
+        effectiveBody,
+        env,
+        startDir,
+        mutableVars,
+        resolver,
+        iteration: iterationOptions?.collectionIndex ?? 0,
+        collectionPlan: iterationOptions?.collectionPlan,
+      });
+
+      await runScripts(
+        block.scripts.preRequest,
+        "preRequest",
+        block,
+        filePath,
+        undefined,
+        mutableVars,
+        flow,
+        scriptConsole,
+        preScriptRequestCtx,
+        scriptRunScope,
+      );
+
+      if (
+        iterationOptions?.skipCollectionExpansion &&
+        iterationOptions.collectionPlan &&
+        typeof iterationOptions.collectionIndex === "number"
+      ) {
+        Object.assign(
+          mutableVars,
+          varsForCollectionIndex(
+            mutableVars,
+            iterationOptions.collectionPlan.collections,
+            iterationOptions.collectionIndex,
+          ),
+        );
+      }
+    } catch (error) {
+      if (error instanceof ScriptPromptError) {
+        return error.promptResponse;
+      }
+      if (error instanceof ScriptSkipError) {
+        return {
+          success: true,
+          skipped: true,
+          message: error.message,
+          body: controlFlowBody(scriptConsole, error.message),
+          ...(scriptConsole.length > 0 ? { scriptConsole } : {}),
+        } as KulalaSkippedResponse;
+      }
+      if (error instanceof ScriptAbortError) {
+        return {
+          success: false,
+          aborted: true,
+          error: error.message,
+          body: controlFlowBody(scriptConsole, error.message),
+          ...(scriptConsole.length > 0 ? { scriptConsole } : {}),
+        } as KulalaRequestErrorResponse;
+      }
+      if (error instanceof ScriptReplayError) {
+        return runPreRequestScriptsForBlock(
+          block,
+          filePath,
+          mutableVars,
+          stableDocId,
+          resolver,
+          env,
+          flow,
+          scriptConsole,
+          {
+            ...iterationOptions,
+            scriptReplayIndex: scriptReplayIndex + 1,
+          },
+        );
+      }
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+        ...(scriptConsole.length > 0 ? { scriptConsole } : {}),
+      } as KulalaRequestErrorResponse;
+    }
+
+    return { ok: true, effectiveBody };
+  }
 }
 
 function buildSentRequestSnapshot(
@@ -350,8 +609,6 @@ export async function doRequestFromBlock(
   iterationOptions?: DoRequestFromBlockOptions,
 ): Promise<DoRequestFromBlockResult | DoRequestFromBlockResult[]> {
   const scriptConsole: KulalaScriptConsoleLine[] = [];
-
-  const parsePromptArgs = parseKulalaPromptOperatorArgs;
 
   // Pre-request scripts may set variables that affect substitution.
   // Keep `vars` mutable within this block.
@@ -406,60 +663,15 @@ export async function doRequestFromBlock(
   const cookieJarEnabled = !hasOp(["no-cookie-jar"]);
   const logEnabled = !hasOp(["no-log"]);
 
-  // @prompt / @kulala-prompt: request requires user input before executing.
-  const promptVar = getOpArgs(["prompt", "kulala-prompt"]);
-  if (promptVar) {
-    const parsed = parsePromptArgs(promptVar);
-    const varName = parsed?.varName?.trim() ?? "";
-    const label = parsed?.label?.trim();
-
-    consumeRequestPromptVariable({
-      stableDocId,
-      blockName: block.name,
-      varName,
-      mutableVars,
-    });
-
-    if (varName && mutableVars[varName] === undefined) {
-      return buildCustomPromptResponse({
-        stableDocId,
-        blockName: block.name,
-        varName,
-        label,
-        inputType: parsed?.inputType,
-      });
-    }
-  }
-
-  // @kulala-file-contents-to-variable VAR PATH
-  const fileToVarArgs = getOpArgs(["kulala-file-contents-to-variable"]);
-  if (fileToVarArgs) {
-    const parts = fileToVarArgs.trim().split(/\s+/);
-    const varName = parts.shift();
-    const relPath = parts.join(" ").trim();
-    if (varName && relPath) {
-      const pathMod = await import("path");
-      const fs = await import("fs/promises");
-      const resolved = pathMod.resolve(startDir, relPath);
-      const content = await fs.readFile(resolved, "utf-8");
-      mutableVars[varName] = content;
-      if (stableDocId) {
-        setVariable("document", varName, content, { document: stableDocId });
-      }
-    }
-  }
-
-  // Resolve body-from-file (JetBrains-style "< path") so we have effective body for substitution and send
+  let scriptReplayIndex = iterationOptions?.scriptReplayIndex ?? 0;
   let effectiveBody: typeof block.request.body = block.request.body;
-  if (isBodyFromFileRef(effectiveBody)) {
+  if (iterationOptions?.skipPreScripts && isBodyFromFileRef(effectiveBody)) {
     effectiveBody = await resolveEffectiveBodyFromFileRef(
       effectiveBody,
       startDir,
       block.request.method,
     );
   }
-
-  let scriptReplayIndex = iterationOptions?.scriptReplayIndex ?? 0;
 
   scriptReplay: while (true) {
     if (scriptReplayIndex > MAX_SCRIPT_REPLAYS) {
@@ -471,114 +683,21 @@ export async function doRequestFromBlock(
     }
 
     if (!iterationOptions?.skipPreScripts || scriptReplayIndex > 0) {
-      try {
-        if (!iterationOptions?.skipSharedHooks) {
-          const iter = iterationOptions?.collectionIndex ?? 0;
-          await runSharedScriptsForPhase("preRequest", {
-            flow,
-            requestBlock: block,
-            filePath,
-            effectiveBody,
-            env,
-            startDir,
-            mutableVars,
-            resolver,
-            iteration: iter,
-            collectionPlan: iterationOptions?.collectionPlan,
-            scriptConsole,
-            stableDocId,
-            doc: iterationOptions?.doc,
-            runRequestStack: scriptRunScope.runRequestStack,
-          });
-
-          await runSharedBlockHttpRequests({
-            flow,
-            requestBlock: block,
-            filePath,
-            env,
-            stableDocId,
-            doc: iterationOptions?.doc,
-            mutableVars,
-            resolver,
-            responseFormat: iterationOptions?.responseFormat,
-          });
-        }
-
-        const preScriptRequestCtx = buildScriptRequestContextFromBlock({
-          block,
-          phase: "preRequest",
-          effectiveBody,
-          env,
-          startDir,
-          mutableVars,
-          resolver,
-          iteration: iterationOptions?.collectionIndex ?? 0,
-          collectionPlan: iterationOptions?.collectionPlan,
-        });
-
-        // Pre-request scripts run before substitution so they can set request/global vars.
-        await runScripts(
-          block.scripts.preRequest,
-          "preRequest",
-          block,
-          filePath,
-          undefined,
-          mutableVars,
-          flow,
-          scriptConsole,
-          preScriptRequestCtx,
-          scriptRunScope,
-        );
-
-        // When running a single expanded collection request, force the per-iteration
-        // collection values after pre-request scripts have run. This ensures pre scripts
-        // can still mutate other variables while iteration-sensitive templates ({{id}},
-        // {{users[*].name}}, etc.) resolve to the correct element for this request.
-        if (
-          iterationOptions?.skipCollectionExpansion &&
-          iterationOptions.collectionPlan &&
-          typeof iterationOptions.collectionIndex === "number"
-        ) {
-          Object.assign(
-            mutableVars,
-            varsForCollectionIndex(
-              mutableVars,
-              iterationOptions.collectionPlan.collections,
-              iterationOptions.collectionIndex,
-            ),
-          );
-        }
-      } catch (error) {
-        if (error instanceof ScriptPromptError) {
-          return error.promptResponse;
-        }
-        if (error instanceof ScriptSkipError) {
-          return {
-            success: true,
-            skipped: true,
-            body: controlFlowBody(scriptConsole, "Request skipped by script"),
-            ...(scriptConsole.length > 0 ? { scriptConsole } : {}),
-          } as KulalaSkippedResponse;
-        }
-        if (error instanceof ScriptAbortError) {
-          return {
-            success: false,
-            aborted: true,
-            error: error.message,
-            body: controlFlowBody(scriptConsole, error.message),
-            ...(scriptConsole.length > 0 ? { scriptConsole } : {}),
-          } as KulalaRequestErrorResponse;
-        }
-        if (error instanceof ScriptReplayError) {
-          scriptReplayIndex += 1;
-          continue scriptReplay;
-        }
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : String(error),
-          ...(scriptConsole.length > 0 ? { scriptConsole } : {}),
-        } as KulalaRequestErrorResponse;
+      const preResult = await runPreRequestScriptsForBlock(
+        block,
+        filePath,
+        mutableVars,
+        stableDocId,
+        resolver,
+        env,
+        flow,
+        scriptConsole,
+        { ...iterationOptions, scriptReplayIndex },
+      );
+      if (!isPreRequestScriptsOk(preResult)) {
+        return preResult as DoRequestFromBlockResult;
       }
+      effectiveBody = preResult.effectiveBody;
 
       if (!iterationOptions?.skipPreScripts && scriptReplayIndex === 0) {
         const collectionPlan = detectCollectionIterationPlan(
@@ -852,7 +971,7 @@ export async function doRequestFromBlock(
 
     const methodUpper = (block.request.method || "GET").toUpperCase();
 
-    if (hasOp(["kulala-openapi-json"])) {
+    if (hasOp(["kulala-openapi-explorer"])) {
       const requestHeaders = { ...headers };
       return await runOpenAPIFromBlock({
         block,
