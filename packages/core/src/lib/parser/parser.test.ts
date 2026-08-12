@@ -605,6 +605,23 @@ GRPC localhost:50051 helloworld.Greeter/SayHello
   expect(authority?.args).toBe("real.example.com");
 });
 
+test("parses # @grpc-insecure operator", async () => {
+  const content = `
+### LocalTls
+
+# @grpc-insecure
+
+GRPC localhost:50051 helloworld.Greeter/SayHello
+`;
+  const doc = await getDocument(content, "/tmp/grpc-insecure.http");
+  const block = doc.blocks.find((b) => b.name === "LocalTls");
+  expect(block).toBeDefined();
+  expect(block!.errors).toEqual([]);
+  const insecure = block!.operators.find((o) => o.name === "grpc-insecure");
+  expect(insecure).toBeDefined();
+  expect(insecure?.args).toBeUndefined();
+});
+
 test("parses WEBSOCKET request line", async () => {
   const content = `
 ### Echo

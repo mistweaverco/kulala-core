@@ -54,3 +54,15 @@ HEADER1: {{header1}}
 
 GRPC localhost:9001 grpcbin.GRPCBin/Index
 HEADER1: {{header1}}
+
+### local_tls_insecure
+
+# Local TLS with a self-signed / invalid cert: keep TLS, skip verification.
+# @grpc-insecure
+
+GRPC localhost:50051 echo.Echo/UnaryEcho
+Content-Type: application/json
+
+{
+  "message": "Hello world!"
+}

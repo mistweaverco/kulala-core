@@ -65,12 +65,14 @@ export function grpcFlagsToLoaderOptions(
   protoFiles: string[];
   protosetFiles: string[];
   plaintext: boolean;
+  insecure: boolean;
   authority?: string;
 } {
   const importPaths: string[] = [];
   const protoFiles: string[] = [];
   const protosetFiles: string[] = [];
   let plaintext = false;
+  let insecure = false;
   let authority: string | undefined;
 
   for (const { flag, value } of flags) {
@@ -87,6 +89,9 @@ export function grpcFlagsToLoaderOptions(
       case "plaintext":
         plaintext = true;
         break;
+      case "insecure":
+        insecure = true;
+        break;
       case "authority":
         if (value) authority = value;
         break;
@@ -95,7 +100,14 @@ export function grpcFlagsToLoaderOptions(
     }
   }
 
-  return { importPaths, protoFiles, protosetFiles, plaintext, authority };
+  return {
+    importPaths,
+    protoFiles,
+    protosetFiles,
+    plaintext,
+    insecure,
+    authority,
+  };
 }
 
 /** Channel options for grpcurl-compatible `-authority` / `# @grpc-authority`. */

@@ -69,3 +69,24 @@ describe("grpc-authority", () => {
     });
   });
 });
+
+describe("grpc-insecure", () => {
+  test("maps # @grpc-insecure to the insecure flag", () => {
+    expect(
+      grpcFlagsFromOperators([
+        {
+          name: "grpc-insecure",
+          lineNumber: 0,
+        },
+      ]),
+    ).toEqual([{ flag: "insecure", value: "" }]);
+  });
+
+  test("extracts insecure from loader options", () => {
+    expect(
+      grpcFlagsToLoaderOptions([{ flag: "insecure", value: "" }], "/project")
+        .insecure,
+    ).toBe(true);
+    expect(grpcFlagsToLoaderOptions([], "/project").insecure).toBe(false);
+  });
+});

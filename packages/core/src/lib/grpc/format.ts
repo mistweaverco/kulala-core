@@ -9,6 +9,7 @@ const LOADER_FLAGS = new Set([
   "proto",
   "protoset",
   "plaintext",
+  "insecure",
   "v",
 ]);
 
@@ -29,7 +30,7 @@ function emitGrpcFlag(
   cwd: string,
   vars: Record<string, string>,
 ): void {
-  if (flag === "plaintext" || flag === "v") {
+  if (flag === "plaintext" || flag === "insecure" || flag === "v") {
     parts.push(`-${flag}`);
     return;
   }
@@ -73,13 +74,17 @@ export function formatGrpcurlCommand(input: GrpcurlFormatInput): string {
   }
   const { channelTarget, useTls } = parseGrpcAddress(address);
   const hasPlaintextFlag = flags.some(({ flag }) => flag === "plaintext");
+  const hasInsecureFlag = flags.some(({ flag }) => flag === "insecure");
 
   // grpcurl defaults to TLS; plaintext only via # @grpc-plaintext or grpc:// scheme.
   if (!useTls && !hasPlaintextFlag) parts.push("-plaintext");
-  // curl --insecure maps to grpcurl -insecure (skip cert verify), only for TLS connections.
-  if (input.insecure && useTls && !hasPlaintextFlag) parts.push("-insecure");
+  // curl --insecure → grpcurl -insecure when not already set via # @grpc-insecure.
+  if (input.insecure && useTls && !hasPlaintextFlag && !hasInsecureFlag) {
+    parts.push("-insecure");
+  }
 
   for (const { flag, value } of flags) {
+    if (flag === "insecure" && (!useTls || hasPlaintextFlag)) continue;
     if (LOADER_FLAGS.has(flag)) {
       emitGrpcFlag(parts, flag, value, input.cwd, vars);
     } else {

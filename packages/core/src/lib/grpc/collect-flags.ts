@@ -8,6 +8,7 @@ const GRPC_OPERATOR_MAP: Record<string, string> = {
   "grpc-proto": "proto",
   "grpc-protoset": "protoset",
   "grpc-plaintext": "plaintext",
+  "grpc-insecure": "insecure",
   "grpc-authority": "authority",
   "grpc-v": "v",
 };

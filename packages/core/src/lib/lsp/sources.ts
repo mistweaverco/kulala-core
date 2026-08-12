@@ -189,6 +189,12 @@ export function staticCompletionItems(sourceName: string): LspCompletionItem[] {
       documentation: "No TLS",
     },
     {
+      label: "grpc-insecure",
+      insertText: "grpc-insecure",
+      documentation:
+        "Skip TLS certificate verification (grpcurl -insecure); useful for local/self-signed certs",
+    },
+    {
       label: "grpc-authority",
       insertText: "grpc-authority",
       documentation:

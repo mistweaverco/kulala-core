@@ -84,6 +84,35 @@ describe("formatGrpcurlCommand", () => {
     expect(explicitPlaintext).not.toContain("-insecure");
   });
 
+  test("adds -insecure for # @grpc-insecure on TLS connections", () => {
+    const withOperator = formatGrpcurlCommand({
+      grpcCommand: {
+        address: "localhost:50051",
+        symbol: "pkg.Service/Method",
+        inlineFlags: [],
+      },
+      flags: [{ flag: "insecure", value: "" }],
+      cwd: "/project",
+    });
+    expect(withOperator).toContain("-insecure");
+    expect(withOperator).not.toContain("-plaintext");
+
+    const withPlaintextWins = formatGrpcurlCommand({
+      grpcCommand: {
+        address: "localhost:50051",
+        symbol: "pkg.Service/Method",
+        inlineFlags: [],
+      },
+      flags: [
+        { flag: "plaintext", value: "" },
+        { flag: "insecure", value: "" },
+      ],
+      cwd: "/project",
+    });
+    expect(withPlaintextWins).toContain("-plaintext");
+    expect(withPlaintextWins).not.toContain("-insecure");
+  });
+
   test("adds -plaintext only for # @grpc-plaintext or grpc:// scheme", () => {
     const withOperator = formatGrpcurlCommand({
       grpcCommand: {

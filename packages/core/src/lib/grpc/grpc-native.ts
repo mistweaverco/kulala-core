@@ -71,6 +71,7 @@ function grpcJsonReplacer(_key: string, v: unknown): unknown {
 function buildCredentials(
   address: string,
   plaintext: boolean,
+  insecure?: boolean,
 ): grpc.ChannelCredentials {
   if (plaintext) {
     return grpc.credentials.createInsecure();
@@ -78,6 +79,12 @@ function buildCredentials(
   const { useTls } = parseGrpcAddress(address);
   if (!useTls) {
     return grpc.credentials.createInsecure();
+  }
+  // `# @grpc-insecure` / curl --insecure → skip TLS cert verification (grpcurl -insecure).
+  if (insecure) {
+    return grpc.credentials.createSsl(null, null, null, {
+      rejectUnauthorized: false,
+    });
   }
   return grpc.credentials.createSsl();
 }
@@ -280,11 +287,11 @@ export async function grpcNativeRequest(
   const parsed = opts.grpcCommand ?? parseGrpcTarget(opts.target);
   const flags = mergeGrpcFlags(opts.metadataFlags, parsed.inlineFlags);
   const vars = opts.vars ?? {};
-  const { plaintext, authority } = grpcFlagsToLoaderOptions(
-    flags,
-    opts.cwd,
-    vars,
-  );
+  const {
+    plaintext,
+    insecure: insecureFlag,
+    authority,
+  } = grpcFlagsToLoaderOptions(flags, opts.cwd, vars);
   const channelOptions = grpcChannelOptionsForAuthority(authority);
   const address = parsed.address;
   if (!address) {
@@ -292,7 +299,11 @@ export async function grpcNativeRequest(
   }
 
   const { channelTarget } = parseGrpcAddress(address);
-  const creds = buildCredentials(address, plaintext);
+  const creds = buildCredentials(
+    address,
+    plaintext,
+    opts.insecure || insecureFlag,
+  );
   const metadata = metadataFromHeaders(opts.headers);
 
   try {

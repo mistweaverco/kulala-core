@@ -11,7 +11,7 @@ function safeJsonParse<T>(raw: string | null): T | undefined {
 }
 
 /**
- * Latest response per named request for VS Code REST Client–style {{NAME.response…}} vars.
+ * Latest response per named request for VS Code REST Client-style {{NAME.response…}} vars.
  * Scoped to stable document id (same .http file).
  */
 export function saveRequestVarResult(
