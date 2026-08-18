@@ -14,7 +14,11 @@ import {
   buildOperationRequest,
   buildSyntheticOperationBlock,
 } from "./operation";
-import { openAPILoadAtCursor, runOpenAPIOperation } from "./index";
+import {
+  openAPILoadAtCursor,
+  openAPIOperationToHttp,
+  runOpenAPIOperation,
+} from "./index";
 
 test("resolveJsonPointer resolves components schema", () => {
   const doc = {
@@ -448,3 +452,65 @@ GET ${specPath} HTTP/1.1
   });
   expect(result).not.toHaveProperty("status");
 });
+
+test("openAPIOperationToHttp serializes try-it-out values without explorer operator or scripts", async () => {
+  setDbForTesting(getDbInMemory());
+  const dir = mkdtempSync(join(tmpdir(), "kulala-openapi-to-http-"));
+  const specPath = join(dir, "spec.json");
+  writeFileSync(specPath, fixtureRawForToHttp());
+  const scriptPath = join(dir, "pre.js");
+  writeFileSync(scriptPath, `client.global.set("fromScript", "1");`);
+  const content = `### openapi-yank
+< ${scriptPath}
+
+# @kulala-openapi-explorer
+
+GET ${specPath} HTTP/1.1
+Authorization: Bearer {{token}}
+`;
+  const filepath = join(dir, "test.http");
+  writeFileSync(filepath, content);
+
+  const result = await openAPIOperationToHttp({
+    content,
+    filepath,
+    line: 6,
+    column: 1,
+    operationKey: "POST /pets",
+    parameterOverrides: { __body__: '{"name":"spot"}' },
+  });
+
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  expect(result.content).toContain("### openapi-yank::POST_pets");
+  expect(result.content).toContain("POST https://petstore.example.com/v1/pets");
+  expect(result.content).toContain("Authorization: Bearer {{token}}");
+  expect(result.content).toContain('{"name":"spot"}');
+  expect(result.content).not.toContain("kulala-openapi-explorer");
+  expect(result.content).not.toContain("fromScript");
+  expect(result.content).not.toContain(scriptPath);
+});
+
+function fixtureRawForToHttp(): string {
+  return JSON.stringify({
+    openapi: "3.0.0",
+    info: { title: "Petstore", version: "1.0.0" },
+    servers: [{ url: "https://petstore.example.com/v1" }],
+    paths: {
+      "/pets": {
+        post: {
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: { type: "object" },
+                example: { name: "fluffy" },
+              },
+            },
+          },
+          responses: { "201": { description: "Created" } },
+        },
+      },
+    },
+  });
+}

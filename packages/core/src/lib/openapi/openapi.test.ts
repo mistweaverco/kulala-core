@@ -4,8 +4,14 @@ import { expect, test } from "bun:test";
 import { parseOpenAPIRawText } from "./parse";
 import { buildOpenAPIIndex } from "./schema-index";
 import { buildOpenAPIUITree } from "./ui-tree";
-import { buildOperationRequest } from "./operation";
+import {
+  buildOperationRequest,
+  buildSyntheticOperationBlock,
+} from "./operation";
 import { openAPICacheKeyFromSource } from "./host";
+import { serializeHttpBlock } from "../parser/serde";
+import type { KulalaBlock } from "../parser/types/block";
+import type { KulalaHttpURL } from "../parser/types/request";
 
 const fixturePath = join(import.meta.dir, "fixtures", "petstore-minimal.json");
 const fixtureRaw = readFileSync(fixturePath, "utf-8");
@@ -62,4 +68,97 @@ paths: {}
   expect(doc?.info).toBeDefined();
   const info = doc?.info as Record<string, unknown>;
   expect(info.title).toBe("YAML API");
+});
+
+test("serializeHttpBlock yanks an OpenAPI operation as a named .http block", () => {
+  const doc = parseOpenAPIRawText(fixtureRaw)!;
+  const index = buildOpenAPIIndex(doc)!;
+  const built = buildOperationRequest(
+    index,
+    "POST /pets",
+    {},
+    {
+      body: '{"name":"spot"}',
+    },
+  );
+  expect("error" in built).toBe(false);
+  if ("error" in built) return;
+
+  const parent: KulalaBlock = {
+    name: "petstore",
+    errors: [],
+    position: { start: 1, end: 10 },
+    preamble: [],
+    comments: [],
+    operators: [{ name: "kulala-openapi-explorer", lineNumber: 1 }],
+    request: {
+      method: "GET",
+      url: "https://petstore.example.com/openapi.json" as KulalaHttpURL,
+      headerSection: [
+        { type: "header", name: "Authorization", value: "Bearer {{token}}" },
+      ],
+    },
+    scripts: {
+      preRequest: [
+        {
+          type: "preRequest",
+          lang: "js",
+          source: "inline",
+          content: "client.log('nope')",
+          lineNumber: 1,
+        },
+      ],
+      postRequest: [],
+    },
+    hasRequest: true,
+  };
+
+  const synthetic = buildSyntheticOperationBlock(parent, "POST /pets", built);
+  const yanked: KulalaBlock = {
+    ...synthetic,
+    scripts: { preRequest: [], postRequest: [] },
+  };
+  const http = serializeHttpBlock(yanked);
+
+  expect(http).toContain("### petstore::POST_pets");
+  expect(http).toContain("POST https://petstore.example.com/v1/pets");
+  expect(http).toContain("Authorization: Bearer {{token}}");
+  expect(http).toContain("Content-Type: application/json");
+  expect(http).toContain('{"name":"spot"}');
+  expect(http).not.toContain("kulala-openapi-explorer");
+  expect(http).not.toContain("client.log");
+});
+
+test("serializeHttpBlock fills path params from try-it-out overrides", () => {
+  const doc = parseOpenAPIRawText(fixtureRaw)!;
+  const index = buildOpenAPIIndex(doc)!;
+  const built = buildOperationRequest(
+    index,
+    "GET /pets/{petId}",
+    {},
+    { parameters: { petId: "42" } },
+  );
+  expect("error" in built).toBe(false);
+  if ("error" in built) return;
+
+  const parent: KulalaBlock = {
+    name: "petstore",
+    errors: [],
+    position: { start: 1, end: 8 },
+    preamble: [],
+    comments: [],
+    operators: [],
+    request: {
+      method: "GET",
+      url: "./openapi.json" as KulalaHttpURL,
+      headerSection: [],
+    },
+    scripts: { preRequest: [], postRequest: [] },
+    hasRequest: true,
+  };
+  const http = serializeHttpBlock(
+    buildSyntheticOperationBlock(parent, "GET /pets/{petId}", built),
+  );
+  expect(http).toContain("### petstore::GET_pets_petId");
+  expect(http).toContain("GET https://petstore.example.com/v1/pets/42");
 });

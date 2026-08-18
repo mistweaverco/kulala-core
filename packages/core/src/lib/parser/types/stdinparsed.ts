@@ -182,6 +182,18 @@ export type KulalaStdinActionOpenapiRunOperation = {
   responseFormat?: KulalaResponseFormatStdinOptions;
 };
 
+/** Serialize one OpenAPI operation as a standalone `.http` block. */
+export type KulalaStdinActionOpenapiToHttp = {
+  action: "openapi_to_http";
+  content: string;
+  filepath?: string;
+  line: number;
+  column: number;
+  env?: string;
+  operationKey: string;
+  parameterOverrides?: Record<string, string>;
+};
+
 /** Discover http-client.env.json / ws.yaml environments for UI pickers. */
 export type KulalaStdinActionEnvironments = {
   action: "environments";
@@ -286,6 +298,7 @@ export type KulalaStdinParsed =
   | KulalaStdinActionClearOpenapiSchema
   | KulalaStdinActionOpenapiLoad
   | KulalaStdinActionOpenapiRunOperation
+  | KulalaStdinActionOpenapiToHttp
   | KulalaStdinActionEnvironments
   | KulalaStdinActionInspectRequest
   | KulalaStdinActionToCurl

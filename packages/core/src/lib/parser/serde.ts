@@ -384,6 +384,21 @@ function serializeBlock(
   return lines;
 }
 
+/** Serialize a single block as a standalone `.http` snippet (named `###` block). */
+export function serializeHttpBlock(
+  block: KulalaBlock,
+  options: KulalaHttpSerdeSerializeOptions = {},
+): string {
+  return serializeHttp(
+    {
+      directives: [],
+      blocks: [block],
+      nativeBlockCount: 1,
+    },
+    options,
+  );
+}
+
 export function serializeHttp(
   doc: KulalaDocument,
   options: KulalaHttpSerdeSerializeOptions = {},

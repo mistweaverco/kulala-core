@@ -39,6 +39,7 @@ import {
   buildSyntheticOperationBlock,
   overridesFromTryItOutValues,
 } from "./operation";
+import { serializeHttpBlock } from "../parser/serde";
 import type { OpenAPIUiPayload } from "./types";
 
 export { openAPICacheKeyFromSource } from "./host";
@@ -356,7 +357,7 @@ export async function openAPILoadAtCursor(input: {
   };
 }
 
-export async function runOpenAPIOperation(input: {
+export type OpenAPIOperationInput = {
   content: string;
   filepath?: string;
   line: number;
@@ -364,13 +365,30 @@ export async function runOpenAPIOperation(input: {
   env?: string;
   operationKey: string;
   parameterOverrides?: Record<string, string>;
-  responseFormat?: import("../runner/http-response-body").KulalaResponseFormatOptions;
-}): Promise<import("../runner/doRequest").DoRequestFromBlockResult> {
+};
+
+type PreparedOpenAPIOperation =
+  | {
+      ok: true;
+      doc: KulalaDocument;
+      env: string;
+      prepared: Extract<PreparedOpenAPIParent, { ok: true }>;
+      synthetic: KulalaBlock;
+    }
+  | {
+      ok: false;
+      error: string;
+      parentFail?: Extract<PreparedOpenAPIParent, { ok: false }>;
+    };
+
+async function prepareOpenAPIOperation(
+  input: OpenAPIOperationInput,
+): Promise<PreparedOpenAPIOperation> {
   const { getDocument } = await import("../parser/parser");
   const doc = await getDocument(input.content, input.filepath);
   const block = openAPIBlockFromCursor(doc, input.line, input.column);
   if (!block) {
-    return { success: false, error: "No OpenAPI block at cursor" };
+    return { ok: false, error: "No OpenAPI block at cursor" };
   }
 
   const env = input.env ?? "default";
@@ -415,7 +433,11 @@ export async function runOpenAPIOperation(input: {
     { skipPreScripts: specCached },
   );
   if (!prepared.ok) {
-    return preScriptResultToDoRequestError(prepared);
+    return {
+      ok: false,
+      error: preScriptResultToOpenAPIError(prepared).error,
+      parentFail: prepared,
+    };
   }
 
   const indexResult = await getOrLoadOpenAPIIndex(
@@ -427,7 +449,7 @@ export async function runOpenAPIOperation(input: {
     prepared.stableDocId,
   );
   if (!indexResult.ok) {
-    return { success: false, error: indexResult.error };
+    return { ok: false, error: indexResult.error };
   }
 
   const built = buildOperationRequest(
@@ -437,7 +459,7 @@ export async function runOpenAPIOperation(input: {
     overridesFromTryItOutValues(input.parameterOverrides),
   );
   if ("error" in built) {
-    return { success: false, error: built.error };
+    return { ok: false, error: built.error };
   }
 
   const synthetic = buildSyntheticOperationBlock(
@@ -445,25 +467,60 @@ export async function runOpenAPIOperation(input: {
     input.operationKey,
     built,
   );
+  return { ok: true, doc, env, prepared, synthetic };
+}
+
+export async function runOpenAPIOperation(
+  input: OpenAPIOperationInput & {
+    responseFormat?: import("../runner/http-response-body").KulalaResponseFormatOptions;
+  },
+): Promise<import("../runner/doRequest").DoRequestFromBlockResult> {
+  const prep = await prepareOpenAPIOperation(input);
+  if (!prep.ok) {
+    if (prep.parentFail) {
+      return preScriptResultToDoRequestError(prep.parentFail);
+    }
+    return { success: false, error: prep.error };
+  }
+
   const { resolver } = createRequestVarContext(
-    doc,
-    synthetic,
-    prepared.stableDocId,
+    prep.doc,
+    prep.synthetic,
+    prep.prepared.stableDocId,
   );
 
   const result = await doRequestFromBlock(
-    synthetic,
-    doc.filepath,
-    prepared.mutableVars,
-    prepared.stableDocId,
+    prep.synthetic,
+    prep.doc.filepath,
+    prep.prepared.mutableVars,
+    prep.prepared.stableDocId,
     resolver,
-    env,
-    prepared.flow,
+    prep.env,
+    prep.prepared.flow,
     {
-      doc,
+      doc: prep.doc,
       responseFormat: input.responseFormat,
     },
   );
   const item = Array.isArray(result) ? result[0]! : result;
-  return { ...item, blockName: synthetic.name };
+  return { ...item, blockName: prep.synthetic.name };
+}
+
+export type OpenAPIOperationToHttpResult =
+  | { ok: true; content: string }
+  | { ok: false; error: string };
+
+export async function openAPIOperationToHttp(
+  input: OpenAPIOperationInput,
+): Promise<OpenAPIOperationToHttpResult> {
+  const prep = await prepareOpenAPIOperation(input);
+  if (!prep.ok) {
+    return { ok: false, error: prep.error };
+  }
+
+  const yankBlock: KulalaBlock = {
+    ...prep.synthetic,
+    scripts: { preRequest: [], postRequest: [] },
+  };
+  return { ok: true, content: serializeHttpBlock(yankBlock) };
 }

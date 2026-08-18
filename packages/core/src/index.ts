@@ -1,6 +1,11 @@
 export { KulalaParser, writeErrorToStderr } from "./lib/parser";
 export { KulalaRunner } from "./lib/runner";
-export { deserializeHttp, serializeHttp, formatHttp } from "./lib/parser";
+export {
+  deserializeHttp,
+  serializeHttp,
+  serializeHttpBlock,
+  formatHttp,
+} from "./lib/parser";
 export type {
   KulalaHttpSerdeSerializeOptions,
   KulalaHttpFormatOptions,
@@ -60,6 +65,7 @@ export {
 export {
   clearOpenAPISchemaCache,
   openAPILoadAtCursor,
+  openAPIOperationToHttp,
   runOpenAPIOperation,
   openAPICacheKeyFromSource,
   parseOpenAPIRawText,
@@ -74,6 +80,7 @@ export {
   type OpenAPIUiPayload,
   type OpenAPIUITreeNode,
   type OpenAPIIndex,
+  type OpenAPIOperationToHttpResult,
 } from "./lib/openapi";
 export type {
   LspCompletionItem,

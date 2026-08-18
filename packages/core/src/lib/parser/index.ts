@@ -9,7 +9,7 @@ import {
 import { getDocument } from "./parser";
 import { formatHttp } from "./format";
 import { serializeHttp } from "./serde";
-export { deserializeHttp, serializeHttp } from "./serde";
+export { deserializeHttp, serializeHttp, serializeHttpBlock } from "./serde";
 export type { KulalaHttpSerdeSerializeOptions } from "./serde";
 export { formatHttp } from "./format";
 export type {
@@ -40,6 +40,7 @@ import { clearGraphQLSchemaCache, introspectGraphQLAtCursor } from "../graphql";
 import {
   clearOpenAPISchemaCache,
   openAPILoadAtCursor,
+  openAPIOperationToHttp,
   runOpenAPIOperation,
 } from "../openapi";
 import {
@@ -372,6 +373,22 @@ const kulalaParser: KulalaParser = {
           responseFormat: stdIn.responseFormat,
         });
         await writeRequestResponseToStdout(result);
+        break;
+      }
+      case "openapi_to_http": {
+        const result = await openAPIOperationToHttp({
+          content: stdIn.content,
+          filepath: stdIn.filepath,
+          line: stdIn.line,
+          column: stdIn.column,
+          env: stdIn.env,
+          operationKey: stdIn.operationKey,
+          parameterOverrides: stdIn.parameterOverrides,
+        });
+        await writeToStdout({
+          type: "openapi_to_http",
+          ...result,
+        });
         break;
       }
       case "environments": {

@@ -14,7 +14,7 @@ export type OpenAPIUITreeNode = {
   badge?: string;
   description?: string;
   children?: OpenAPIUITreeNode[];
-  /** Stable key for `openapi_run_operation` (e.g. `GET /pets/{id}`). */
+  /** Stable key for `openapi_run_operation` / `openapi_to_http` (e.g. `GET /pets/{id}`). */
   operationKey?: string;
   /** Parameter name when kind is `parameter` or `tryItOut`. */
   paramName?: string;
